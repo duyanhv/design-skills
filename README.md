@@ -89,6 +89,7 @@ it was built from.
 | `bun run validate <id>` | IR schema, scope integrity, provenance, Agent Skills frontmatter, token budget, license gate | CI + build |
 | `bun run validate:negative` | That all 18 validate guards actually fire, by corrupting a real build one defect at a time | CI |
 | `bun run eval <id>` | Rule-level assertions: severity, scope, conformance level, exceptions, citation anchors | build |
+| `bun run trace` | Each audit finding mapped to an assertion over the **shipped** `ir/` and `skills/` | local (needs a build) |
 | `bun run agenteval` | Whether an agent given the skill actually reviews UI better | manual (costs model calls) |
 
 A check that has never been seen to fail is a guess, so the guards are tested in both directions:

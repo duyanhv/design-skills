@@ -4,11 +4,17 @@ Responses to [AUDIT.md](AUDIT.md). Every finding is addressed, with the check th
 regresses. Verification below is from this working tree at the time of writing.
 
 ```
-bun run check     typecheck · 29 tests, 191 assertions · e2e build · 18 validate guards fire · 3 manifests valid
-bun run validate  apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
-bun run eval      apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
-bun run agenteval 3 review tasks × 2 arms × 3 samples = 18 runs (summary below)
+bun run check      typecheck · 29 tests, 191 assertions · e2e build · 18 validate guards fire · 3 manifests valid
+bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
+bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
+bun run trace      7/7 requirements verified against the shipped ir/ and skills/
+bun run agenteval  3 review tasks × 2 arms × 3 samples = 18 runs (summary below)
 ```
+
+`bun run trace` is the traceability check: every finding below maps to an assertion over the
+**shipped artifacts**, not over the source code and not over a value observed while the work was in
+progress. "I fixed it" and "the output is correct" are different claims, and only the second matters
+to someone using the skill. Each assertion was confirmed to fail when the thing it guards is broken.
 
 ## Findings
 
