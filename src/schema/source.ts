@@ -42,11 +42,16 @@ export const SourceSchema = z.object({
     name: z.string(),
     description: z.string(),
     max_skill_lines: z.number().int().positive().default(300),
-    top_rules_per_topic: z.number().int().positive().default(1),
     /** Label for the text that follows a rule's statement in reference files. */
     rationale_label: z.string().default("Why"),
-    /** Include the "Highest-leverage rules" section in SKILL.md. */
-    highlights: z.boolean().default(true),
+    /**
+     * Removed: a "Highest-leverage rules" section used to pick one rule per topic, ranked partly by
+     * how short the sentence was. No guideline states which of its rules matter most, so any such
+     * ranking is the compiler's opinion presented in the source's voice — exactly what this project
+     * exists to avoid. The routing table sends the reader to the right rulebook without inventing a
+     * hierarchy. Manifests may still carry `highlights:`; it is ignored.
+     */
+    highlights: z.boolean().optional(),
     /** "pages": one index row per page. "rules": one row per rule (good for small sources like WCAG). */
     index: z.enum(["pages", "rules"]).default("pages"),
     /** Curated routing hints: task keywords → pages to read. Rendered as a "Where to look" table. */

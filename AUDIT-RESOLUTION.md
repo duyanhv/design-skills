@@ -191,18 +191,22 @@ Apple's or W3C's content. CI fails if it drifts from what the compiler produces.
 **The missing decision workflow** is now the shape of SKILL.md, and the agent evaluation is the
 evidence that it changes behaviour.
 
+**Highlights removed.** The audit noted that the "highest-leverage rules" selection ranked partly by
+how short the sentence was. Turning it on confirmed it: the top pick for Accessibility was "Support
+Switch Control", and it leaked a rule's notes into the entry file. The deeper problem is that no
+guideline states which of its rules matter most, so any such ranking is the compiler's opinion
+printed in the source's voice — the exact failure mode this project exists to prevent. The feature
+is deleted rather than tuned; the routing table sends a reader to the right rulebook without
+inventing a hierarchy.
+
 **README claims.** The unsupported swipe at hand-written skill repos is gone, replaced with the
 specific, checkable property that motivates this design: a hand-written `SKILL.md` cannot tell you
 which version it reflects or show you a diff when the guideline changes.
 
 ## Not addressed
 
-- **Highlights selection** still ranks partly by brevity. `highlights: false` on both real sources, so
-  nothing ships with it; the ranking should be reconsidered before anything turns it on.
 - **Figure alt text** is preserved and marked, but nothing verifies that a figure's alt text actually
   carries the information the prose defers to it.
 - **Agent evaluation breadth** is two tasks, one model, one run per arm. It shows a direction, not a
   distribution. Worth widening to more tasks, several runs, and an implement-a-screen task before any
   quantitative claim is made from it.
-- **`LICENSING.md`** still uses a W3C example that reads oddly now that `wcag22` is treated as
-  non-redistributable; a documentation consistency fix, not a licensing determination.

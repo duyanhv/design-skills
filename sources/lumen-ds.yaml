@@ -26,7 +26,6 @@ skill:
     Lumen Design System as actionable rules with citations — a synthetic example showing what
     design-skills generates. Use when you want to see the output format, not for real design work.
   max_skill_lines: 120
-  highlights: false
   routing:
     - when: "buttons, actions, destructive flows"
       read: [buttons]

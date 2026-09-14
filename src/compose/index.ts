@@ -9,8 +9,6 @@ import { PageIRSchema, type PageIR, type Rule, type Section, type Table } from "
 import { listFiles, paths, readJson, writeJson, writeText, ensureDir } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 
-const SEV_ORDER = { must: 0, should: 1, may: 2 } as const;
-
 export async function loadIR(source: Source): Promise<PageIR[]> {
   const files = await listFiles(paths.irPages(source.id), ".json");
   const pages: PageIR[] = [];
@@ -235,33 +233,6 @@ function skillDoc(
       lines.push(`| ${r.when} | ${links.join(", ")} |`);
     }
     lines.push(``);
-  }
-
-  if (skill.highlights) {
-    // Top rules: N per topic — "Best practices" first, platform-agnostic first, must > should > may, then brevity.
-    const budgetForTop = Math.max(20, skill.max_skill_lines - 80 - pages.length - skill.routing.length);
-    let used = 0;
-    const blocks: string[][] = [];
-    for (const cat of categories) {
-      const picked: Rule[] = [];
-      for (const p of byCategory.get(cat)!) {
-        const bp = (r: Rule) => (/best practices/i.test(r.section) ? 0 : 1);
-        picked.push(
-          ...p.rules
-            .filter((r) => r.kind === "rule" && !/[:—-]$/.test(r.statement))
-            .sort((a, b) => bp(a) - bp(b) || a.platforms.length - b.platforms.length || SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
-            .slice(0, skill.top_rules_per_topic),
-        );
-      }
-      const block: string[] = [];
-      for (const r of picked) {
-        if (used >= budgetForTop) break;
-        block.push(ruleLine({ ...r, rationale: undefined }, { withTopic: true }));
-        used++;
-      }
-      if (block.length) blocks.push([`### ${titleCase(cat)}`, ``, ...block, ``]);
-    }
-    if (blocks.length) lines.push(`## Highest-leverage rules`, ``, `One rule per topic, to orient — not a checklist. The reference files are the checklist.`, ``, ...blocks.flat());
   }
 
   const index: string[] = [];

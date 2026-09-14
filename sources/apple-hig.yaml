@@ -28,7 +28,6 @@ skill:
     React Native, Flutter). Use when designing screens, choosing components, checking
     layout/typography/color/accessibility, or reviewing UI against Apple's guidance.
   max_skill_lines: 320
-  highlights: false          # the routing table below orients better than one arbitrary rule per page
   routing:
     - when: "any iOS/iPadOS screen review"
       read: [accessibility, layout, typography, color, dark-mode]

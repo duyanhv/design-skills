@@ -26,7 +26,6 @@ skill:
     accessibility/a11y compliance question.
   max_skill_lines: 300
   rationale_label: Details
-  highlights: false
   index: rules
   notes: |
     **Applicability is decided by the conformance target, not by this skill.** Every success criterion
