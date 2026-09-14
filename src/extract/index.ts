@@ -51,7 +51,7 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
     const previous = await readJson<PageIR>(join(paths.irPages(source.id), `${slug}.json`));
     if (!opts.force && previous && previous.source_hash === meta.source_hash && previous.extractor === EXTRACTOR) {
       skipped++;
-      rulesTotal += previous.rules.length;
+      rulesTotal += previous.rules.filter((r) => r.kind === "rule").length;
       continue;
     }
 
@@ -62,6 +62,7 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
       page: slug,
       category: meta.category ?? "uncategorized",
       topic: meta.title ?? slug,
+      kind: r.kind,
       section: r.section,
       platforms: r.platforms,
       severity: r.severity,
@@ -86,8 +87,9 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
     });
     await writeJson(join(paths.irPages(source.id), `${slug}.json`), ir);
     extracted++;
-    rulesTotal += rules.length;
-    if (!rules.length) log.warn(`${slug}: 0 rules`);
+    const n = rules.filter((r) => r.kind === "rule").length;
+    rulesTotal += n;
+    if (!n) log.warn(`${slug}: 0 rules`);
   }
 
   await writeMeta(source);
@@ -103,8 +105,9 @@ export async function writeMeta(source: Source) {
   let fetched = "";
   for (const f of files) {
     const ir = (await readJson<PageIR>(join(paths.irPages(source.id), f)))!;
-    pages[ir.page] = { source_hash: ir.source_hash, source_version: ir.source_version, rules: ir.rules.length };
-    rule_count += ir.rules.length;
+    const n = ir.rules.filter((r) => r.kind === "rule").length;
+    pages[ir.page] = { source_hash: ir.source_hash, source_version: ir.source_version, rules: n };
+    rule_count += n;
     if (ir.source_version && ir.source_version > version) version = ir.source_version;
     if (ir.fetched_at > fetched) fetched = ir.fetched_at;
   }

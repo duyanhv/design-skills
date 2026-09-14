@@ -8,9 +8,10 @@
  */
 import { severityOf, valueOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@1";
+export const EXTRACTOR = "bold-lead@3";
 
 export interface ExtractedRule {
+  kind: "rule" | "term";
   section: string;
   anchor?: string;
   platforms: string[];
@@ -33,6 +34,31 @@ export interface ExtractOptions {
 
 const HEADING = /^(#{1,6})\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
 const BOLD_LEAD = /^(?:[-*]\s+|\d+\.\s+)?\*\*(.+?)\*\*\s*(.*)$/;
+/** Plain list item (no bold lead). Only treated as a rule inside a "Best practices" section. */
+const PLAIN_ITEM = /^(?:[-*]\s+|\d+\.\s+)(?!\*\*)(?!\[)(.+)$/;
+const FIRST_SENTENCE = /^(.*?[.!?])(?:\s+(.*))?$/;
+
+/**
+ * A bold lead is a rule when it reads as an instruction. Very short leads are only rules when they
+ * start with an imperative verb ("Be brief."); otherwise they are labels ("Long delay.", "Custom view.").
+ * Leads with no terminal punctuation are headings-in-disguise ("San Francisco (SF)") → term.
+ */
+const IMPERATIVE_STARTS = new Set(("be use keep avoid don't do prefer make provide let give help include consider create support " +
+  "display show ensure never always offer test design choose place position limit present respect follow write add put set " +
+  "allow enable stay try aim minimize maximize localize match align group describe label name pair reserve clarify communicate " +
+  "supply require request ask tell start stop pause resume update remove hide reveal confirm handle respond reflect indicate " +
+  "prioritize emphasize reduce increase balance combine separate distinguish define specify identify anticipate accommodate").split(" "));
+
+export function classify(statement: string): "rule" | "term" {
+  const s = statement.trim();
+  if (!/[.!?:]["\u201D\u2019']?$/.test(s)) return "term";
+  const words = s.replace(/[.!?:]["\u201D\u2019']?$/, "").split(/\s+/);
+  if (words.length <= 2) {
+    const first = words[0]!.toLowerCase().replace(/[\u2019]/g, "'");
+    return IMPERATIVE_STARTS.has(first) ? "rule" : "term";
+  }
+  return "rule";
+}
 
 const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
 const LONG_DATE = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/g;
@@ -95,18 +121,40 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
     }
     if (inChangeLog) changeLog += line + "\n";
     if (!sawHeading) {
-      if (line.trim()) summary += (summary ? " " : "") + stripMd(line);
+      if (line.trim() && !summary) summary = stripMd(line); // the abstract is the first paragraph
       continue;
     }
     if (skipping()) continue;
 
+    let statement: string;
+    let rationale: string | undefined;
+    let kind: "rule" | "term" = "rule";
     const m = BOLD_LEAD.exec(line.trim());
-    if (!m) continue;
-    const statement = stripMd(m[1]!);
-    const rationale = stripMd(m[2] ?? "") || undefined;
-    if (statement.split(" ").length < 2) continue; // "**Style**" style list labels, not rules
+    if (m) {
+      statement = stripMd(m[1]!);
+      rationale = stripMd(m[2] ?? "") || undefined;
+      // Apple sometimes closes the bold before the period: "**Keep it consistent**. Once you…"
+      const punct = /^([.!?:])\s*(.*)$/.exec(rationale ?? "");
+      if (punct) {
+        statement += punct[1];
+        rationale = punct[2] || undefined;
+      }
+      kind = classify(statement);
+      if (kind === "term" && !rationale) continue; // bare "**Style**" list labels carry nothing
+    } else {
+      // Overview pages ("Designing for iOS") list best practices as plain bullets.
+      const inBestPractices = path.some((p) => /best practices/i.test(p.text));
+      const item = inBestPractices ? PLAIN_ITEM.exec(line.trim()) : null;
+      if (!item) continue;
+      const text = stripMd(item[1]!);
+      const fs = FIRST_SENTENCE.exec(text);
+      statement = fs ? fs[1]! : text;
+      rationale = fs?.[2] || undefined;
+      if (statement.split(" ").length < 4) continue;
+    }
     const nearest = [...path].reverse().find((p) => p.anchor);
     rules.push({
+      kind,
       section: path.map((p) => p.text).join(" › "),
       anchor: nearest?.anchor,
       platforms: currentPlatforms(),

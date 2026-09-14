@@ -18,6 +18,11 @@ export const RuleSchema = z.object({
   section: z.string(),
   /** Empty array = applies to every platform the source covers. */
   platforms: z.array(z.string()).default([]),
+  /**
+   * "rule": an imperative guideline. "term": a bold label + description (e.g. "Long delay." or
+   * "San Francisco (SF)") that carries facts but no instruction; kept for reference, excluded from counts.
+   */
+  kind: z.enum(["rule", "term"]).default("rule"),
   /** Heuristic from the statement's wording — see extract/severity.ts. */
   severity: z.enum(["must", "should", "may"]),
   /** The guideline's lead sentence, verbatim. */

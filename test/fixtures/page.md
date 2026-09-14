@@ -12,13 +12,25 @@ Toggles are made of three things:
 
 **Make toggles easy for people to reach.** Give a toggle a hit region of at least 44x44 pt so people can flip it without precision, whether they use a finger or a pointer.
 
-**Avoid using a toggle for an action that takes effect later.** People expect the change to happen immediately.
+**Don’t use a toggle for an action that takes effect later.** People expect the change to happen immediately.
 
 **Consider pairing a toggle with a short description.** A description can clarify what the setting controls.
 
+## Style {#Style}
+
+**Long delay.** The toggle waits a moment before flipping.
+
+**San Francisco (SF)** The system font.
+
+**Be brief.** Keep labels short.
+
+**Keep visuals consistent**. Once set, keep it.
+
+**Translate only the word Hey in “Hey Siri.”** Siri is a trademark.
+
 ## Content {#Content}
 
-**Use a label that names the setting, not the state.** "Wi-Fi" is clearer than "On".
+**Use a label that names the setting, not the state.** "Wi-Fi" is clearer than "On". Keep about 10 pixels of padding.
 
 ## Platform considerations {#Platform-considerations}
 

@@ -25,7 +25,7 @@ export async function validateSource(source: Source): Promise<Finding[]> {
     }
     const ir = parsed.data;
     irPages.push(ir.page);
-    if (!ir.rules.length) warn(where, "page has zero rules");
+    if (!ir.rules.some((r) => r.kind === "rule")) warn(where, "page has zero rules");
     for (const r of ir.rules) {
       if (ids.has(r.id)) err(where, `duplicate rule id ${r.id}`);
       ids.add(r.id);

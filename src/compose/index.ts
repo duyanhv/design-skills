@@ -35,16 +35,19 @@ function ruleLine(r: Rule, withTopic = false): string {
 }
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }): string {
-  // keep document order; group consecutive rules by section path
+  // keep document order; group rules by section path; terms (labels + descriptions) go last
+  const rules = page.rules.filter((r) => r.kind === "rule");
+  const terms = page.rules.filter((r) => r.kind === "term");
   const bySection = new Map<string, Rule[]>();
-  for (const r of page.rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
-  const sections = [...bySection.entries()].map(([section, rules]) => {
-    return `\n### ${section}\n` + rules.map((r) => ruleLine(r)).join("\n");
-  });
+  for (const r of rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
+  const sections = [...bySection.entries()].map(([section, rs]) => `\n### ${section}\n` + rs.map((r) => ruleLine(r)).join("\n"));
+  if (terms.length) {
+    sections.push(`\n## Terms\n` + terms.map((t) => `- **${t.statement}** ${t.rationale ?? ""} ${cite(t)}`.replace(/\s+/g, " ")).join("\n"));
+  }
   return [
     `# ${page.title}`,
     ``,
-    `> Source: [${source.name}](${page.url}) · version ${meta.source_version} · ${page.rules.length} rules`,
+    `> Source: [${source.name}](${page.url}) · version ${page.source_version ?? meta.source_version} · ${rules.length} rules`,
     `> ${source.license.attribution}`,
     ``,
     page.summary,
@@ -104,7 +107,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     const picked: Rule[] = [];
     for (const p of catPages) {
       const bp = (r: Rule) => (/best practices/i.test(r.section) ? 0 : 1);
-      const best = [...p.rules]
+      const best = p.rules.filter((r) => r.kind === "rule")
         .sort((a, b) => bp(a) - bp(b) || SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
         .slice(0, skill.top_rules_per_topic);
       picked.push(...best);
@@ -122,7 +125,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
   lines.push(`## Index`, ``, `| Category | Topic | Rules | Reference |`, `| --- | --- | --- | --- |`);
   for (const cat of categories) {
     for (const p of byCategory.get(cat)!) {
-      lines.push(`| ${titleCase(cat)} | ${p.title} | ${p.rules.length} | [${p.page}.md](references/${cat}/${p.page}.md) |`);
+      lines.push(`| ${titleCase(cat)} | ${p.title} | ${p.rules.filter((r) => r.kind === "rule").length} | [${p.page}.md](references/${cat}/${p.page}.md) |`);
     }
   }
   lines.push(``);
