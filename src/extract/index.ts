@@ -84,6 +84,7 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
       extractor: EXTRACTOR,
       summary: page.summary,
       rules,
+      tables: page.tables,
     });
     await writeJson(join(paths.irPages(source.id), `${slug}.json`), ir);
     extracted++;

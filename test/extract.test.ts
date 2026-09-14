@@ -55,6 +55,15 @@ test("section path, anchor, platforms, severity and value", () => {
   expect(vision!.value).toBe("60x60 pt");
 });
 
+test("tables under guidance sections are captured with section, anchor and caption; change-log tables are not", () => {
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });
+  expect(page.tables.length).toBe(1);
+  expect(page.tables[0]!.section).toBe("Style › Small");
+  expect(page.tables[0]!.anchor).toBe("Small");
+  expect(page.tables[0]!.caption).toBe("Sizes");
+  expect(page.tables[0]!.markdown).toBe("| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+});
+
 test("overview pages: abstract is first paragraph; plain best-practice bullets become rules", () => {
   const md = readFileSync(new URL("./fixtures/overview.md", import.meta.url), "utf8");
   const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });

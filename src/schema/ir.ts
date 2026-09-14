@@ -26,13 +26,23 @@ export const RuleSchema = z.object({
   /** Heuristic from the statement's wording — see extract/severity.ts. */
   severity: z.enum(["must", "should", "may"]),
   /** The guideline's lead sentence, verbatim. */
-  statement: z.string().min(4).max(400),
+  statement: z.string().min(2).max(400),
   /** The explanatory text that follows the lead sentence, verbatim. */
   rationale: z.string().max(2000).optional(),
   /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,
 });
+
+/** A markdown table found under a guidance section — specs, sizes, margins. Kept verbatim. */
+export const TableSchema = z.object({
+  section: z.string(),
+  anchor: z.string().optional(),
+  /** Text immediately preceding the table (a tab label or intro sentence), if any. */
+  caption: z.string().max(200).optional(),
+  markdown: z.string(),
+});
+export type Table = z.infer<typeof TableSchema>;
 
 export const PageIRSchema = z.object({
   source: z.string(),
@@ -50,6 +60,7 @@ export const PageIRSchema = z.object({
   /** The page abstract. */
   summary: z.string().max(1000),
   rules: z.array(RuleSchema),
+  tables: z.array(TableSchema).default([]),
 });
 
 export type Rule = z.infer<typeof RuleSchema>;

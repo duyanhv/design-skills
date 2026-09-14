@@ -17,6 +17,8 @@ test("docc → markdown covers headings, inline, lists, tables, asides, unknown 
   expect(body).toContain("> **Note:** Widgets refresh on a budget.");
   expect(body).toContain("Unknown blocks still surface text.");
   expect(body).not.toContain("img-1");
+  expect(body).toContain("**Small**\n\n#### Small widget {#Small-widget}\n\n| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+  expect(body).not.toContain("**Empty**");
 });
 
 test("slugs are stable and flat", () => {

@@ -35,6 +35,7 @@ export type Block = {
   style?: string;
   name?: string;
   columns?: { content?: Block[] }[];
+  tabs?: { title?: string; content?: Block[] }[];
   [k: string]: unknown;
 };
 
@@ -122,10 +123,17 @@ export function blocksToMarkdown(blocks: Block[] | undefined, refs: Record<strin
       case "termList":
         out.push(blocksToMarkdown(b.items?.flatMap((i) => i.content ?? []), refs, depth + 1));
         break;
+      case "tabNavigator":
+        // Tabbed spec panels ("Two-column" / "Three-column" grids): flatten, label each tab.
+        for (const tab of b.tabs ?? []) {
+          const inner = blocksToMarkdown(tab.content, refs, depth + 1);
+          if (!inner) continue;
+          out.push(tab.title ? `**${tab.title}**\n\n${inner}` : inner);
+        }
+        break;
       case "image":
       case "video":
       case "links":
-      case "tabNavigator":
         break;
       default: {
         // unknown block: recurse into anything that looks like content

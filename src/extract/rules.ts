@@ -8,7 +8,7 @@
  */
 import { severityOf, valueOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@3";
+export const EXTRACTOR = "bold-lead@4";
 
 export interface ExtractedRule {
   kind: "rule" | "term";
@@ -21,10 +21,18 @@ export interface ExtractedRule {
   value?: string;
 }
 
+export interface ExtractedTable {
+  section: string;
+  anchor?: string;
+  caption?: string;
+  markdown: string;
+}
+
 export interface ExtractedPage {
   summary: string;
   source_version?: string;
   rules: ExtractedRule[];
+  tables: ExtractedTable[];
 }
 
 export interface ExtractOptions {
@@ -92,7 +100,22 @@ export function latestDate(text: string): string | undefined {
 export function extractRules(markdown: string, opts: ExtractOptions): ExtractedPage {
   const lines = markdown.split("\n");
   const rules: ExtractedRule[] = [];
+  const tables: ExtractedTable[] = [];
   const path: { level: number; text: string; anchor?: string }[] = [];
+  let tableBuf: string[] = [];
+  let lastProse = "";
+  const flushTable = () => {
+    if (tableBuf.length >= 2) {
+      const nearest = [...path].reverse().find((p) => p.anchor);
+      tables.push({
+        section: path.map((p) => p.text).join(" › "),
+        anchor: nearest?.anchor,
+        caption: lastProse ? stripMd(lastProse).slice(0, 200) : undefined,
+        markdown: tableBuf.join("\n"),
+      });
+    }
+    tableBuf = [];
+  };
   let summary = "";
   let sawHeading = false;
   let changeLog = "";
@@ -109,6 +132,8 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
 
   for (const raw of lines) {
     const line = raw.trimEnd();
+    const isTableRow = /^\|.*\|$/.test(line.trim());
+    if (!isTableRow && tableBuf.length) flushTable();
     const h = HEADING.exec(line);
     if (h) {
       const level = h[1]!.length;
@@ -125,6 +150,12 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       continue;
     }
     if (skipping()) continue;
+
+    if (isTableRow) {
+      tableBuf.push(line.trim());
+      continue;
+    }
+    if (line.trim()) lastProse = line.trim();
 
     let statement: string;
     let rationale: string | undefined;
@@ -165,5 +196,6 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
     });
   }
 
-  return { summary: summary.slice(0, 1000), source_version: latestDate(changeLog), rules };
+  flushTable();
+  return { summary: summary.slice(0, 1000), source_version: latestDate(changeLog), rules, tables };
 }

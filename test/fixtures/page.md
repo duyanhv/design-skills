@@ -28,6 +28,14 @@ Toggles are made of three things:
 
 **Translate only the word Hey in “Hey Siri.”** Siri is a trademark.
 
+**Sizes**
+
+#### Small {#Small}
+
+| Attribute | Value |
+| --- | --- |
+| Width | 155 pt |
+
 ## Content {#Content}
 
 **Use a label that names the setting, not the state.** "Wi-Fi" is clearer than "On". Keep about 10 pixels of padding.

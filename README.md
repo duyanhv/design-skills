@@ -36,11 +36,12 @@ change log at the bottom. The extractor (`src/extract/rules.ts`) reads exactly t
 | platform-named headings (`iOS, iPadOS`, `macOS`…) | `platforms` |
 | wording (avoid/never/always → must, consider/can → may) | `severity` |
 | first figure with a unit (`44x44 pt`, `4.5:1`) | `value` |
+| tables under guidance sections (sizes, margins, specs) | `tables[]`, rendered verbatim in the reference file |
 | change-log dates | page `source_version` |
 | bold label without an instruction ("Long delay.", "San Francisco (SF)") | `kind: term` — kept in the reference file, excluded from rule counts |
 | plain bullets under "Best practices" (overview pages) | rules, first sentence as statement |
 
-Heuristics are small, tested and versioned (`extractor: bold-lead@3` is stamped into every IR file), so a
+Heuristics are small, tested and versioned (`extractor: bold-lead@4` is stamped into every IR file), so a
 change to them re-extracts every page and shows up as a reviewable diff. On the current HIG this yields
 ~2,340 rules across 158 pages, every one with a section anchor, in about a minute.
 

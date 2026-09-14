@@ -40,7 +40,18 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
   const terms = page.rules.filter((r) => r.kind === "term");
   const bySection = new Map<string, Rule[]>();
   for (const r of rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
-  const sections = [...bySection.entries()].map(([section, rs]) => `\n### ${section}\n` + rs.map((r) => ruleLine(r)).join("\n"));
+  const tablesBySection = new Map<string, typeof page.tables>();
+  for (const t of page.tables) tablesBySection.set(t.section, [...(tablesBySection.get(t.section) ?? []), t]);
+  const order = [...new Set([...bySection.keys(), ...tablesBySection.keys()])];
+  const sections = order.map((section) => {
+    const rs = bySection.get(section) ?? [];
+    const ts = tablesBySection.get(section) ?? [];
+    const body = [
+      ...rs.map((r) => ruleLine(r)),
+      ...ts.map((t) => (t.caption && !/^\|/.test(t.caption) ? `\n${t.caption}\n\n${t.markdown}` : `\n${t.markdown}`)),
+    ];
+    return `\n### ${section}\n` + body.join("\n");
+  });
   if (terms.length) {
     sections.push(`\n## Terms\n` + terms.map((t) => `- **${t.statement}** ${t.rationale ?? ""} ${cite(t)}`.replace(/\s+/g, " ")).join("\n"));
   }
