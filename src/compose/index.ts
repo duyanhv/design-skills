@@ -99,7 +99,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     ``,
   );
 
-  // Top rules: N per topic — "Best practices" section first, then must > should > may, then brevity.
+  // Top rules: N per topic — "Best practices" first, platform-agnostic first, must > should > may, then brevity.
   const budgetForTop = Math.max(20, skill.max_skill_lines - 60 - pages.length);
   let used = 0;
   for (const cat of categories) {
@@ -108,7 +108,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     for (const p of catPages) {
       const bp = (r: Rule) => (/best practices/i.test(r.section) ? 0 : 1);
       const best = p.rules.filter((r) => r.kind === "rule")
-        .sort((a, b) => bp(a) - bp(b) || SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
+        .sort((a, b) => bp(a) - bp(b) || a.platforms.length - b.platforms.length || SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
         .slice(0, skill.top_rules_per_topic);
       picked.push(...best);
     }
