@@ -87,8 +87,15 @@ it was built from.
 | `bun test` | Each stage in isolation, with regression fixtures for every bug the audit found | CI |
 | `bun run e2e` | The whole pipeline over a synthetic source, plus the cache and reconciliation contracts | CI |
 | `bun run validate <id>` | IR schema, scope integrity, provenance, Agent Skills frontmatter, token budget, license gate | CI + build |
+| `bun run validate:negative` | That all 18 validate guards actually fire, by corrupting a real build one defect at a time | CI |
 | `bun run eval <id>` | Rule-level assertions: severity, scope, conformance level, exceptions, citation anchors | build |
 | `bun run agenteval` | Whether an agent given the skill actually reviews UI better | manual (costs model calls) |
+
+A check that has never been seen to fail is a guess, so the guards are tested in both directions:
+`validate:negative` introduces one defect at a time into a copied build and asserts validate reports
+that specific error. An incomplete crawl is handled the same way — it is refused by default, and when
+forced with `--allow-partial` the resulting `SKILL.md` says so above the fold, because an agent that
+cannot tell a rulebook has holes in it will read absence as permission.
 
 Evals assert facts about *rules*, not substrings on a page. An eval locates one rule and checks what
 an agent acts on, because a substring test passes happily while a criterion loses the exception list

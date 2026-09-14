@@ -9,7 +9,7 @@
  * Usage: `bun run src/e2e/run.ts` (add `--keep` to leave the build in place for inspection).
  */
 import { join } from "node:path";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { Manifest, PageEntry } from "../fetch/types.ts";
 import { normalizeSource } from "../normalize/index.ts";
@@ -17,7 +17,7 @@ import { extractSource } from "../extract/index.ts";
 import { composeSource } from "../compose/index.ts";
 import { validateSource } from "../validate/index.ts";
 import { evalSource } from "../eval/index.ts";
-import { loadSource, paths, writeJson, writeText } from "../util/fs.ts";
+import { loadSource, paths, readJson, writeJson, writeText } from "../util/fs.ts";
 import { shortHash } from "../util/hash.ts";
 import { log } from "../util/log.ts";
 import { PAGES } from "./fixture.ts";
@@ -115,6 +115,29 @@ const afterRemoval = await extractSource(source);
 if (afterRemoval.removed !== 1) throw new Error(`removing a page upstream left its IR in place (removed=${afterRemoval.removed})`);
 const partialRun = await extractSource(source, { partial: true });
 if (partialRun.removed !== 0) throw new Error("a partial run must never delete pages it did not visit");
+
+// An incomplete crawl must be refused by default, and when forced it must be *visible* all the way
+// through to the file an agent reads. Recording it only in provenance.json would leave a reader
+// treating "not in this skill" as "permitted by the guideline".
+const manifestPath = paths.manifest(SOURCE_ID);
+const goodManifest = (await readJson<Manifest>(manifestPath))!;
+await writeJson(manifestPath, { ...goodManifest, partial: true, failed: [{ url: "/design/lumen/color", error: "503" }] });
+let refused = false;
+try {
+  await normalizeSource(source);
+} catch {
+  refused = true;
+}
+if (!refused) throw new Error("normalize accepted a partial manifest without --allow-partial");
+await normalizeSource(source, { allowPartial: true });
+await extractSource(source, { force: true });
+await composeSource(source);
+const partialSkill = await readFile(join(paths.skill(source.skill.name), "SKILL.md"), "utf8");
+if (!/This build is incomplete/.test(partialSkill)) throw new Error("a partial build does not warn the reader in SKILL.md");
+if (!/partial: "true"/.test(partialSkill)) throw new Error("a partial build is not marked in the skill frontmatter");
+const partialProvenance = await readJson<{ partial: boolean }>(join(paths.skill(source.skill.name), "provenance.json"));
+if (!partialProvenance?.partial) throw new Error("a partial build is not recorded in provenance.json");
+await writeJson(manifestPath, goodManifest);
 
 // Restore the pre-probe IR, then rebuild normally. The restored IR carries the same input_hash, so
 // extraction reuses it and timestamps stay put: an unchanged compiler produces an unchanged example.

@@ -158,7 +158,7 @@ function severitiesPresent(pages: PageIR[]): string[] {
 function skillDoc(
   source: Source,
   pages: PageIR[],
-  meta: { source_version: string; rule_count: number; revision?: string; fetched_at?: string },
+  meta: { source_version: string; rule_count: number; revision?: string; fetched_at?: string; partial?: boolean },
 ): { skill: string; index?: string } {
   const { skill } = source;
   const byCategory = new Map<string, PageIR[]>();
@@ -189,11 +189,22 @@ function skillDoc(
     ...(meta.revision ? [`  source_revision: ${JSON.stringify(meta.revision)}`] : []),
     ...(meta.fetched_at ? [`  fetched_at: ${JSON.stringify(meta.fetched_at)}`] : []),
     `  rules: ${JSON.stringify(String(meta.rule_count))}`,
+    ...(meta.partial ? [`  partial: ${JSON.stringify("true")}`] : []),
     `  generated_by: ${JSON.stringify("design-skills")}`,
     `---`,
     ``,
     `# ${source.name}`,
     ``,
+    // A partial build is a rulebook with holes in it. The agent has to be told, in the file it
+    // always reads — recording it only in provenance.json leaves the reader confidently wrong.
+    ...(meta.partial
+      ? [
+          `> **This build is incomplete.** The crawl did not cover the whole source, so a rule may be ` +
+            `missing rather than absent. Treat "not in this skill" as unknown, not as permitted, and ` +
+            `check the source directly for anything load-bearing. See \`provenance.json\`.`,
+          ``,
+        ]
+      : []),
     `Compiled rulebook: ${meta.rule_count} rules across ${pages.length} pages, each cited back to the source. ` +
       `Statements are the guideline's own sentences; follow the citation for visuals and surrounding context.`,
     ``,

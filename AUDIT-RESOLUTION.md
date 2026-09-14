@@ -4,7 +4,7 @@ Responses to [AUDIT.md](AUDIT.md). Every finding is addressed, with the check th
 regresses. Verification below is from this working tree at the time of writing.
 
 ```
-bun run check     typecheck · 29 tests, 191 assertions · e2e build · 3 manifests valid
+bun run check     typecheck · 29 tests, 191 assertions · e2e build · 18 validate guards fire · 3 manifests valid
 bun run validate  apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval      apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
 bun run agenteval 3 review tasks × 2 arms × 3 samples = 18 runs (summary below)
@@ -94,6 +94,14 @@ stage reconciles against one. `--limit` marks the build partial for the same rea
 The end-to-end run asserts both halves: removing a page drops its IR (`removed === 1`), and a partial
 run over the same state removes nothing.
 
+Testing this end to end rather than by inspection found a real gap. A partial build was recorded in
+`ir/<id>/meta.json` and `provenance.json`, but **`SKILL.md` said nothing** — so an agent reading the
+skill would treat "not in this rulebook" as "not required by the guideline", which is precisely
+backwards for an incomplete crawl. A partial build now carries `partial: "true"` in its frontmatter
+and a warning above the fold telling the reader to treat absence as unknown. The e2e run asserts the
+whole path: normalize refuses a partial manifest, `--allow-partial` proceeds, and the warning reaches
+the frontmatter, the body, and `provenance.json`.
+
 ### 6 · P2 — Extraction cache omits configuration and metadata dependencies → fixed
 
 Reuse is keyed on an `input_hash` over every semantic input: page body, extractor id, title,
@@ -121,6 +129,14 @@ Validation parses the frontmatter as YAML and checks it against a schema derived
 [Agent Skills specification](https://agentskills.io/specification), so `rules: 2346` as a bare number
 now fails; the composer quotes every metadata value. It also estimates the token budget, requires
 `provenance.json`, checks `index.md` linkage, and errors on a reference file with no IR page.
+
+Every one of these guards is now *observed* firing rather than asserted by reading the code.
+`bun run validate:negative` copies a real build into a scratch tree, introduces one defect at a time
+(18 of them: a scoped rule with no platforms, a provenance hash that disagrees with its page, a
+metadata number, a broken reference link, a non-redistributable output left un-ignored, …) and
+asserts validate reports that specific error. It runs in CI. Writing it caught that the first version
+of the harness was reading the wrong directory and reporting "no IR pages" for every case — a false
+pass that looked exactly like a real one.
 
 On size: the entry file was ~4,800 estimated tokens, 15 KB of which was a 158-row index. Past
 `split_index_over` the index moves to `index.md` and SKILL.md keeps the decision workflow, the

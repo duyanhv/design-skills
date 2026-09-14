@@ -18,8 +18,9 @@
     "test": "bun test",
     "example": "bun run src/e2e/run.ts",
     "e2e": "bun run src/e2e/run.ts",
-    "check": "bun run typecheck && bun test && bun run src/e2e/run.ts && bun run src/e2e/manifests.ts",
-    "agenteval": "bun run src/agenteval/run.ts"
+    "check": "bun run typecheck && bun test && bun run src/e2e/run.ts && bun run src/e2e/validate-negative.ts && bun run src/e2e/manifests.ts",
+    "agenteval": "bun run src/agenteval/run.ts",
+    "validate:negative": "bun run src/e2e/validate-negative.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

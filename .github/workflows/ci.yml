@@ -28,5 +28,9 @@ jobs:
             echo "::error::examples drifted — run 'bun run example' and commit the result"
             exit 1
           }
+      # Every validate guard must be *seen* to fire. A check that has never failed is a guess: a
+      # regex that stopped matching would look exactly like a clean build.
+      - name: Validate guards fire on corrupted builds
+        run: bun run src/e2e/validate-negative.ts
       - name: Manifests parse against the source schema
         run: bun run src/e2e/manifests.ts
