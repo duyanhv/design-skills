@@ -89,8 +89,16 @@ it was built from.
 | `bun run validate <id>` | IR schema, scope integrity, provenance, Agent Skills frontmatter, token budget, license gate | CI + build |
 | `bun run validate:negative` | That all 18 validate guards actually fire, by corrupting a real build one defect at a time | CI |
 | `bun run eval <id>` | Rule-level assertions: severity, scope, conformance level, exceptions, citation anchors | build |
+| `bun run coverage` | That **nothing** the source said is missing from the shipped skill, beyond declared omissions | CI |
 | `bun run trace` | Each audit finding mapped to an assertion over the **shipped** `ir/` and `skills/` | local (needs a build) |
 | `bun run agenteval` | Whether an agent given the skill actually reviews UI better | manual (costs model calls) |
+
+`coverage` is the complement of every other check: instead of asking whether the things I looked for
+survived, it walks every source line and fails on any whose content is missing downstream, excluding
+three declared omissions (page-header figures, table rows that moved to a sibling file, and skipped
+sections). It found a real loss nothing else was looking for — WCAG 4.1.1's explanation was in the IR
+but never rendered — and it reports **0 unexplained losses across 158 Apple pages and 14 WCAG
+guidelines**.
 
 A check that has never been seen to fail is a guess, so the guards are tested in both directions:
 `validate:negative` introduces one defect at a time into a copied build and asserts validate reports

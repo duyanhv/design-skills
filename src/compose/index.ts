@@ -88,7 +88,12 @@ function sectionIntro(s: Section | undefined, linker: Linker, category: string):
 }
 
 function termLine(t: Rule, linker: Linker, category: string): string {
-  return `- **${t.statement}** — ${linker.localize(t.rationale ?? "", category)} ${cite(t)}`.replace(/\s+/g, " ");
+  // A term's description can arrive as `rationale` (glossary entries) or as `notes` (an obsolete
+  // WCAG criterion, whose whole explanation is a note). Rendering only the first dropped the text
+  // explaining *why* 4.1.1 Parsing was removed, leaving a definition with nothing after the dash.
+  const body = [t.rationale, ...t.notes].filter(Boolean).join(" ");
+  const rendered = linker.localize(body, category);
+  return `- **${t.statement}**${rendered ? ` — ${rendered}` : ""} ${cite(t)}`.replace(/\s+/g, " ");
 }
 
 interface Rendered { main: string; tables?: string }

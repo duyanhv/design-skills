@@ -32,5 +32,9 @@ jobs:
       # regex that stopped matching would look exactly like a clean build.
       - name: Validate guards fire on corrupted builds
         run: bun run src/e2e/validate-negative.ts
+      # The complement of the targeted checks: does anything the source said fail to reach the
+      # shipped skill? Skips sources that are not built, so it is meaningful without a network crawl.
+      - name: No unexplained content loss
+        run: bun run src/e2e/coverage.ts
       - name: Manifests parse against the source schema
         run: bun run src/e2e/manifests.ts

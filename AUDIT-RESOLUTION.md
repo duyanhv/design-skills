@@ -4,10 +4,11 @@ Responses to [AUDIT.md](AUDIT.md). Every finding is addressed, with the check th
 regresses. Verification below is from this working tree at the time of writing.
 
 ```
-bun run check      typecheck · 29 tests, 191 assertions · e2e build · 18 validate guards fire · 3 manifests valid
+bun run check      typecheck · 30 tests, 196 assertions · e2e build · 18 validate guards fire · coverage · 3 manifests valid
 bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
-bun run trace      7/7 requirements verified against the shipped ir/ and skills/
+bun run coverage   0 unexplained content losses across 158 Apple pages and 14 WCAG guidelines
+bun run trace      10/10 requirements verified against the shipped ir/ and skills/
 bun run agenteval  3 review tasks × 2 arms × 3 samples = 18 runs (summary below)
 ```
 
@@ -31,6 +32,13 @@ Guarded by `test/wcag.test.ts` (a fixture with direct-text `li`, mixed inline co
 mixing a bare sentence with a nested paragraph) and by four `rule:` evals that assert the exception
 text is attached to its criterion.
 
+A later completeness sweep found one more loss of the same kind that no targeted check was looking
+for: 4.1.1 Parsing's explanation of *why* it was removed reached the IR but was never rendered,
+because a term's description can arrive as `notes` rather than `rationale` and the renderer only read
+the latter. Fixed, and `bun run coverage` now walks every source line and fails on any content that
+does not reach the shipped skill — 0 unexplained losses across 158 Apple pages and 14 WCAG
+guidelines.
+
 ### 2 · P1 — Apple extraction omits context needed to apply rules → fixed
 
 Prose that is not a rule is no longer discarded. It is routed to where it belongs:
@@ -48,8 +56,14 @@ content under the previous tab's heading.
 
 Concretely, on the Buttons page the visionOS hover-effect note, the material-selection bullets, and
 the role definitions are all present now; the role definitions render beside the rule that uses them
-rather than in a trailing "Terms" bucket. Across the HIG this attached 1,023 rule notes and 667 section
+rather than in a trailing "Terms" bucket. Across the HIG this attached 1,043 rule notes and 667 section
 intros that were previously dropped.
+
+The same completeness sweep found that the cap on context blocks (12 per rule or section) was
+*silently* discarding the overflow — finding 2's own failure mode surviving inside finding 2's fix.
+Apple's Virtual keyboards page lists ~10 keyboard types as label/figure pairs under one rule and was
+losing half of them; 20 lists across the HIG were affected. The cap is now 40, overflow leaves a
+counted marker citing the source URL, and no list on the HIG reaches it.
 
 Guarded by `test/normalize.test.ts`, `test/extract.test.ts`, and evals that assert the note text is
 in the rule's own context (not merely somewhere on the page).
