@@ -1,0 +1,50 @@
+{
+  "generated_by": "design-skills",
+  "source": "lumen-ds",
+  "name": "Lumen Design System",
+  "license": {
+    "spdx": "MIT",
+    "redistributable": true,
+    "attribution": "Lumen Design System — a synthetic example guideline, part of design-skills (MIT)."
+  },
+  "source_version": "2026-03-04",
+  "source_revision": null,
+  "fetched_at": "2026-03-04T00:00:00.000Z",
+  "extractor": "bold-lead@6",
+  "partial": false,
+  "rule_count": 10,
+  "pages": [
+    {
+      "page": "buttons",
+      "category": "components",
+      "url": "https://example.invalid/design/lumen/buttons",
+      "source_version": "2026-03-04",
+      "source_hash": "6a08c842144e63ba",
+      "fetched_at": "2026-03-04T00:00:00.000Z",
+      "rules": 4,
+      "platforms": []
+    },
+    {
+      "page": "color",
+      "category": "foundations",
+      "url": "https://example.invalid/design/lumen/color",
+      "source_version": "2026-03-04",
+      "source_hash": "30b362a28f40a934",
+      "fetched_at": "2026-03-04T00:00:00.000Z",
+      "rules": 2,
+      "platforms": []
+    },
+    {
+      "page": "designing-for-tv",
+      "category": "getting-started",
+      "url": "https://example.invalid/design/lumen/designing-for-tv",
+      "source_version": "2026-03-04",
+      "source_hash": "39212c1bcddec64e",
+      "fetched_at": "2026-03-04T00:00:00.000Z",
+      "rules": 4,
+      "platforms": [
+        "tv"
+      ]
+    }
+  ]
+}

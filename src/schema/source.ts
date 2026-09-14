@@ -22,6 +22,11 @@ export const SourceSchema = z.object({
   /** Where citations point, when different from base_url (e.g. fetched from GitHub, cited at w3.org). */
   canonical_url: z.string().url().optional(),
   cadence: z.enum(["daily", "weekly", "monthly"]).default("weekly"),
+  /**
+   * This source has no upstream to crawl; its raw pages are produced locally (see `src/e2e`).
+   * `fetch` and `build` skip it, so `bun run build` over all sources does not try the network.
+   */
+  synthetic: z.boolean().default(false),
   license: LicenseSchema,
   platforms: z.array(z.string()).default([]),
   /**

@@ -1,0 +1,32 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Unit tests
+        run: bun test
+      # An end-to-end build over a synthetic source: no network, no proprietary text, but it
+      # exercises normalize → extract → compose → validate → eval exactly as a real source does.
+      # This is what catches a pipeline break that unit tests alone would not.
+      - name: End-to-end build (synthetic source)
+        run: bun run src/e2e/run.ts
+      # The example skill is committed so people can read real output without a local build.
+      # If a compiler change alters it, the example has to be regenerated in the same PR.
+      - name: Committed example matches a fresh build
+        run: |
+          git diff --exit-code -- ir/lumen-ds skills/lumen-ds || {
+            echo "::error::examples drifted — run 'bun run example' and commit the result"
+            exit 1
+          }
+      - name: Manifests parse against the source schema
+        run: bun run src/e2e/manifests.ts

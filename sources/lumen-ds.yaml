@@ -1,0 +1,36 @@
+# Source manifest for the synthetic example guideline used by CI and by `examples/lumen-ds/`.
+#
+# "Lumen" is invented. Its text is written for this repository and is MIT-licensed like the code,
+# which is why this is the one source whose generated skill is committed: it lets anyone read a real
+# output of the compiler without building Apple's or W3C's content locally.
+id: lumen-ds
+name: Lumen Design System
+kind: docc
+base_url: https://example.invalid
+entry: /design/lumen
+cadence: monthly
+synthetic: true          # no upstream to crawl: staged from src/e2e/fixture.ts
+
+license:
+  spdx: MIT
+  redistributable: true
+  attribution: "Lumen Design System — a synthetic example guideline, part of design-skills (MIT)."
+
+platforms: [web, desktop, mobile, tv]
+categories: [getting-started, foundations, components]
+skip_sections: [Change log]
+
+skill:
+  name: lumen-ds
+  description: >-
+    Lumen Design System as actionable rules with citations — a synthetic example showing what
+    design-skills generates. Use when you want to see the output format, not for real design work.
+  max_skill_lines: 120
+  highlights: false
+  routing:
+    - when: "buttons, actions, destructive flows"
+      read: [buttons]
+    - when: "color, contrast, accessibility"
+      read: [color]
+    - when: "tv, remote navigation, focus"
+      read: [designing-for-tv]

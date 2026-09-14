@@ -1,28 +1,118 @@
 # Deterministic evals for the generated apple-hig skill: `bun run eval apple-hig`.
-# Each `expect` string (case-insensitive) must appear in references/<category>/<source>.md, and
-# SKILL.md must route to that page. `q` is documentation for humans — the fact a reader should be able
-# to answer from the skill.
+#
+# `expect` is a page-level smoke check (the string must appear in the reference file).
+# `rule` is the real assertion: it locates one rule by a fragment of its statement and checks the
+# properties an agent acts on — severity, platform scope, the exceptions that must travel with it,
+# and the citation anchor it should quote. A substring test passes while guidance is silently lost;
+# these do not.
+#
+# `q` documents, for a human, the question a reader should be able to answer from the skill.
+
 - q: What is the minimum hit region for a button on iOS, and on visionOS?
+  source: buttons
   expect: ["44x44", "60x60"]
-  source: buttons
+  rule:
+    statement_contains: Make buttons easy for people to use
+    severity: should
+    value: at least 44x44 pt
+    # Apple states both figures in one sentence; the visionOS number must not be lost when the
+    # statement alone is quoted.
+    context_contains: ["at least 44x44 pt", "in visionOS, 60x60 pt"]
+    anchor: Best-practices
+    scope: general
+
 - q: Should a destructive action get the primary (default) button role?
-  expect: "Don’t assign the primary role to a button that performs a destructive action"
   source: buttons
+  rule:
+    statement_contains: primary role to a button that performs a destructive action
+    severity: must
+    scope: general
+    context_contains: ["people sometimes choose a primary button without reading it first"]
+    anchor: Role
+
+- q: Do visionOS buttons support custom hover effects?
+  source: buttons
+  # Regression for AUDIT finding 2: this note was dropped, leaving the skill silent on a hard limit.
+  expect: ["In visionOS, buttons don’t support custom hover effects"]
+
+- q: In visionOS, which material should a button on top of a glass window use?
+  source: buttons
+  rule:
+    statement_contains: discernible background shape and fill
+    platforms: [visionOS]
+    scope: section
+    # The supporting bullets are the actionable part; the statement alone cannot answer the question.
+    context_contains:
+      - "use the [thin](/documentation/swiftui/material/thin) material as the button’s background"
+      - "When a button appears floating in space"
+    anchor: visionOS
+    # …and the reader must actually see it, with the link resolved to something followable.
+    rendered_contains:
+      - "https://developer.apple.com/documentation/swiftui/material/thin"
+
 - q: How many sheets may be displayed at a time from the main interface?
-  expect: "Display only one sheet at a time"
   source: sheets
+  rule:
+    statement_contains: Display only one sheet at a time
+    severity: must
+    scope: general
+
 - q: What should you do with tab bar buttons whose content is currently unavailable?
-  expect: "Don’t disable or hide tab bar buttons"
   source: tab-bars
+  rule:
+    statement_contains: disable or hide tab bar buttons
+    severity: must
+    # Tab bars are not a watchOS component; the rule must not read as applying there.
+    platforms: [iOS, iPadOS, macOS, visionOS, tvOS]
+    scope: page
+    rendered_contains: ["_[iOS, iPadOS, macOS, visionOS, tvOS only]_"]
+
 - q: What text-size scaling should apps support for accessibility?
-  expect: "200 percent"
   source: accessibility
+  expect: ["200 percent"]
+  rule:
+    statement_contains: Support larger text sizes
+    value: at least 200 percent
+    scope: general
+
 - q: On macOS, how much padding belongs between an image button's image and its edges?
-  expect: "10 pixels"
   source: buttons
+  expect: ["10 pixels"]
+
 - q: What layout size does an iOS app icon use?
-  expect: ["1024x1024 px"]
   source: app-icons
+  expect: ["1024x1024 px"]
+
 - q: What is the unfocused content width of a two-column tvOS grid?
-  expect: ["Two-column grid", "860 pt"]
   source: layout
+  expect: ["Two-column grid", "860 pt"]
+
+- q: Is tvOS remote guidance scoped to tvOS, or does it read as universal advice?
+  source: designing-for-tvos
+  # Regression for AUDIT finding 3: every rule on this page used to carry an empty platform list,
+  # which the skill defines as "applies to all platforms".
+  rule:
+    statement_contains: gestures people make with the Siri Remote
+    platforms: [tvOS]
+    scope: page
+    rendered_contains: ["_[tvOS only]_"]
+
+- q: Is "Consider using text when a short label communicates more clearly" a requirement?
+  source: buttons
+  # Regression for AUDIT finding 4: heuristics must not promote a suggestion to a hard constraint.
+  rule:
+    statement_contains: Consider using text when a short label
+    severity: may
+    scope: general
+
+- q: Is supporting keyboard-only work styles on macOS a hard requirement, or a recommendation?
+  source: designing-for-macos
+  # Regression for AUDIT finding 4: "keyboard-only" is a compound adjective, not a restriction. The
+  # old heuristic matched the bare word "only" and rendered this recommendation as MUST — and, per
+  # finding 3, as universal advice rather than macOS guidance.
+  rule:
+    statement_contains: keyboard-only work styles
+    severity: should
+    platforms: [macOS]
+    scope: page
+    rendered_contains: ["**SHOULD**", "_[macOS only]_"]

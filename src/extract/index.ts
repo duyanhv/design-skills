@@ -155,7 +155,10 @@ export async function extractSource(
       source_hash: meta.source_hash,
       fetched_at: meta.fetched_at,
       source_version: page.source_version ?? meta.version,
-      extracted_at: new Date().toISOString(),
+      // `extracted_at` records when this content was last *turned into these rules*, so a forced
+      // re-run over identical inputs keeps the old stamp. Otherwise `--force` would churn every
+      // timestamp and bury the real diff (AUDIT finding 7).
+      extracted_at: previous && previous.input_hash === input_hash ? previous.extracted_at : new Date().toISOString(),
       extractor: extractor.id,
       input_hash,
       summary: page.summary,
@@ -197,6 +200,7 @@ export async function writeMeta(source: Source) {
   let rule_count = 0;
   let version = "";
   let fetched = "";
+  let extractedAt = "";
   for (const f of files) {
     const ir = (await readJson<PageIR>(join(paths.irPages(source.id), f)))!;
     const n = ir.rules.filter((r) => r.kind === "rule").length;
@@ -204,6 +208,7 @@ export async function writeMeta(source: Source) {
     rule_count += n;
     if (ir.source_version && ir.source_version > version) version = ir.source_version;
     if (ir.fetched_at > fetched) fetched = ir.fetched_at;
+    if (ir.extracted_at > extractedAt) extractedAt = ir.extracted_at;
   }
   await writeJson(paths.irMeta(source.id), {
     source: source.id,
@@ -216,7 +221,8 @@ export async function writeMeta(source: Source) {
     /** True when the underlying crawl did not cover the whole source; the skill is incomplete. */
     partial: manifest?.partial ?? false,
     fetched_at: fetched,
-    updated_at: new Date().toISOString(),
+    // Derived from the pages rather than from the clock, so rebuilding unchanged input is a no-op.
+    updated_at: extractedAt || fetched,
     page_count: files.length,
     rule_count,
     pages,

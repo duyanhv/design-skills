@@ -17,10 +17,39 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run build ${{ inputs.source }}
+      # Never open a refresh PR from a tree that does not pass its own checks: a red compiler would
+      # otherwise silently rewrite the committed example and the IR.
+      - name: Checks
+        run: bun run check
+      - name: Build
+        run: bun run build ${{ inputs.source }}
+      # Non-redistributable sources produce no diff here, so summarise what changed for the reviewer.
+      - name: Summarise
+        id: summary
+        run: |
+          {
+            echo "summary<<EOF"
+            for meta in ir/*/meta.json; do
+              [ -f "$meta" ] || continue
+              bun -e '
+                const m = await Bun.file(process.argv[1]).json();
+                console.log(`- **${m.name}** — ${m.rule_count} rules across ${m.page_count} pages · version ${m.source_version}` +
+                  (m.revision ? ` · rev \`${String(m.revision).slice(0, 10)}\`` : "") +
+                  (m.partial ? " · ⚠️ PARTIAL BUILD" : ""));
+              ' "$meta"
+            done
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
       - uses: peter-evans/create-pull-request@v7
         with:
           branch: refresh/${{ inputs.source || 'all' }}
           title: "refresh: ${{ inputs.source || 'all sources' }}"
-          body: "Automated regeneration. Review the IR diff under `ir/` — the skill files under `skills/` are derived. Sources with `license.redistributable: false` produce no diff here; their outputs are built locally."
+          body: |
+            Automated regeneration. Review the IR diff under `ir/`; the files under `skills/` are derived from it.
+
+            ${{ steps.summary.outputs.summary }}
+
+            Sources with `license.redistributable: false` produce no diff here — their outputs are built locally,
+            so the counts above are the only signal that the upstream content changed. A build marked
+            **PARTIAL** did not cover the whole source and must not be treated as a complete refresh.
           commit-message: "chore: refresh ${{ inputs.source || 'all sources' }}"

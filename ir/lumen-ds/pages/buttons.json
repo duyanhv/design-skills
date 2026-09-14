@@ -1,0 +1,169 @@
+{
+  "source": "lumen-ds",
+  "page": "buttons",
+  "title": "Buttons",
+  "category": "components",
+  "url": "https://example.invalid/design/lumen/buttons",
+  "source_hash": "6a08c842144e63ba",
+  "fetched_at": "2026-03-04T00:00:00.000Z",
+  "source_version": "2026-03-04",
+  "extracted_at": "2026-09-14T08:15:13.727Z",
+  "extractor": "bold-lead@6",
+  "input_hash": "f74e8ad73c8adc1c",
+  "summary": "A button performs a single, immediate action.",
+  "overview": [
+    "A button combines a label, an optional icon, and a role. Use a button for actions, and a link for navigation."
+  ],
+  "platforms": [],
+  "sections": [
+    {
+      "section": "Best practices",
+      "anchor": "Best-practices",
+      "platforms": [],
+      "intro": [
+        "A button is recognisable when its target is large enough and its label names the action."
+      ]
+    },
+    {
+      "section": "Roles",
+      "anchor": "Roles",
+      "platforms": [],
+      "intro": [
+        "A role changes both appearance and behaviour:"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "lumen-ds/buttons/001",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Best practices",
+      "platforms": [],
+      "scope": "general",
+      "kind": "rule",
+      "severity": "should",
+      "statement": "Give every button a comfortable target.",
+      "rationale": "A button needs a hit region of at least 44x44 pt on touch inputs, and 32x32 pt with a precise pointer.",
+      "notes": [
+        "**Note:** On tv, a focused button grows by 10 percent, so leave room for the focused size."
+      ],
+      "value": "at least 44x44 pt",
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Best-practices",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "lumen-ds/buttons/002",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Best practices",
+      "platforms": [],
+      "scope": "general",
+      "kind": "rule",
+      "severity": "may",
+      "statement": "Consider using an icon-only button when the action is universally understood.",
+      "rationale": "Close, back and search read clearly without a label. Anything else needs text.",
+      "notes": [],
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Best-practices",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "lumen-ds/buttons/003",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Best practices",
+      "platforms": [],
+      "scope": "general",
+      "kind": "rule",
+      "severity": "must",
+      "statement": "Show only one primary button per view.",
+      "rationale": "Two primary buttons make the default action ambiguous.",
+      "notes": [],
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Best-practices",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "lumen-ds/buttons/004",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Roles",
+      "platforms": [],
+      "scope": "general",
+      "kind": "term",
+      "severity": "should",
+      "statement": "Primary.",
+      "rationale": "The action the person is most likely to take.",
+      "notes": [],
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Roles",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "lumen-ds/buttons/005",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Roles",
+      "platforms": [],
+      "scope": "general",
+      "kind": "term",
+      "severity": "should",
+      "statement": "Destructive.",
+      "rationale": "The action removes data and cannot be undone.",
+      "notes": [],
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Roles",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "lumen-ds/buttons/006",
+      "page": "buttons",
+      "category": "components",
+      "topic": "Buttons",
+      "section": "Roles",
+      "platforms": [],
+      "scope": "general",
+      "kind": "rule",
+      "severity": "must",
+      "statement": "Never give the destructive role to the primary button.",
+      "rationale": "People activate a prominent button without reading it.",
+      "notes": [],
+      "provenance": {
+        "url": "https://example.invalid/design/lumen/buttons",
+        "anchor": "Roles",
+        "source_hash": "6a08c842144e63ba",
+        "fetched_at": "2026-03-04T00:00:00.000Z"
+      }
+    }
+  ],
+  "tables": [
+    {
+      "section": "Sizes",
+      "anchor": "Sizes",
+      "caption": "Buttons come in three sizes.",
+      "markdown": "| Size | Height | Label |\n| --- | --- | --- |\n| Small | 28 pt | 13 pt |\n| Medium | 36 pt | 15 pt |\n| Large | 44 pt | 17 pt |"
+    }
+  ]
+}

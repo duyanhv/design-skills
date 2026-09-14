@@ -1,0 +1,74 @@
+# Evals for the synthetic `lumen-ds` source. These run in CI as the end-to-end check, so they cover
+# the failure modes the AUDIT found rather than facts about a made-up design system.
+
+- q: What target size does a button need, and does the tv focus growth affect it?
+  source: buttons
+  rule:
+    statement_contains: Give every button a comfortable target
+    severity: should
+    scope: general
+    value: at least 44x44 pt
+    # Finding 2: the aside that follows a rule used to be discarded.
+    context_contains:
+      - "32x32 pt with a precise pointer"
+      - "On tv, a focused button grows by 10 percent"
+
+- q: Is an icon-only button a requirement or a suggestion?
+  source: buttons
+  # Finding 4: "icon-only" must not be read as a restriction.
+  rule:
+    statement_contains: Consider using an icon-only button
+    severity: may
+    rendered_contains: ["**MAY**"]
+
+- q: How many primary buttons may a view have?
+  source: buttons
+  # …while "only one" genuinely restricts and stays a requirement.
+  rule:
+    statement_contains: Show only one primary button per view
+    severity: must
+    rendered_contains: ["**MUST**"]
+
+- q: May the primary button be destructive?
+  source: buttons
+  rule:
+    statement_contains: Never give the destructive role to the primary button
+    severity: must
+    anchor: Roles
+  # Finding 2: the role definitions live in prose, not in any rule, and must survive.
+  expect:
+    - "**Destructive.** — The action removes data and cannot be undone."
+    - "A button combines a label, an optional icon, and a role."
+
+- q: What is the height of a large button?
+  source: buttons
+  # Spec tables are rendered verbatim under their section.
+  expect: ["| Large | 44 pt | 17 pt |"]
+
+- q: Does tv focus guidance apply to mobile?
+  source: designing-for-tv
+  # Finding 3: an overview page's plain bullets used to carry no platform scope, which the skill
+  # defines as "applies to every platform".
+  rule:
+    statement_contains: Keep the focused element obvious at three metres
+    platforms: [tv]
+    scope: page
+    rendered_contains: ["_[tv only]_"]
+
+- q: What contrast ratio does text need?
+  source: color
+  rule:
+    statement_contains: contrast ratio of 4.5:1
+    severity: must
+    value: "4.5:1"
+    context_contains: ["Large text may use 3:1"]
+
+- q: Is there information in this guideline that only exists as an image?
+  source: color
+  # Finding 2: a figure with no text equivalent is marked, not silently dropped.
+  expect: ["_[figure: A grid of foreground and background color pairings with their contrast ratios.]_"]
+
+- q: Is change-log noise excluded from the rules?
+  source: buttons
+  # skip_sections must hold: the change log is metadata, not guidance.
+  expect: ["version 2026-03-04"]

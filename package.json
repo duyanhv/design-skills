@@ -15,7 +15,10 @@
     "eval": "bun run src/cli.ts eval",
     "build": "bun run src/cli.ts build",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "example": "bun run src/e2e/run.ts",
+    "e2e": "bun run src/e2e/run.ts",
+    "check": "bun run typecheck && bun test && bun run src/e2e/run.ts && bun run src/e2e/manifests.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

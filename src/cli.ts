@@ -52,6 +52,11 @@ const allowPartial = values["allow-partial"] === true;
 let failed = false;
 for (const id of ids) {
   const source = await loadSource(id);
+  // A synthetic source has no upstream; `bun run example` builds it from its local fixture.
+  if (source.synthetic && (command === "fetch" || command === "build") && !sourceArg) {
+    log.info(`skipping ${id} (synthetic; build it with \`bun run example\`)`);
+    continue;
+  }
   log.step(`${command} ${id}`);
   switch (command) {
     case "fetch":

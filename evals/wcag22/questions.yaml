@@ -1,16 +1,97 @@
 # Deterministic evals for the generated wcag22 skill: `bun run eval wcag22`.
-- q: What is the minimum contrast ratio for normal text at Level AA?
+#
+# `expect` is a page-level smoke check. `rule` locates one success criterion and asserts what an
+# auditor acts on: its conformance level, the exceptions that make it satisfiable, and the anchor a
+# finding should cite. The exception assertions are the regression guard for AUDIT finding 1, where
+# a criterion kept its numbers but lost the list that gave them meaning.
+
+- q: What is the minimum contrast ratio for normal text at Level AA, and what is exempt?
+  source: distinguishable
   expect: ["4.5:1", "Level AA"]
+  rule:
+    statement_contains: contrast ratio of at least 4.5:1
+    conformance_level: AA
+    anchor: contrast-minimum
+    # Quoting 4.5:1 without the exemptions produces false findings on logos and disabled controls.
+    context_contains:
+      - "Large Text"
+      - "Incidental"
+      - "Logotypes"
+    rendered_contains: ["**(Level AA)**"]
+
+- q: What are the four text-spacing values a page must survive?
   source: distinguishable
-- q: What is the minimum target size at Level AA (2.5.8)?
-  expect: ["24 by 24 CSS pixels"]
+  # Regression for AUDIT finding 1: all four requirements were rendered as empty bullets.
+  rule:
+    statement_contains: no loss of content or functionality occurs by setting all of the following
+    conformance_level: AA
+    anchor: text-spacing
+    context_contains:
+      - "Line height (line spacing) to at least 1.5 times the font size"
+      - "Spacing following paragraphs to at least 2 times the font size"
+      - "Letter spacing (tracking) to at least 0.12 times the font size"
+      - "Word spacing to at least 0.16 times the font size"
+
+- q: What must be true of content shown on hover or focus?
+  source: distinguishable
+  # Regression for AUDIT finding 1: Dismissible/Hoverable/Persistent lost most of their definitions.
+  rule:
+    statement_contains: removing pointer hover or keyboard focus triggers additional content
+    conformance_level: AA
+    anchor: content-on-hover-or-focus
+    context_contains:
+      - "Dismissible — A mechanism is available to dismiss the additional content without moving pointer hover or keyboard focus"
+      - "Hoverable — If pointer hover can trigger the additional content"
+      - "Persistent — The additional content remains visible until the hover or focus trigger is removed"
+
+- q: What viewport widths and heights must content reflow to without two-dimensional scrolling?
+  source: distinguishable
+  rule:
+    statement_contains: without loss of information or functionality, and without requiring scrolling in two dimensions
+    conformance_level: AA
+    anchor: reflow
+    context_contains:
+      - "Vertical scrolling content at a width equivalent to 320 CSS pixels"
+      - "Horizontal scrolling content at a height equivalent to 256 CSS pixels"
+
+- q: What is the minimum target size at Level AA (2.5.8), and when does it not apply?
   source: input-modalities
+  expect: ["24 by 24 CSS pixels"]
+  rule:
+    statement_contains: at least 24 by 24 CSS pixels
+    conformance_level: AA
+    anchor: target-size-minimum
+    context_contains: ["Spacing", "Equivalent", "Inline", "Essential"]
+
 - q: Is 4.1.1 Parsing still a requirement in WCAG 2.2?
-  expect: ["Parsing (Obsolete and removed)"]
   source: compatible
+  expect: ["Parsing (Obsolete and removed)"]
+
 - q: How long may audio auto-play before a pause/stop control is required?
-  expect: ["3 seconds"]
   source: distinguishable
-- q: Which level is Focus Not Obscured (Minimum)?
-  expect: ["Focus Not Obscured (Minimum)", "Level AA"]
+  expect: ["3 seconds"]
+  rule:
+    statement_contains: plays automatically for more than 3 seconds
+    conformance_level: A
+    anchor: audio-control
+
+- q: Which level is Focus Not Obscured (Minimum), and is it new in 2.2?
   source: navigable
+  expect: ["Focus Not Obscured (Minimum)", "Level AA"]
+  rule:
+    statement_contains: the component is not entirely hidden due to author-created content
+    conformance_level: AA
+    anchor: focus-not-obscured-minimum
+
+- q: Is an AAA criterion presented as optional, or as normative text selected by the target level?
+  source: distinguishable
+  # Regression for AUDIT finding 4: AAA used to be rendered MAY, which misstates WCAG's model.
+  rule:
+    statement_contains: contrast ratio of at least 7:1
+    conformance_level: AAA
+    severity: must
+    anchor: contrast-enhanced
+
+- q: Where are terms like "large scale (text)" defined?
+  source: glossary
+  expect: ["large scale (text)", "18 point"]

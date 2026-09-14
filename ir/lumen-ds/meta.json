@@ -1,0 +1,33 @@
+{
+  "source": "lumen-ds",
+  "name": "Lumen Design System",
+  "license": {
+    "spdx": "MIT",
+    "redistributable": true,
+    "attribution": "Lumen Design System — a synthetic example guideline, part of design-skills (MIT)."
+  },
+  "extractor": "bold-lead@6",
+  "source_version": "2026-03-04",
+  "partial": false,
+  "fetched_at": "2026-03-04T00:00:00.000Z",
+  "updated_at": "2026-09-14T08:15:13.729Z",
+  "page_count": 3,
+  "rule_count": 10,
+  "pages": {
+    "buttons": {
+      "source_hash": "6a08c842144e63ba",
+      "source_version": "2026-03-04",
+      "rules": 4
+    },
+    "color": {
+      "source_hash": "30b362a28f40a934",
+      "source_version": "2026-03-04",
+      "rules": 2
+    },
+    "designing-for-tv": {
+      "source_hash": "39212c1bcddec64e",
+      "source_version": "2026-03-04",
+      "rules": 4
+    }
+  }
+}

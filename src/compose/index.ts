@@ -89,6 +89,10 @@ function sectionIntro(s: Section | undefined, linker: Linker, category: string):
   return [s.intro.map((t) => linker.localize(t, category)).join("\n\n"), ``];
 }
 
+function termLine(t: Rule, linker: Linker, category: string): string {
+  return `- **${t.statement}** — ${linker.localize(t.rationale ?? "", category)} ${cite(t)}`.replace(/\s+/g, " ");
+}
+
 interface Rendered { main: string; tables?: string }
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }, linker: Linker): Rendered {
@@ -119,23 +123,24 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
 
   const bySection = new Map<string, Rule[]>();
   for (const r of rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
+  // A glossary page is nothing but definitions; everywhere else a definition belongs beside the
+  // rules that use it ("Destructive." next to "Never give the destructive role to the primary
+  // button"), not in a bucket at the end of the file.
+  const isGlossary = terms.length > 0 && terms.length === page.rules.length;
+  const termsBySection = new Map<string, Rule[]>();
+  if (!isGlossary) for (const t of terms) termsBySection.set(t.section, [...(termsBySection.get(t.section) ?? []), t]);
   const introBySection = new Map(page.sections.map((s) => [s.section, s]));
-  const order = [...new Set([...bySection.keys(), ...tablesBySection.keys(), ...introBySection.keys()])];
+  const order = [...new Set([...bySection.keys(), ...termsBySection.keys(), ...tablesBySection.keys(), ...introBySection.keys()])];
   const sections = order.map((section) => {
     const body = [
       ...sectionIntro(introBySection.get(section), linker, page.category),
+      ...(termsBySection.get(section) ?? []).map((t) => termLine(t, linker, page.category)),
       ...(bySection.get(section) ?? []).map((r) => ruleLine(r, { label, linker, category: page.category, withId: true })),
       ...(tablesBySection.get(section) ?? []).map(tableBlock),
     ];
     return `\n### ${section}\n` + body.join("\n");
   });
-  if (terms.length) {
-    const isGlossary = terms.length === page.rules.length;
-    sections.push(
-      `\n## ${isGlossary ? "Definitions" : "Terms"}\n` +
-        terms.map((t) => `- **${t.statement}** — ${linker.localize(t.rationale ?? "", page.category)} ${cite(t)}`.replace(/\s+/g, " ")).join("\n"),
-    );
-  }
+  if (isGlossary) sections.push(`\n## Definitions\n` + terms.map((t) => termLine(t, linker, page.category)).join("\n"));
   const main = [...header, ...(rules.length ? ["## Rules"] : []), ...sections];
   if (split) {
     main.push(``, `## Specifications`, ``, `${page.tables.length} tables (${Math.round(tableChars / 1024)} KB) are in [${page.page}.tables.md](${page.page}.tables.md).`);
@@ -200,13 +205,15 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     `4. **Apply** ${severitiesPresent(pages).map((s) => sevText[s]).join(", ")}.`,
     `5. **Report evidence** — quote the rule, its id, and its link, so any finding can be checked against the source.`,
     ``,
-    `Rules are the source's own sentences. Severity is inferred from that wording, not asserted by Apple or W3C; when a decision turns on it, follow the citation. Text marked \`_[figure: …]_\` stands for an image that carries information the text does not.`,
+    `Rules are ${possessive(source.name)} own sentences. Severity is inferred from that wording, not declared by ${source.name}; when a decision turns on it, follow the citation. Text marked \`_[figure: …]_\` stands for an image that carries information the text does not.`,
     ``,
   ];
   if (source.platforms.length) {
+    // Use real platform names from this source so the examples match what the reader will see.
+    const [example = "", other = ""] = source.platforms;
     lines.push(
-      `**Platform tags.** \`_[macOS]_\` means the rule comes from a macOS-specific section. ` +
-        `\`_[tvOS only]_\` means the whole page is tvOS-specific. An untagged rule is stated by the source without platform scope. ` +
+      `**Platform tags.** \`_[${example}]_\` means the rule comes from ${article(example)} ${example}-specific section. ` +
+        `\`_[${other} only]_\` means the whole page is ${other}-specific. An untagged rule is stated by the source without platform scope. ` +
         `Never carry a tagged rule to a platform it is not tagged for.`,
       ``,
     );
@@ -288,6 +295,16 @@ function anchorOf(heading: string): string {
 
 function titleCase(s: string) {
   return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** "Apple Human Interface Guidelines" → "…Guidelines'", "WCAG 2.2" → "WCAG 2.2's". */
+function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+}
+
+/** "a iOS" → "an iOS". Platform names are proper nouns, so go by the sound of the first letter. */
+function article(word: string): string {
+  return /^[aeiou]/i.test(word) ? "an" : "a";
 }
 
 /** Everything needed to tell what a copied skill directory was built from, without the IR. */
