@@ -13,10 +13,14 @@ export const LicenseSchema = z.object({
 export const SourceSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string(),
-  kind: z.enum(["docc", "html"]),
+  /** docc: Apple DocC JSON sites · wcag: the w3c/wcag guidelines source tree · html: generic (todo) */
+  kind: z.enum(["docc", "wcag", "html"]),
+  /** Where the fetcher reads from. */
   base_url: z.string().url(),
   entry: z.string().startsWith("/"),
   data_prefix: z.string().startsWith("/").optional(),
+  /** Where citations point, when different from base_url (e.g. fetched from GitHub, cited at w3.org). */
+  canonical_url: z.string().url().optional(),
   cadence: z.enum(["daily", "weekly", "monthly"]).default("weekly"),
   license: LicenseSchema,
   platforms: z.array(z.string()).default([]),
@@ -28,6 +32,8 @@ export const SourceSchema = z.object({
     description: z.string(),
     max_skill_lines: z.number().int().positive().default(300),
     top_rules_per_topic: z.number().int().positive().default(1),
+    /** Label for the text that follows a rule's statement in reference files. */
+    rationale_label: z.string().default("Why"),
   }),
 });
 

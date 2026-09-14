@@ -29,7 +29,7 @@ export async function validateSource(source: Source): Promise<Finding[]> {
     for (const r of ir.rules) {
       if (ids.has(r.id)) err(where, `duplicate rule id ${r.id}`);
       ids.add(r.id);
-      if (!r.provenance.url.startsWith(source.base_url)) err(where, `${r.id}: provenance url outside source`);
+      if (!r.provenance.url.startsWith(source.canonical_url ?? source.base_url)) err(where, `${r.id}: provenance url outside source`);
       if (r.provenance.source_hash !== ir.source_hash) err(where, `${r.id}: provenance hash != page hash`);
       for (const p of r.platforms) if (!source.platforms.includes(p)) err(where, `${r.id}: unknown platform ${p}`);
     }

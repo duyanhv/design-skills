@@ -7,3 +7,5 @@ node_modules/
 # Build them locally: `bun run build <id>`. validate enforces these entries.
 ir/apple-hig/
 skills/apple-hig/
+ir/wcag22/
+skills/wcag22/

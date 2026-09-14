@@ -26,9 +26,9 @@ export const RuleSchema = z.object({
   /** Heuristic from the statement's wording — see extract/severity.ts. */
   severity: z.enum(["must", "should", "may"]),
   /** The guideline's lead sentence, verbatim. */
-  statement: z.string().min(2).max(400),
+  statement: z.string().min(2).max(600),
   /** The explanatory text that follows the lead sentence, verbatim. */
-  rationale: z.string().max(2000).optional(),
+  rationale: z.string().max(4000).optional(),
   /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,

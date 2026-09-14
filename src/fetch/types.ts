@@ -13,5 +13,7 @@ export interface Manifest {
   source: string;
   entry: string;
   fetched_at: string;
+  /** Upstream version when the source exposes one (e.g. a git commit date). */
+  version?: string;
   pages: Record<string, PageEntry>;
 }

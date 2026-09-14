@@ -58,8 +58,8 @@ regenerated 40 KB markdown blob.
 | id | guideline | kind | license | status |
 | --- | --- | --- | --- | --- |
 | `apple-hig` | Apple Human Interface Guidelines | `docc` | proprietary → build locally, not committed | in progress |
-| `material-3` | Material Design 3 | — | CC-BY 4.0 | planned |
-| `wcag-2.2` | WCAG 2.2 | — | W3C | planned |
+| `material-3` | Material Design 3 | — | CC-BY 4.0 | blocked: JS app shell, needs a headless-browser fetcher |
+| `wcag22` | WCAG 2.2 (from the w3c/wcag source tree) | `wcag` | W3C Document License → build locally, not committed | working |
 
 See [LICENSING.md](LICENSING.md) for how proprietary sources are handled.
 
@@ -69,7 +69,8 @@ Requires [Bun](https://bun.sh) ≥ 1.2. No API keys.
 
 ```sh
 bun install
-bun run build apple-hig      # fetch (≈150 pages, ~1 min) → normalize → extract → compose → validate
+bun run build apple-hig      # fetch (≈170 pages, ~1 min) → normalize → extract → compose → validate → eval
+bun run build wcag22         # 13 guidelines / 86 success criteria, a few seconds
 ```
 
 Or step by step: `bun run fetch|normalize|extract|compose|validate apple-hig`. Re-running is cheap —
@@ -103,6 +104,6 @@ evals/        golden questions per skill    src/compose     IR → SKILL.md + re
 
 ## Status
 
-Early. The pipeline runs end-to-end for DocC sources with evals. Next: an `html` fetcher for
-Material 3 / WCAG, and extra emitters (Cursor rules, `AGENTS.md`).
+Early. Two sources build end-to-end with evals (Apple HIG, WCAG 2.2). Next: a headless-browser fetcher
+for Material 3, a generic `html` fetcher, and extra emitters (Cursor rules, `AGENTS.md`).
 Contributions welcome — especially new source manifests and eval questions.

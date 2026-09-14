@@ -19,11 +19,12 @@ export async function loadIR(source: Source): Promise<PageIR[]> {
 }
 
 function cite(r: Rule): string {
-  const url = r.provenance.anchor ? `${r.provenance.url}#${r.provenance.anchor}` : r.provenance.url;
+  const base = r.provenance.url.replace(/#.*$/, "");
+  const url = r.provenance.anchor ? `${base}#${r.provenance.anchor}` : r.provenance.url;
   return `[src](${url})`;
 }
 
-function ruleLine(r: Rule, withTopic = false): string {
+function ruleLine(r: Rule, withTopic = false, label = "Why"): string {
   const parts = [`- **${r.severity.toUpperCase()}**`];
   if (withTopic) parts.push(`(${r.topic})`);
   parts.push(r.statement);
@@ -31,7 +32,7 @@ function ruleLine(r: Rule, withTopic = false): string {
   if (r.platforms.length) parts.push(`_[${r.platforms.join(", ")}]_`);
   parts.push(cite(r));
   const line = parts.join(" ");
-  return r.rationale ? `${line}\n  - Why: ${r.rationale}` : line;
+  return r.rationale ? `${line}\n  - ${label}: ${r.rationale}` : line;
 }
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }): string {
@@ -47,7 +48,7 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
     const rs = bySection.get(section) ?? [];
     const ts = tablesBySection.get(section) ?? [];
     const body = [
-      ...rs.map((r) => ruleLine(r)),
+      ...rs.map((r) => ruleLine(r, false, source.skill.rationale_label)),
       ...ts.map((t) => (t.caption && !/^\|/.test(t.caption) ? `\n${t.caption}\n\n${t.markdown}` : `\n${t.markdown}`)),
     ];
     return `\n### ${section}\n` + body.join("\n");
@@ -104,8 +105,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     `3. Apply **MUST** rules as hard constraints, **SHOULD** as defaults you deviate from only with a reason, **MAY** as options.`,
     `4. When reviewing existing UI, cite the rule id and link so the finding is verifiable.`,
     ``,
-    `Platforms: ${source.platforms.join(", ")}. A rule with no platform tag applies to all of them.`,
-    ``,
+    ...(source.platforms.length ? [`Platforms: ${source.platforms.join(", ")}. A rule with no platform tag applies to all of them.`, ``] : []),
     `## Highest-leverage rules`,
     ``,
   );

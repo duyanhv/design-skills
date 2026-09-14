@@ -1,7 +1,7 @@
 {
   "name": "design-skills",
   "version": "0.1.0",
-  "description": "Deterministically compile platform design guidelines (Apple HIG, Material 3, WCAG, …) into versioned, cited Agent Skills. No LLM in the loop.",
+  "description": "Deterministically compile platform design guidelines (Apple HIG, Material 3, WCAG, \u2026) into versioned, cited Agent Skills. No LLM in the loop.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -18,6 +18,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "node-html-parser": "^7.0.1",
     "yaml": "^2.8.0",
     "zod": "^4.1.0"
   },

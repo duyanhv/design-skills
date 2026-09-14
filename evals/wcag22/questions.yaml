@@ -1,0 +1,16 @@
+# Deterministic evals for the generated wcag22 skill: `bun run eval wcag22`.
+- q: What is the minimum contrast ratio for normal text at Level AA?
+  expect: ["4.5:1", "Level AA"]
+  source: distinguishable
+- q: What is the minimum target size at Level AA (2.5.8)?
+  expect: ["24 by 24 CSS pixels"]
+  source: input-modalities
+- q: Is 4.1.1 Parsing still a requirement in WCAG 2.2?
+  expect: ["Parsing (Obsolete and removed)"]
+  source: compatible
+- q: How long may audio auto-play before a pause/stop control is required?
+  expect: ["3 seconds"]
+  source: distinguishable
+- q: Which level is Focus Not Obscured (Minimum)?
+  expect: ["Focus Not Obscured (Minimum)", "Level AA"]
+  source: navigable

@@ -1,0 +1,28 @@
+# Source manifest: Web Content Accessibility Guidelines (WCAG) 2.2
+id: wcag22
+name: WCAG 2.2
+kind: wcag
+# The published TR is built from this tree; SC ids are identical, so citations resolve on w3.org.
+base_url: https://raw.githubusercontent.com/w3c/wcag/main/guidelines
+entry: /index.html
+canonical_url: https://www.w3.org/TR/WCAG22/
+cadence: monthly
+
+license:
+  spdx: W3C-Document-License   # no derivatives → treated like Apple: built locally, not committed
+  redistributable: false
+  attribution: "Text © W3C (World Wide Web Consortium). Web Content Accessibility Guidelines 2.2, https://www.w3.org/TR/WCAG22/. W3C Document License."
+
+platforms: []
+categories: [perceivable, operable, understandable, robust]
+skip_sections: []
+
+skill:
+  name: wcag22
+  description: >-
+    WCAG 2.2 success criteria as rules with conformance levels (A/AA/AAA) and citations, for
+    building or auditing accessible web and hybrid-app UI. Use when checking contrast, keyboard
+    access, focus, forms, timing, motion, or any accessibility/a11y compliance question.
+  max_skill_lines: 300
+  top_rules_per_topic: 2
+  rationale_label: Details

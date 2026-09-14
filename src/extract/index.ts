@@ -3,7 +3,18 @@ import { readFile } from "node:fs/promises";
 import type { Source } from "../schema/source.ts";
 import { PageIRSchema, type PageIR, type Rule } from "../schema/ir.ts";
 import { parseFrontmatter } from "../normalize/frontmatter.ts";
-import { extractRules, EXTRACTOR } from "./rules.ts";
+import { extractRules, EXTRACTOR as BOLD_LEAD, type ExtractedPage } from "./rules.ts";
+import { extractWcag, WCAG_EXTRACTOR } from "./wcag.ts";
+
+/** Which extractor a source kind uses; the id is stamped into every IR file. */
+export function extractorFor(source: Source): { id: string; run: (md: string) => ExtractedPage } {
+  switch (source.kind) {
+    case "wcag":
+      return { id: WCAG_EXTRACTOR, run: extractWcag };
+    default:
+      return { id: BOLD_LEAD, run: (md) => extractRules(md, { platforms: source.platforms, skipSections: source.skip_sections }) };
+  }
+}
 import { listFiles, paths, readJson, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 
@@ -44,18 +55,19 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
   let skipped = 0;
   let rulesTotal = 0;
   const todo = opts.limit ? files.slice(0, opts.limit) : files;
+  const extractor = extractorFor(source);
 
   for (const file of todo) {
     const slug = file.replace(/\.md$/, "");
     const { meta, body } = parseFrontmatter(await readFile(join(paths.md(source.id), file), "utf8"));
     const previous = await readJson<PageIR>(join(paths.irPages(source.id), `${slug}.json`));
-    if (!opts.force && previous && previous.source_hash === meta.source_hash && previous.extractor === EXTRACTOR) {
+    if (!opts.force && previous && previous.source_hash === meta.source_hash && previous.extractor === extractor.id) {
       skipped++;
       rulesTotal += previous.rules.filter((r) => r.kind === "rule").length;
       continue;
     }
 
-    const page = extractRules(body, { platforms: source.platforms, skipSections: source.skip_sections });
+    const page = extractor.run(body);
     const ids = assignIds(source.id, slug, previous, page.rules.map((r) => r.statement));
     const rules: Rule[] = page.rules.map((r, i) => ({
       id: ids[i]!,
@@ -79,9 +91,9 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
       url: meta.url,
       source_hash: meta.source_hash,
       fetched_at: meta.fetched_at,
-      source_version: page.source_version,
+      source_version: page.source_version ?? meta.version,
       extracted_at: new Date().toISOString(),
-      extractor: EXTRACTOR,
+      extractor: extractor.id,
       summary: page.summary,
       rules,
       tables: page.tables,
@@ -116,7 +128,7 @@ export async function writeMeta(source: Source) {
     source: source.id,
     name: source.name,
     license: source.license,
-    extractor: EXTRACTOR,
+    extractor: extractorFor(source).id,
     source_version: version || fetched.slice(0, 10),
     fetched_at: fetched,
     updated_at: new Date().toISOString(),

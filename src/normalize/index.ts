@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Source } from "../schema/source.ts";
 import type { Manifest } from "../fetch/types.ts";
 import { doccToMarkdown, type DoccDocument } from "./docc.ts";
+import { wcagToMarkdown } from "./wcag.ts";
 import { withFrontmatter } from "./frontmatter.ts";
 import { paths, readJson, writeText } from "../util/fs.ts";
 import { shortHash } from "../util/hash.ts";
@@ -27,11 +28,13 @@ export async function normalizeSource(source: Source): Promise<NormalizedPage[]>
   const out: NormalizedPage[] = [];
 
   for (const entry of Object.values(manifest.pages)) {
-    const raw = await readFile(join(paths.raw(source.id), `${entry.slug}.json`), "utf8");
     let md: { title: string; abstract: string; body: string };
     switch (source.kind) {
       case "docc":
-        md = doccToMarkdown(JSON.parse(raw) as DoccDocument);
+        md = doccToMarkdown(JSON.parse(await readFile(join(paths.raw(source.id), `${entry.slug}.json`), "utf8")) as DoccDocument);
+        break;
+      case "wcag":
+        md = wcagToMarkdown(await readFile(join(paths.raw(source.id), `${entry.slug}.html`), "utf8"));
         break;
       default:
         throw new Error(`normalizer for kind "${source.kind}" not implemented`);
@@ -52,7 +55,10 @@ export async function normalizeSource(source: Source): Promise<NormalizedPage[]>
     };
     await writeText(
       join(paths.md(source.id), `${entry.slug}.md`),
-      withFrontmatter({ title: page.title, slug: page.slug, category: page.category, url: page.url, source_hash, fetched_at: page.fetched_at, words }, `# ${page.title}\n\n${body}`),
+      withFrontmatter(
+        { title: page.title, slug: page.slug, category: page.category, url: page.url, source_hash, fetched_at: page.fetched_at, words, ...(manifest.version ? { version: manifest.version } : {}) },
+        `# ${page.title}\n\n${body}`,
+      ),
     );
     out.push(page);
   }
