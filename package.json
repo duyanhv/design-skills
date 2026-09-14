@@ -12,6 +12,7 @@
     "extract": "bun run src/cli.ts extract",
     "compose": "bun run src/cli.ts compose",
     "validate": "bun run src/cli.ts validate",
+    "eval": "bun run src/cli.ts eval",
     "build": "bun run src/cli.ts build",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

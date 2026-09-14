@@ -5,6 +5,7 @@ import { normalizeSource } from "./normalize/index.ts";
 import { extractSource } from "./extract/index.ts";
 import { composeSource } from "./compose/index.ts";
 import { validateSource } from "./validate/index.ts";
+import { evalSource } from "./eval/index.ts";
 import { listSources, loadSource } from "./util/fs.ts";
 import { log } from "./util/log.ts";
 
@@ -17,8 +18,9 @@ commands
   normalize   raw → markdown in .cache/<id>/md
   extract     markdown → rules IR in ir/<id>/pages (deterministic; only changed pages)
   compose     IR → skills/<name>/SKILL.md + references/
-  validate    schema, provenance, verbatim and size checks
-  build       fetch → normalize → extract → compose → validate
+  validate    schema, provenance, license gate and size checks
+  eval        assert evals/<id>/questions.yaml facts are present in the generated skill
+  build       fetch → normalize → extract → compose → validate → eval
 
 options
   --limit N        cap pages (fetch/extract)
@@ -64,12 +66,16 @@ for (const id of ids) {
     case "validate":
       failed = report(await validateSource(source)) || failed;
       break;
+    case "eval":
+      failed = reportEval(await evalSource(source)) || failed;
+      break;
     case "build":
       await fetchSource(source, { limit });
       await normalizeSource(source);
       await extractSource(source, { limit, force: values.force });
       await composeSource(source);
       failed = report(await validateSource(source)) || failed;
+      failed = reportEval(await evalSource(source)) || failed;
       break;
     default:
       console.error(`unknown command: ${command}\n\n${USAGE}`);
@@ -77,6 +83,20 @@ for (const id of ids) {
   }
 }
 if (failed) process.exit(1);
+
+function reportEval(results: { q: string; source: string; pass: boolean; missing: string[] }[] | null): boolean {
+  if (!results) {
+    log.info("no evals for this source");
+    return false;
+  }
+  for (const r of results) {
+    console.log(`${r.pass ? "✓" : "✗"} ${r.q}  [${r.source}]`);
+    for (const m of r.missing) console.log(`    ${m}`);
+  }
+  const failed = results.filter((r) => !r.pass).length;
+  log.info(`${results.length - failed}/${results.length} evals pass`);
+  return failed > 0;
+}
 
 function report(findings: { level: string; where: string; message: string }[]): boolean {
   for (const f of findings) console.log(`${f.level === "error" ? "✗" : "△"} ${f.where}: ${f.message}`);

@@ -1,16 +1,18 @@
-# Golden questions for the generated apple-hig skill (eval runner: TODO).
-# `expect` is matched loosely (substring / number) against the answer; `source` is the page the answer must cite.
+# Deterministic evals for the generated apple-hig skill: `bun run eval apple-hig`.
+# Each `expect` string (case-insensitive) must appear in references/<category>/<source>.md, and
+# SKILL.md must route to that page. `q` is documentation for humans — the fact a reader should be able
+# to answer from the skill.
 - q: What is the minimum hit region for a button on iOS, and on visionOS?
   expect: ["44x44", "60x60"]
   source: buttons
 - q: Should a destructive action get the primary (default) button role?
-  expect: "no"
+  expect: "Don’t assign the primary role to a button that performs a destructive action"
   source: buttons
 - q: How many sheets may be displayed at a time from the main interface?
-  expect: "one"
+  expect: "Display only one sheet at a time"
   source: sheets
 - q: What should you do with tab bar buttons whose content is currently unavailable?
-  expect: "don't disable or hide"
+  expect: "Don’t disable or hide tab bar buttons"
   source: tab-bars
 - q: What text-size scaling should apps support for accessibility?
   expect: "200 percent"
@@ -18,3 +20,9 @@
 - q: On macOS, how much padding belongs between an image button's image and its edges?
   expect: "10 pixels"
   source: buttons
+- q: What layout size does an iOS app icon use?
+  expect: ["1024x1024 px"]
+  source: app-icons
+- q: What is the unfocused content width of a two-column tvOS grid?
+  expect: ["Two-column grid", "860 pt"]
+  source: layout

@@ -17,6 +17,7 @@ sources/<id>.yaml        declarative manifest (url, crawl scope, license, cadenc
         │  extract        structural rules (bold-lead sentences, headings) → ir/<id>/pages/*.json
         │  compose        IR → skills/<name>/SKILL.md + references/
         │  validate       schema · provenance · license gate · size budget
+        │  eval           evals/<id>/questions.yaml facts must be present in the output
         ▼
 skills/<name>/           drop into ~/.claude/skills, .cursor, Codex, etc.
 ```
@@ -85,7 +86,8 @@ ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
 1. Add `sources/<id>.yaml` (copy `apple-hig.yaml`). Set `license.redistributable` honestly; if false, add
    `ir/<id>/` and `skills/<name>/` to `.gitignore` (validate enforces this).
 2. If the site isn't DocC, add a fetcher/normalizer for its `kind` under `src/fetch` and `src/normalize`.
-3. Add `evals/<id>/questions.yaml` — golden questions the generated skill must answer.
+3. Add `evals/<id>/questions.yaml` — facts (with the page they come from) that must survive into the
+   generated skill. `bun run eval <id>` checks them; `build` runs them last.
 4. `bun run build <id>` and open a PR. CI runs validate; the weekly refresh workflow opens PRs when
    the upstream content hash changes.
 
@@ -101,6 +103,6 @@ evals/        golden questions per skill    src/compose     IR → SKILL.md + re
 
 ## Status
 
-Early. The pipeline runs end-to-end for DocC sources. Next: the eval runner, an `html` fetcher for
+Early. The pipeline runs end-to-end for DocC sources with evals. Next: an `html` fetcher for
 Material 3 / WCAG, and extra emitters (Cursor rules, `AGENTS.md`).
 Contributions welcome — especially new source manifests and eval questions.
