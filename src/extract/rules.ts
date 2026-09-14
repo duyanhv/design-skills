@@ -12,7 +12,7 @@
  */
 import { severityOf, valueOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@6";
+export const EXTRACTOR = "bold-lead@7";
 
 /**
  * Where a rule's platform scope came from.
@@ -74,6 +74,8 @@ export interface ExtractOptions {
   title?: string;
   /** Manifest override: platforms this page is about, when the title does not say so. */
   pagePlatforms?: string[];
+  /** Page URL, cited in the marker left when context exceeds the cap. */
+  url?: string;
 }
 
 const HEADING = /^(#{1,6})\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
@@ -176,7 +178,18 @@ export function pagePlatformsOf(title: string | undefined, known: string[]): str
   return known.filter((p) => new RegExp(`(^|[^A-Za-z])${p}([^A-Za-z]|$)`).test(title));
 }
 
-const MAX_NOTES = 12;
+/**
+ * Cap on context blocks attached to one rule or section.
+ *
+ * A cap is needed — a pathological page should not produce an unbounded rule — but silently
+ * dropping guidance is the failure this module exists to prevent. Apple's Virtual keyboards page
+ * lists ~10 keyboard types as label/figure pairs under a single rule; at 12 blocks that catalogue
+ * was cut in half with no trace. The cap is now high enough for real pages, and anything past it
+ * leaves an explicit marker instead of vanishing.
+ */
+const MAX_NOTES = 40;
+const overflowMarker = (dropped: number, url?: string) =>
+  `_[${dropped} further block(s) here are not included; read the source${url ? `: ${url}` : ""}]_`;
 
 export function extractRules(markdown: string, opts: ExtractOptions): ExtractedPage {
   const lines = markdown.split("\n");
@@ -228,13 +241,28 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
   const skipping = () => path.some((h) => opts.skipSections.includes(h.text));
 
   /** Attach qualifying prose to the open rule, or to the section's intro when no rule is open yet. */
+  /** Blocks dropped past the cap, per list, so the marker can say how many. */
+  const dropped = new Map<string[], number>();
+  /** Append to a capped list; past the cap, keep a marker that says what is missing. */
+  const push = (list: string[], text: string) => {
+    const block = text.slice(0, 1000);
+    if (list.length < MAX_NOTES) {
+      list.push(block);
+      lastContext = { list, text: block };
+      return;
+    }
+    // At the cap the last slot becomes (and stays) the overflow marker: never a silent loss.
+    const n = (dropped.get(list) ?? 0) + 1;
+    dropped.set(list, n);
+    const marker = overflowMarker(n, opts.url);
+    if (list.length === MAX_NOTES && dropped.get(list) === 1) list.push(marker);
+    else list[list.length - 1] = marker;
+    lastContext = null; // a marker is never a table caption
+  };
   const addContext = (text: string) => {
     if (!text) return;
     if (openRule) {
-      if (openRule.notes.length < MAX_NOTES) {
-        openRule.notes.push(text.slice(0, 1000));
-        lastContext = { list: openRule.notes, text: text.slice(0, 1000) };
-      }
+      push(openRule.notes, text);
       return;
     }
     if (!openSection) {
@@ -247,10 +275,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       };
       sections.push(openSection);
     }
-    if (openSection.intro.length < MAX_NOTES) {
-      openSection.intro.push(text.slice(0, 1000));
-      lastContext = { list: openSection.intro, text: text.slice(0, 1000) };
-    }
+    push(openSection.intro, text);
   };
 
   for (const raw of lines) {
@@ -276,7 +301,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       if (!line.trim()) continue;
       if (FIGURE.test(line.trim())) continue; // a decorative page header image carries no guidance
       if (!summary) summary = stripMd(line);
-      else if (overview.length < MAX_NOTES) overview.push(contextText(line).slice(0, 1000));
+      else push(overview, contextText(line));
       continue;
     }
     if (skipping()) continue;

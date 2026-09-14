@@ -97,6 +97,71 @@ const CHECKS: Check[] = [
     },
   },
   {
+    finding: "2 (completeness)",
+    requirement: "No context is discarded silently: anything past the cap leaves a counted marker",
+    observe: async () => {
+      const pages = await loadPages("apple-hig");
+      let capped = 0;
+      let marked = 0;
+      const lists = pages.flatMap((p) => [...p.rules.map((r) => r.notes), ...p.sections.map((s) => s.intro), p.overview]);
+      for (const list of lists) {
+        if (list.length >= 40) capped++;
+        if (list.some((b) => b.includes("not included"))) marked++;
+      }
+      // Anything that hit the cap must carry a marker; a capped list with no marker is a silent loss.
+      if (capped > marked) throw new Error(`${capped - marked} context lists hit the cap with no overflow marker`);
+      const kb = pages.find((p) => p.page === "virtual-keyboards");
+      const catalogue = kb?.rules.find((r) => r.statement.startsWith("Choose a keyboard"));
+      if (!catalogue || catalogue.notes.length < 20) {
+        throw new Error(`the keyboard-type catalogue kept only ${catalogue?.notes.length ?? 0} blocks`);
+      }
+      return `${lists.length} context lists, ${capped} at the cap, ${marked} marked; keyboard catalogue keeps ${catalogue.notes.length} blocks`;
+    },
+  },
+  {
+    finding: "3 (completeness)",
+    requirement: "No page is platform-specific while shipping its rules as universal",
+    observe: async () => {
+      const pages = await loadPages("apple-hig");
+      const platformNames = ["iOS", "iPadOS", "macOS", "watchOS", "visionOS", "tvOS"];
+      // A page is platform-specific when its *title* names one platform ("Designing for tvOS") or a
+      // single device ("Designing for iPhone Duo"). "Designing for games" is not: it is a topic that
+      // spans all six, and scoping it would be as wrong as leaving tvOS guidance unscoped. The test
+      // is the title, not the prefix — an earlier version of this check flagged games and was wrong.
+      const DEVICE_SPECIFIC = /\b(iPhone|iPad|Mac|Apple Watch|Apple TV|Apple Vision)\b/;
+      const unscoped = pages.filter((p) => {
+        if (p.platforms.length) return false;
+        const named = platformNames.some((n) => new RegExp(`(^|[^A-Za-z])${n}([^A-Za-z]|$)`).test(p.title));
+        return named || DEVICE_SPECIFIC.test(p.title);
+      });
+      if (unscoped.length) {
+        throw new Error(`unscoped but platform-specific: ${unscoped.map((p) => p.page).join(", ")} — add page_platforms`);
+      }
+      const scoped = pages.filter((p) => p.platforms.length);
+      return `every "Designing for …" and platform-named page is scoped (${scoped.length} scoped pages overall)`;
+    },
+  },
+  {
+    finding: "4 (completeness)",
+    requirement: "Every MUST is justified by the source's wording, and no absolute prohibition is downgraded",
+    observe: async () => {
+      const rules = (await loadPages("apple-hig")).flatMap((p) => p.rules);
+      const strong = /\b(avoid|never|don't|do not|must|shouldn't|should not|cannot|can't|required|refrain from|always|ensure|make sure|be sure|be certain)\b/i;
+      const restrictive = /(^|[^\w-])only\s/i;
+      const absolute = /\b(never|must not|under no circumstances)\b/i;
+      const unjustified: string[] = [];
+      const downgraded: string[] = [];
+      for (const r of rules) {
+        const s = r.statement.replace(/\u2019/g, "'");
+        if (r.severity === "must" && !strong.test(s) && !restrictive.test(s)) unjustified.push(r.id);
+        if (r.severity !== "must" && absolute.test(s)) downgraded.push(r.id);
+      }
+      if (unjustified.length) throw new Error(`${unjustified.length} MUSTs with no strong wording, e.g. ${unjustified[0]}`);
+      if (downgraded.length) throw new Error(`${downgraded.length} absolute prohibitions below MUST, e.g. ${downgraded[0]}`);
+      return `${rules.length} rules: 0 unjustified MUSTs, 0 downgraded prohibitions`;
+    },
+  },
+  {
     finding: "4",
     requirement: "Severity reports the source's wording; WCAG levels are not collapsed into severity",
     observe: async () => {

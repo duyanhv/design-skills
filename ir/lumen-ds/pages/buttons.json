@@ -7,9 +7,9 @@
   "source_hash": "6a08c842144e63ba",
   "fetched_at": "2026-03-04T00:00:00.000Z",
   "source_version": "2026-03-04",
-  "extracted_at": "2026-09-14T08:16:41.097Z",
-  "extractor": "bold-lead@6",
-  "input_hash": "f74e8ad73c8adc1c",
+  "extracted_at": "2026-09-14T09:43:07.803Z",
+  "extractor": "bold-lead@7",
+  "input_hash": "aab93c2491b5499b",
   "summary": "A button performs a single, immediate action.",
   "overview": [
     "A button combines a label, an optional icon, and a role. Use a button for actions, and a link for navigation."

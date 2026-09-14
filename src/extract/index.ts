@@ -31,6 +31,7 @@ export function extractorFor(source: Source): { id: string; run: (md: string, me
             platforms: source.platforms,
             skipSections: source.skip_sections,
             title: meta.title,
+            url: meta.url,
             // Precedence: a manifest override (a human decision) > the source's own declaration >
             // the page title. Title matching is the weakest signal and only fills the remaining gap.
             pagePlatforms: source.page_platforms[meta.slug] ?? meta.platforms,

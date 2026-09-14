@@ -14,6 +14,14 @@ license:
 
 platforms: [iOS, iPadOS, macOS, watchOS, visionOS, tvOS]
 
+# Pages whose platform scope the source does not declare and whose title does not name a platform.
+# Without this they ship as universal guidance, which is the failure `scope` exists to prevent.
+# Check with: the page has no `supported-platforms` in its DocC metadata, but is plainly about one
+# device or platform family.
+page_platforms:
+  # A foldable iPhone. The guidance is about adapting one app across its two displays.
+  designing-for-iphone-duo: [iOS]
+
 # Category is derived from the top-level topic section a page hangs under.
 categories: [getting-started, foundations, patterns, components, inputs, technologies]
 

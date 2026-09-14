@@ -6,11 +6,11 @@
     "redistributable": true,
     "attribution": "Lumen Design System — a synthetic example guideline, part of design-skills (MIT)."
   },
-  "extractor": "bold-lead@6",
+  "extractor": "bold-lead@7",
   "source_version": "2026-03-04",
   "partial": false,
   "fetched_at": "2026-03-04T00:00:00.000Z",
-  "updated_at": "2026-09-14T08:16:41.099Z",
+  "updated_at": "2026-09-14T09:43:07.806Z",
   "page_count": 3,
   "rule_count": 10,
   "pages": {

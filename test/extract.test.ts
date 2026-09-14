@@ -169,3 +169,36 @@ test("context that is not a rule is kept, not dropped", () => {
   expect(tv.overview).toContain("Some more preamble that is not the abstract.");
   expect(tv.overview).toContain("**Display.** The TV is large.");
 });
+
+test("context past the cap is marked, never silently dropped", () => {
+  // Regression: the cap was 12 blocks, so Apple's Virtual keyboards page — a catalogue of ~10
+  // keyboard types as label/figure pairs under one rule — lost half its entries with no trace.
+  // A cap still exists, but overflow leaves a counted marker pointing at the source.
+  const md = [
+    "# Topic",
+    "",
+    "Abstract.",
+    "",
+    "## Best practices {#bp}",
+    "",
+    "**A rule with a long catalogue under it.** Why it matters.",
+    ...Array.from({ length: 50 }, (_, i) => `- item ${i}`),
+  ].join("\n");
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP, url: "https://example.test/topic" });
+  const rule = page.rules.find((r) => r.statement.startsWith("A rule with a long catalogue"))!;
+
+  // Real pages stay well under the cap; this synthetic one exceeds it deliberately.
+  expect(rule.notes.length).toBeLessThan(50);
+  const last = rule.notes[rule.notes.length - 1]!;
+  expect(last).toContain("not included");
+  expect(last).toContain("https://example.test/topic");
+  // The count must be accurate: 50 items, 40 kept, 10 reported missing.
+  expect(last).toContain("10 further");
+
+  // A page that fits keeps everything and gains no marker.
+  const small = extractRules(
+    ["# T", "", "Abstract.", "", "## Best practices {#bp}", "", "**A rule.** Why.", "- one", "- two"].join("\n"),
+    { platforms: PLATFORMS, skipSections: SKIP },
+  );
+  expect(small.rules[0]!.notes).toEqual(["- one", "- two"]);
+});
