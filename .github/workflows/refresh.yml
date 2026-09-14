@@ -18,11 +18,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build ${{ inputs.source }}
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - uses: peter-evans/create-pull-request@v7
         with:
           branch: refresh/${{ inputs.source || 'all' }}
           title: "refresh: ${{ inputs.source || 'all sources' }}"
-          body: "Automated regeneration. Review the IR diff under `ir/` — the skill files under `skills/` are derived."
+          body: "Automated regeneration. Review the IR diff under `ir/` — the skill files under `skills/` are derived. Sources with `license.redistributable: false` produce no diff here; their outputs are built locally."
           commit-message: "chore: refresh ${{ inputs.source || 'all sources' }}"

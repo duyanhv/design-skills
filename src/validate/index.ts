@@ -2,17 +2,9 @@ import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { Source } from "../schema/source.ts";
 import { PageIRSchema } from "../schema/ir.ts";
-import { parseFrontmatter } from "../normalize/frontmatter.ts";
-import { exists, listFiles, paths, readJson } from "../util/fs.ts";
+import { exists, listFiles, paths, readJson, ROOT } from "../util/fs.ts";
 
 export interface Finding { level: "error" | "warn"; where: string; message: string }
-
-function shingles(text: string, n = 8): Set<string> {
-  const words = text.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
-  const out = new Set<string>();
-  for (let i = 0; i + n <= words.length; i++) out.add(words.slice(i, i + n).join(" "));
-  return out;
-}
 
 export async function validateSource(source: Source): Promise<Finding[]> {
   const findings: Finding[] = [];
@@ -42,21 +34,13 @@ export async function validateSource(source: Source): Promise<Finding[]> {
       for (const p of r.platforms) if (!source.platforms.includes(p)) err(where, `${r.id}: unknown platform ${p}`);
     }
 
-    // 2. Verbatim check against the normalized text when it's available locally
-    if (!source.license.allow_verbatim) {
-      const mdPath = join(paths.md(source.id), `${ir.page}.md`);
-      if (await exists(mdPath)) {
-        const { body } = parseFrontmatter(await readFile(mdPath, "utf8"));
-        const src = shingles(body);
-        for (const r of ir.rules) {
-          for (const s of shingles(r.statement + " " + (r.rationale ?? ""))) {
-            if (src.has(s)) {
-              err(where, `${r.id}: 8-word run copied verbatim from source ("${s}")`);
-              break;
-            }
-          }
-        }
-      }
+  }
+
+  // 2. Non-redistributable sources must have their outputs git-ignored
+  if (!source.license.redistributable) {
+    const gi = (await exists(join(ROOT, ".gitignore"))) ? await readFile(join(ROOT, ".gitignore"), "utf8") : "";
+    for (const dir of [`ir/${source.id}/`, `skills/${source.skill.name}/`]) {
+      if (!gi.split("\n").some((l) => l.trim() === dir)) err("license", `${dir} must be listed in .gitignore (license.redistributable is false)`);
     }
   }
 

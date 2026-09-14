@@ -9,13 +9,16 @@ cadence: weekly
 
 license:
   spdx: LicenseRef-Apple-Proprietary
-  allow_verbatim: false         # extract must paraphrase; normalized text stays in .cache
-  attribution: "Apple Human Interface Guidelines — © Apple Inc. Rules are paraphrased summaries with citations."
+  redistributable: false        # outputs are built locally and git-ignored (see LICENSING.md)
+  attribution: "Text © Apple Inc. — Apple Human Interface Guidelines. Compiled locally by design-skills; not redistributed."
 
 platforms: [iOS, iPadOS, macOS, watchOS, visionOS, tvOS]
 
 # Category is derived from the top-level topic section a page hangs under.
 categories: [getting-started, foundations, patterns, components, inputs, technologies]
+
+# Headings that never contain guidance
+skip_sections: [Resources, Related, Developer documentation, Videos, Change log]
 
 skill:
   name: apple-hig

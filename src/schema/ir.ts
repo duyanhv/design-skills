@@ -9,19 +9,22 @@ export const ProvenanceSchema = z.object({
 });
 
 export const RuleSchema = z.object({
-  /** `${source}/${page}/${nnn}` — stable across regenerations when the statement survives. */
+  /** `${source}/${page}/${nnn}` — stable across regenerations while the statement survives. */
   id: z.string(),
   page: z.string(),
   category: z.string(),
   topic: z.string(),
+  /** Heading path the rule sits under, e.g. "Platform considerations › macOS › Push buttons". */
+  section: z.string(),
   /** Empty array = applies to every platform the source covers. */
   platforms: z.array(z.string()).default([]),
+  /** Heuristic from the statement's wording — see extract/severity.ts. */
   severity: z.enum(["must", "should", "may"]),
-  /** Imperative, self-contained, paraphrased. */
-  statement: z.string().min(10).max(320),
-  rationale: z.string().max(400).optional(),
-  applies_when: z.string().max(200).optional(),
-  /** Concrete figure when the guideline gives one, e.g. "44x44 pt", "≥ 4.5:1". */
+  /** The guideline's lead sentence, verbatim. */
+  statement: z.string().min(4).max(400),
+  /** The explanatory text that follows the lead sentence, verbatim. */
+  rationale: z.string().max(2000).optional(),
+  /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,
 });
@@ -34,28 +37,15 @@ export const PageIRSchema = z.object({
   url: z.string().url(),
   source_hash: z.string().length(16),
   fetched_at: z.string().datetime(),
+  /** Latest date in the page's own change log, when it has one (YYYY-MM-DD). */
+  source_version: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   extracted_at: z.string().datetime(),
-  model: z.string(),
-  summary: z.string().max(600),
+  /** Extractor implementation + version, so IR produced by older heuristics is identifiable. */
+  extractor: z.string(),
+  /** The page abstract. */
+  summary: z.string().max(1000),
   rules: z.array(RuleSchema),
 });
 
 export type Rule = z.infer<typeof RuleSchema>;
 export type PageIR = z.infer<typeof PageIRSchema>;
-
-/** What the extract step asks the model to produce (provenance/ids are filled in by us). */
-export const ExtractOutputSchema = z.object({
-  summary: z.string().max(600),
-  rules: z.array(
-    z.object({
-      anchor: z.string().optional(),
-      platforms: z.array(z.string()).default([]),
-      severity: z.enum(["must", "should", "may"]),
-      statement: z.string().min(10).max(320),
-      rationale: z.string().max(400).optional(),
-      applies_when: z.string().max(200).optional(),
-      value: z.string().max(80).optional(),
-    }),
-  ),
-});
-export type ExtractOutput = z.infer<typeof ExtractOutputSchema>;

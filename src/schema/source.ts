@@ -2,8 +2,11 @@ import { z } from "zod";
 
 export const LicenseSchema = z.object({
   spdx: z.string(),
-  /** If false, normalized text is never committed and extract must paraphrase. */
-  allow_verbatim: z.boolean().default(false),
+  /**
+   * Whether the guideline's text may be redistributed. When false, `ir/<id>` and `skills/<name>`
+   * must be git-ignored (validate checks this) and users build the skill locally.
+   */
+  redistributable: z.boolean(),
   attribution: z.string(),
 });
 
@@ -18,6 +21,8 @@ export const SourceSchema = z.object({
   license: LicenseSchema,
   platforms: z.array(z.string()).default([]),
   categories: z.array(z.string()).default([]),
+  /** Section headings whose content is navigation/meta, not guidance. */
+  skip_sections: z.array(z.string()).default([]),
   skill: z.object({
     name: z.string(),
     description: z.string(),

@@ -35,14 +35,11 @@ function ruleLine(r: Rule, withTopic = false): string {
 }
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }): string {
-  const byAnchor = new Map<string, Rule[]>();
-  for (const r of [...page.rules].sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity])) {
-    const k = r.provenance.anchor ?? "";
-    byAnchor.set(k, [...(byAnchor.get(k) ?? []), r]);
-  }
-  const sections = [...byAnchor.entries()].map(([anchor, rules]) => {
-    const heading = anchor ? `\n### ${anchor.replace(/-/g, " ")}\n` : "";
-    return heading + rules.map((r) => ruleLine(r)).join("\n");
+  // keep document order; group consecutive rules by section path
+  const bySection = new Map<string, Rule[]>();
+  for (const r of page.rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
+  const sections = [...bySection.entries()].map(([section, rules]) => {
+    return `\n### ${section}\n` + rules.map((r) => ruleLine(r)).join("\n");
   });
   return [
     `# ${page.title}`,
@@ -84,7 +81,7 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     `# ${source.name}`,
     ``,
     `Compiled rulebook: ${meta.rule_count} rules across ${pages.length} pages, each cited back to the source. `
-      + `Rules are paraphrased; follow the citation for Apple's wording and visuals.`,
+      + `Statements are the guideline's own lead sentences; follow the citation for figures and visuals.`,
     ``,
     `## How to use this skill`,
     ``,
@@ -99,15 +96,16 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     ``,
   );
 
-  // Top rules: N per topic, must first, shortest statement wins ties (more likely to be crisp).
+  // Top rules: N per topic — "Best practices" section first, then must > should > may, then brevity.
   const budgetForTop = Math.max(20, skill.max_skill_lines - 60 - pages.length);
   let used = 0;
   for (const cat of categories) {
     const catPages = byCategory.get(cat)!;
     const picked: Rule[] = [];
     for (const p of catPages) {
+      const bp = (r: Rule) => (/best practices/i.test(r.section) ? 0 : 1);
       const best = [...p.rules]
-        .sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
+        .sort((a, b) => bp(a) - bp(b) || SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.statement.length - b.statement.length)
         .slice(0, skill.top_rules_per_topic);
       picked.push(...best);
     }

@@ -1,6 +1,8 @@
 # design-skills
 
-Compile platform design guidelines into versioned, cited, LLM-usable [Agent Skills](https://agentskills.io).
+Deterministically compile platform design guidelines into versioned, cited [Agent Skills](https://agentskills.io).
+No LLM in the loop: the same input always produces the same skill, and every rule links back to the exact
+section it came from.
 
 Hand-written "Apple HIG skill" repos already exist. They share one weakness: someone read the docs
 once, wrote a `SKILL.md`, and it silently rots when the guideline changes — and no rule can tell you
@@ -12,26 +14,45 @@ skill files are generated from that.
 sources/<id>.yaml        declarative manifest (url, crawl scope, license, cadence)   ← hand-written
         │  fetch          deterministic crawl → .cache/<id>/raw        (never committed)
         │  normalize      raw → clean markdown → .cache/<id>/md        (never committed)
-        │  extract        LLM, fixed prompt + JSON schema → ir/<id>/pages/*.json   ← committed, reviewable
-        │  compose        IR → skills/<name>/SKILL.md + references/     ← committed, generated
-        │  validate       schema · provenance · verbatim check · size budget
+        │  extract        structural rules (bold-lead sentences, headings) → ir/<id>/pages/*.json
+        │  compose        IR → skills/<name>/SKILL.md + references/
+        │  validate       schema · provenance · license gate · size budget
         ▼
 skills/<name>/           drop into ~/.claude/skills, .cursor, Codex, etc.
 ```
 
+## How extraction works without a model
+
+Well-edited guidelines are already structured. Apple's HIG, for instance, writes every rule as a paragraph
+whose lead sentence is bold — "**Make buttons easy for people to use.** It's essential to include enough
+space…" — grouped under "Best practices" and per-platform "Platform considerations" headings, with a dated
+change log at the bottom. The extractor (`src/extract/rules.ts`) reads exactly that:
+
+| From the page | Into the rule |
+| --- | --- |
+| bold lead sentence | `statement` (verbatim) |
+| rest of the paragraph | `rationale` |
+| heading path | `section`, citation `anchor` |
+| platform-named headings (`iOS, iPadOS`, `macOS`…) | `platforms` |
+| wording (avoid/never/always → must, consider/can → may) | `severity` |
+| first figure with a unit (`44x44 pt`, `4.5:1`) | `value` |
+| change-log dates | page `source_version` |
+
+Heuristics are small, tested and versioned (`extractor: bold-lead@1` is stamped into every IR file), so a
+change to them re-extracts affected pages and shows up as a reviewable diff.
+
 ## Why an intermediate representation
 
-Every rule in `ir/` carries: an imperative statement, severity (`must`/`should`/`may`), platform scope,
-a concrete value when the guideline gives one, and **provenance** (source URL, section anchor,
-content hash, fetch date). Because the IR is committed, a refresh PR shows a diff of *rules*, not of a
-regenerated 40 KB markdown blob — reviewers can actually review it. And one IR can feed many targets
-(Agent Skills today; Cursor rules, `AGENTS.md`, an MCP server later).
+Every rule in `ir/` carries its statement, severity, platform scope, value, and **provenance** (URL, anchor,
+content hash, fetch date). One IR can feed many targets — Agent Skills today; Cursor rules, `AGENTS.md`,
+an MCP server later — and for redistributable sources a refresh PR is a diff of *rules*, not of a
+regenerated 40 KB markdown blob.
 
 ## Sources
 
 | id | guideline | kind | license | status |
 | --- | --- | --- | --- | --- |
-| `apple-hig` | Apple Human Interface Guidelines | `docc` | proprietary → paraphrased rules only | in progress |
+| `apple-hig` | Apple Human Interface Guidelines | `docc` | proprietary → build locally, not committed | in progress |
 | `material-3` | Material Design 3 | — | CC-BY 4.0 | planned |
 | `wcag-2.2` | WCAG 2.2 | — | W3C | planned |
 
@@ -39,21 +60,15 @@ See [LICENSING.md](LICENSING.md) for how proprietary sources are handled.
 
 ## Usage
 
-Requires [Bun](https://bun.sh) ≥ 1.2 and an `ANTHROPIC_API_KEY` for the extract step.
+Requires [Bun](https://bun.sh) ≥ 1.2. No API keys.
 
 ```sh
 bun install
-cp .env.example .env         # add your key
-
-bun run fetch apple-hig                  # crawl (≈150 pages, polite, ~1 min)
-bun run normalize apple-hig
-bun run extract apple-hig --dry-run      # see what would be sent to the model
-bun run extract apple-hig --limit 5      # try a few pages first
-bun run compose apple-hig
-bun run validate apple-hig
-
-bun run build apple-hig                  # all of the above; only changed pages hit the model
+bun run build apple-hig      # fetch (≈150 pages, ~1 min) → normalize → extract → compose → validate
 ```
+
+Or step by step: `bun run fetch|normalize|extract|compose|validate apple-hig`. Re-running is cheap —
+only pages whose content changed are re-extracted.
 
 The generated skill lands in `skills/apple-hig/`. To use it with Claude Code:
 
@@ -63,7 +78,8 @@ ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
 
 ## Adding a source
 
-1. Add `sources/<id>.yaml` (copy `apple-hig.yaml`). Set `license.allow_verbatim` honestly.
+1. Add `sources/<id>.yaml` (copy `apple-hig.yaml`). Set `license.redistributable` honestly; if false, add
+   `ir/<id>/` and `skills/<name>/` to `.gitignore` (validate enforces this).
 2. If the site isn't DocC, add a fetcher/normalizer for its `kind` under `src/fetch` and `src/normalize`.
 3. Add `evals/<id>/questions.yaml` — golden questions the generated skill must answer.
 4. `bun run build <id>` and open a PR. CI runs validate; the weekly refresh workflow opens PRs when
@@ -74,12 +90,13 @@ ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
 ```
 sources/      manifests                     src/fetch       crawlers (docc, html)
 ir/           rule IR + meta.json           src/normalize   → markdown
-skills/       generated Agent Skills        src/extract     model call, schema-enforced
+skills/       generated Agent Skills        src/extract     structural rule extraction
 evals/        golden questions per skill    src/compose     IR → SKILL.md + references
 .cache/       raw + normalized text (git-ignored)
 ```
 
 ## Status
 
-Early. The pipeline runs end-to-end for DocC sources; the eval runner and non-DocC fetchers are next.
+Early. The pipeline runs end-to-end for DocC sources. Next: the eval runner, an `html` fetcher for
+Material 3 / WCAG, and extra emitters (Cursor rules, `AGENTS.md`).
 Contributions welcome — especially new source manifests and eval questions.

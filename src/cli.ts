@@ -15,7 +15,7 @@ usage: bun run src/cli.ts <command> [source-id] [options]
 commands
   fetch       crawl the source into .cache/<id>/raw
   normalize   raw → markdown in .cache/<id>/md
-  extract     markdown → rules IR in ir/<id>/pages (calls the model; only changed pages)
+  extract     markdown → rules IR in ir/<id>/pages (deterministic; only changed pages)
   compose     IR → skills/<name>/SKILL.md + references/
   validate    schema, provenance, verbatim and size checks
   build       fetch → normalize → extract → compose → validate
@@ -23,8 +23,6 @@ commands
 options
   --limit N        cap pages (fetch/extract)
   --force          re-extract unchanged pages
-  --dry-run        extract: report what would run, no API calls
-  --concurrency N  extract parallelism (default 3)
 `;
 
 const { values, positionals } = parseArgs({
@@ -33,8 +31,6 @@ const { values, positionals } = parseArgs({
   options: {
     limit: { type: "string" },
     force: { type: "boolean", default: false },
-    "dry-run": { type: "boolean", default: false },
-    concurrency: { type: "string" },
     help: { type: "boolean", short: "h", default: false },
   },
 });
@@ -47,7 +43,6 @@ if (values.help || !command) {
 
 const ids = sourceArg ? [sourceArg] : await listSources();
 const limit = values.limit ? Number(values.limit) : undefined;
-const concurrency = values.concurrency ? Number(values.concurrency) : undefined;
 
 let failed = false;
 for (const id of ids) {
@@ -61,7 +56,7 @@ for (const id of ids) {
       await normalizeSource(source);
       break;
     case "extract":
-      await extractSource(source, { limit, force: values.force, dryRun: values["dry-run"], concurrency });
+      await extractSource(source, { limit, force: values.force });
       break;
     case "compose":
       await composeSource(source);
@@ -72,7 +67,7 @@ for (const id of ids) {
     case "build":
       await fetchSource(source, { limit });
       await normalizeSource(source);
-      await extractSource(source, { limit, force: values.force, concurrency });
+      await extractSource(source, { limit, force: values.force });
       await composeSource(source);
       failed = report(await validateSource(source)) || failed;
       break;

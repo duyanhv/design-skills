@@ -1,7 +1,9 @@
 node_modules/
 .cache/
-.env
 *.log
 .DS_Store
-# Raw + normalized source text is never committed (see LICENSING.md)
-corpus/**/raw/
+
+# Outputs of sources whose text is not redistributable (license.redistributable: false).
+# Build them locally: `bun run build <id>`. validate enforces these entries.
+ir/apple-hig/
+skills/apple-hig/

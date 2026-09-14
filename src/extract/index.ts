@@ -1,29 +1,17 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
 import type { Source } from "../schema/source.ts";
-import { ExtractOutputSchema, PageIRSchema, type PageIR, type Rule } from "../schema/ir.ts";
+import { PageIRSchema, type PageIR, type Rule } from "../schema/ir.ts";
 import { parseFrontmatter } from "../normalize/frontmatter.ts";
-import { systemPrompt, userPrompt } from "./prompt.ts";
+import { extractRules, EXTRACTOR } from "./rules.ts";
 import { listFiles, paths, readJson, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
-import { mapLimit } from "../util/limit.ts";
-
-const MODEL = process.env.DESIGN_SKILLS_MODEL ?? "claude-sonnet-4-5";
 
 export interface ExtractOptions {
+  /** Re-extract pages even when neither content nor extractor changed. */
   force?: boolean;
   limit?: number;
-  concurrency?: number;
-  dryRun?: boolean;
 }
-
-const RULES_TOOL = {
-  name: "emit_rules",
-  description: "Return the extracted summary and rules for the page.",
-  input_schema: z.toJSONSchema(ExtractOutputSchema) as Anthropic.Tool["input_schema"],
-} satisfies Anthropic.Tool;
 
 /** Reuse ids for statements that survived; number new ones after the previous max. */
 function assignIds(source: string, slug: string, previous: PageIR | null, statements: string[]): string[] {
@@ -48,60 +36,39 @@ function assignIds(source: string, slug: string, previous: PageIR | null, statem
   });
 }
 
-export async function extractSource(source: Source, opts: ExtractOptions = {}): Promise<{ extracted: number; skipped: number }> {
+export async function extractSource(source: Source, opts: ExtractOptions = {}): Promise<{ extracted: number; skipped: number; rules: number }> {
   const files = await listFiles(paths.md(source.id), ".md");
   if (!files.length) throw new Error(`no normalized pages for ${source.id}; run normalize first`);
-  const client = opts.dryRun ? null : new Anthropic();
 
   let extracted = 0;
   let skipped = 0;
-  const work: { slug: string; meta: Record<string, string>; body: string; previous: PageIR | null }[] = [];
+  let rulesTotal = 0;
+  const todo = opts.limit ? files.slice(0, opts.limit) : files;
 
-  for (const file of files) {
+  for (const file of todo) {
     const slug = file.replace(/\.md$/, "");
     const { meta, body } = parseFrontmatter(await readFile(join(paths.md(source.id), file), "utf8"));
     const previous = await readJson<PageIR>(join(paths.irPages(source.id), `${slug}.json`));
-    if (!opts.force && previous && previous.source_hash === meta.source_hash) {
+    if (!opts.force && previous && previous.source_hash === meta.source_hash && previous.extractor === EXTRACTOR) {
       skipped++;
+      rulesTotal += previous.rules.length;
       continue;
     }
-    work.push({ slug, meta, body, previous });
-  }
-  const todo = opts.limit ? work.slice(0, opts.limit) : work;
-  log.info(`${todo.length} pages to extract, ${skipped} unchanged`);
-  if (opts.dryRun) return { extracted: 0, skipped };
 
-  await mapLimit(todo, opts.concurrency ?? 3, async ({ slug, meta, body, previous }) => {
-    const res = await client!.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      system: systemPrompt(source),
-      tools: [RULES_TOOL],
-      tool_choice: { type: "tool", name: RULES_TOOL.name },
-      messages: [{ role: "user", content: userPrompt(body) }],
-    });
-    const call = res.content.find((c) => c.type === "tool_use");
-    if (!call || call.type !== "tool_use") throw new Error(`no tool call for ${slug}`);
-    const parsed = ExtractOutputSchema.parse(call.input);
-
-    const ids = assignIds(source.id, slug, previous, parsed.rules.map((r) => r.statement));
-    const rules: Rule[] = parsed.rules.map((r, i) => ({
+    const page = extractRules(body, { platforms: source.platforms, skipSections: source.skip_sections });
+    const ids = assignIds(source.id, slug, previous, page.rules.map((r) => r.statement));
+    const rules: Rule[] = page.rules.map((r, i) => ({
       id: ids[i]!,
       page: slug,
       category: meta.category ?? "uncategorized",
       topic: meta.title ?? slug,
-      platforms: r.platforms.filter((p) => source.platforms.includes(p)),
+      section: r.section,
+      platforms: r.platforms,
       severity: r.severity,
       statement: r.statement,
       rationale: r.rationale,
-      applies_when: r.applies_when,
       value: r.value,
-      provenance: {
-        url: meta.url!,
-        anchor: r.anchor,
-        source_hash: meta.source_hash!,
-        fetched_at: meta.fetched_at!,
-      },
+      provenance: { url: meta.url!, anchor: r.anchor, source_hash: meta.source_hash!, fetched_at: meta.fetched_at! },
     }));
     const ir: PageIR = PageIRSchema.parse({
       source: source.id,
@@ -111,36 +78,43 @@ export async function extractSource(source: Source, opts: ExtractOptions = {}): 
       url: meta.url,
       source_hash: meta.source_hash,
       fetched_at: meta.fetched_at,
+      source_version: page.source_version,
       extracted_at: new Date().toISOString(),
-      model: MODEL,
-      summary: parsed.summary,
+      extractor: EXTRACTOR,
+      summary: page.summary,
       rules,
     });
     await writeJson(join(paths.irPages(source.id), `${slug}.json`), ir);
     extracted++;
-    log.info(`${slug}: ${rules.length} rules`);
-  });
+    rulesTotal += rules.length;
+    if (!rules.length) log.warn(`${slug}: 0 rules`);
+  }
 
   await writeMeta(source);
-  return { extracted, skipped };
+  log.info(`extracted ${extracted} pages (${skipped} unchanged), ${rulesTotal} rules`);
+  return { extracted, skipped, rules: rulesTotal };
 }
 
 export async function writeMeta(source: Source) {
   const files = await listFiles(paths.irPages(source.id), ".json");
-  const pages: Record<string, { source_hash: string; fetched_at: string; rules: number }> = {};
+  const pages: Record<string, { source_hash: string; source_version?: string; rules: number }> = {};
   let rule_count = 0;
-  let latest = "";
+  let version = "";
+  let fetched = "";
   for (const f of files) {
     const ir = (await readJson<PageIR>(join(paths.irPages(source.id), f)))!;
-    pages[ir.page] = { source_hash: ir.source_hash, fetched_at: ir.fetched_at, rules: ir.rules.length };
+    pages[ir.page] = { source_hash: ir.source_hash, source_version: ir.source_version, rules: ir.rules.length };
     rule_count += ir.rules.length;
-    if (ir.fetched_at > latest) latest = ir.fetched_at;
+    if (ir.source_version && ir.source_version > version) version = ir.source_version;
+    if (ir.fetched_at > fetched) fetched = ir.fetched_at;
   }
   await writeJson(paths.irMeta(source.id), {
     source: source.id,
     name: source.name,
     license: source.license,
-    source_version: latest.slice(0, 10),
+    extractor: EXTRACTOR,
+    source_version: version || fetched.slice(0, 10),
+    fetched_at: fetched,
     updated_at: new Date().toISOString(),
     page_count: files.length,
     rule_count,
