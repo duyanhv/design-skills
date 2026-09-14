@@ -29,10 +29,20 @@ skill:
   highlights: false
   index: rules
   notes: |
-    Severity is derived from the conformance level: **Level A and AA → MUST** (required for the usual
-    AA target), **Level AAA → MAY**. Criteria added in 2.2 are marked "(new in 2.2)". Terms in
-    italics or otherwise undefined in a rule ("large-scale text", "essential", "target") are defined
-    in [references/glossary/glossary.md](references/glossary/glossary.md).
+    **Applicability is decided by the conformance target, not by this skill.** Every success criterion
+    is normative text and is shown as MUST; which ones bind you depends on the level you are claiming
+    ([WCAG conformance requirements](https://www.w3.org/TR/WCAG22/#conformance-reqs)):
+
+    - Target **Level A** → apply criteria marked `(Level A)`.
+    - Target **Level AA** (the usual legal/procurement baseline) → apply `(Level A)` and `(Level AA)`.
+    - Target **Level AAA** → apply all three. W3C advises that AAA conformance is not achievable for
+      all content, so AAA criteria are commonly treated as enhancements unless AAA is the stated goal.
+
+    Ask for the target if it is not stated; assume **AA** only when you say so in the finding.
+    Every criterion's exceptions and notes are listed under it and are part of the requirement.
+    Criteria added in 2.2 are marked "(new in 2.2)". Terms in italics or otherwise undefined in a rule
+    ("large-scale text", "essential", "target") are defined in
+    [references/glossary/glossary.md](references/glossary/glossary.md).
   routing:
     - when: "contrast, color, text size, reflow, hover/tooltip content"
       read: [distinguishable, glossary]

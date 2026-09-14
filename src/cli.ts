@@ -25,6 +25,7 @@ commands
 options
   --limit N        cap pages (fetch/extract)
   --force          re-extract unchanged pages
+  --allow-partial  build from an incomplete crawl (marks the skill partial; never reconciles)
 `;
 
 const { values, positionals } = parseArgs({
@@ -33,6 +34,7 @@ const { values, positionals } = parseArgs({
   options: {
     limit: { type: "string" },
     force: { type: "boolean", default: false },
+    "allow-partial": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
 });
@@ -45,6 +47,7 @@ if (values.help || !command) {
 
 const ids = sourceArg ? [sourceArg] : await listSources();
 const limit = values.limit ? Number(values.limit) : undefined;
+const allowPartial = values["allow-partial"] === true;
 
 let failed = false;
 for (const id of ids) {
@@ -55,10 +58,10 @@ for (const id of ids) {
       await fetchSource(source, { limit });
       break;
     case "normalize":
-      await normalizeSource(source);
+      await normalizeSource(source, { allowPartial });
       break;
     case "extract":
-      await extractSource(source, { limit, force: values.force });
+      await extractSource(source, { limit, force: values.force, partial: Boolean(limit) || allowPartial });
       break;
     case "compose":
       await composeSource(source);
@@ -71,8 +74,8 @@ for (const id of ids) {
       break;
     case "build":
       await fetchSource(source, { limit });
-      await normalizeSource(source);
-      await extractSource(source, { limit, force: values.force });
+      await normalizeSource(source, { allowPartial });
+      await extractSource(source, { limit, force: values.force, partial: Boolean(limit) || allowPartial });
       await composeSource(source);
       failed = report(await validateSource(source)) || failed;
       failed = reportEval(await evalSource(source)) || failed;

@@ -24,6 +24,12 @@ export const SourceSchema = z.object({
   cadence: z.enum(["daily", "weekly", "monthly"]).default("weekly"),
   license: LicenseSchema,
   platforms: z.array(z.string()).default([]),
+  /**
+   * Page slug → platforms the page is about, for pages whose title does not say so
+   * ("Siri" is tvOS/watchOS/iOS, "Digital Crown" is watchOS). Overrides title detection and is
+   * inherited by every rule on the page that no narrower section scopes.
+   */
+  page_platforms: z.record(z.string(), z.array(z.string())).default({}),
   categories: z.array(z.string()).default([]),
   /** Section headings whose content is navigation/meta, not guidance. */
   skip_sections: z.array(z.string()).default([]),

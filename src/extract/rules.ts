@@ -5,19 +5,38 @@
  * bold ("**Make buttons easy for people to use.** It's essential to …"). We treat every paragraph
  * or list item with a bold lead as one rule: lead = statement, remainder = rationale.
  * Headings give the section path, platform scope, and citation anchor.
+ *
+ * Text that is not a rule is *not* discarded: prose before a section's first rule becomes that
+ * section's intro, and prose/bullets/asides that follow a rule become that rule's notes. A rule is
+ * frequently unusable without them (exceptions, platform caveats, which material to pick).
  */
 import { severityOf, valueOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@5";
+export const EXTRACTOR = "bold-lead@6";
+
+/**
+ * Where a rule's platform scope came from.
+ *   section — a platform-named heading ("### macOS")
+ *   page    — the whole page is about one platform ("Designing for visionOS")
+ *   general — the source states it without scoping it to a platform (applies to all it covers)
+ * Distinguishing `general` from a *missing* scope is the point: an unscoped rule on a
+ * platform-specific page used to read as universal guidance.
+ */
+export type Scope = "section" | "page" | "general";
 
 export interface ExtractedRule {
   kind: "rule" | "term";
   section: string;
   anchor?: string;
   platforms: string[];
+  scope: Scope;
   severity: "must" | "should" | "may";
+  /** Sources with a formal conformance model (WCAG A/AA/AAA) report it here, separate from severity. */
+  conformance_level?: "A" | "AA" | "AAA";
   statement: string;
   rationale?: string;
+  /** Blocks that qualify the rule: follow-up paragraphs, sub-bullets, notes. Verbatim, in order. */
+  notes: string[];
   value?: string;
 }
 
@@ -28,9 +47,22 @@ export interface ExtractedTable {
   markdown: string;
 }
 
+/** A section's own prose — definitions and framing that its rules depend on. */
+export interface ExtractedSection {
+  section: string;
+  anchor?: string;
+  platforms: string[];
+  intro: string[];
+}
+
 export interface ExtractedPage {
   summary: string;
   source_version?: string;
+  /** Paragraphs before the first heading, after the abstract: what the topic is and when to use it. */
+  overview: string[];
+  /** Platforms the whole page is about, when it is platform-specific ("Designing for tvOS"). */
+  platforms: string[];
+  sections: ExtractedSection[];
   rules: ExtractedRule[];
   tables: ExtractedTable[];
 }
@@ -38,6 +70,10 @@ export interface ExtractedPage {
 export interface ExtractOptions {
   platforms: string[];
   skipSections: string[];
+  /** Page title, used to detect a page-wide platform scope. */
+  title?: string;
+  /** Manifest override: platforms this page is about, when the title does not say so. */
+  pagePlatforms?: string[];
 }
 
 const HEADING = /^(#{1,6})\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
@@ -80,9 +116,18 @@ function stripMd(s: string): string {
     .trim();
 }
 
-/** Like stripMd but keeps `[label](url)` links so compose can turn cross-references into local links. */
+/**
+ * Like stripMd but keeps `[label](url)` links so compose can turn cross-references into local links.
+ * Emphasis markers are removed everywhere except inside a link target, where `_` and `*` are legal
+ * URL characters — hence the split on link syntax rather than one global replace.
+ */
 function stripMdKeepLinks(s: string): string {
-  return s.replace(/(^|[^\]])[*_`]/g, "$1").replace(/\s+/g, " ").trim();
+  return s
+    .split(/(\]\([^)]*\))/)
+    .map((part, i) => (i % 2 ? part : part.replace(/[*`]/g, "").replace(/(^|[^\w])_|_([^\w]|$)/g, "$1$2")))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Match a heading to platform names, e.g. "iOS, iPadOS" → ["iOS","iPadOS"]. */
@@ -110,39 +155,103 @@ function isCaption(prose: string): boolean {
   return stripMd(prose).length <= 200;
 }
 
+/** An aside: "> **Note:** …". Notes carry exceptions, so they are never dropped. */
+const ASIDE = /^>\s*(.*)$/;
+/** A figure placeholder the normalizer emitted for an image/video (see normalize/docc.ts). */
+const FIGURE = /^_\[figure(?::[^\]]*)?\]_$/;
+
+/**
+ * Prose kept as context, verbatim. Unlike a rule statement — which is normalized so it can be
+ * matched and quoted — context is the source's own formatting: bold labels, list markers, emphasis
+ * and links all carry meaning here ("**Destructive.** The button performs…").
+ */
+function contextText(line: string): string {
+  const aside = ASIDE.exec(line.trim());
+  return (aside ? aside[1]! : line.trim()).replace(/\s+/g, " ").trim();
+}
+
+/** Page-wide platform scope: "Designing for visionOS", "visionOS app icons". */
+export function pagePlatformsOf(title: string | undefined, known: string[]): string[] {
+  if (!title) return [];
+  return known.filter((p) => new RegExp(`(^|[^A-Za-z])${p}([^A-Za-z]|$)`).test(title));
+}
+
+const MAX_NOTES = 12;
+
 export function extractRules(markdown: string, opts: ExtractOptions): ExtractedPage {
   const lines = markdown.split("\n");
   const rules: ExtractedRule[] = [];
   const tables: ExtractedTable[] = [];
+  const sections: ExtractedSection[] = [];
   const path: { level: number; text: string; anchor?: string }[] = [];
   let tableBuf: string[] = [];
   let lastProse = "";
+  /** Where `lastProse` was stored as context, so a line promoted to a table caption is not duplicated. */
+  let lastContext: { list: string[]; text: string } | null = null;
   const flushTable = () => {
     if (tableBuf.length >= 2) {
       const nearest = [...path].reverse().find((p) => p.anchor);
+      const caption = isCaption(lastProse) ? stripMd(lastProse) : undefined;
+      // The caption line is already on the page as this table's lead-in; drop the context copy.
+      if (caption && lastContext && lastContext.list[lastContext.list.length - 1] === lastContext.text) lastContext.list.pop();
       tables.push({
         section: path.map((p) => p.text).join(" › "),
         anchor: nearest?.anchor,
         // caption = a short lead-in ("Two-column", "Sizes vary by platform.") — never a rule paragraph
-      caption: isCaption(lastProse) ? stripMd(lastProse) : undefined,
+        caption,
         markdown: tableBuf.join("\n"),
       });
     }
     tableBuf = [];
+    lastContext = null;
   };
   let summary = "";
+  const overview: string[] = [];
   let sawHeading = false;
   let changeLog = "";
   let inChangeLog = false;
+  /** The rule most recently emitted in the current section; qualifying prose attaches to it. */
+  let openRule: ExtractedRule | null = null;
+  let openSection: ExtractedSection | null = null;
 
-  const currentPlatforms = (): string[] => {
+  const pagePlatforms = opts.pagePlatforms?.length ? opts.pagePlatforms : pagePlatformsOf(opts.title, opts.platforms);
+
+  /** Nearest platform-named heading wins; otherwise the page's own scope; otherwise general. */
+  const currentScope = (): { platforms: string[]; scope: Scope } => {
     for (let i = path.length - 1; i >= 0; i--) {
       const hit = platformsIn(path[i]!.text, opts.platforms);
-      if (hit.length) return hit;
+      if (hit.length) return { platforms: hit, scope: "section" };
     }
-    return [];
+    if (pagePlatforms.length) return { platforms: pagePlatforms, scope: "page" };
+    return { platforms: [], scope: "general" };
   };
   const skipping = () => path.some((h) => opts.skipSections.includes(h.text));
+
+  /** Attach qualifying prose to the open rule, or to the section's intro when no rule is open yet. */
+  const addContext = (text: string) => {
+    if (!text) return;
+    if (openRule) {
+      if (openRule.notes.length < MAX_NOTES) {
+        openRule.notes.push(text.slice(0, 1000));
+        lastContext = { list: openRule.notes, text: text.slice(0, 1000) };
+      }
+      return;
+    }
+    if (!openSection) {
+      const nearest = [...path].reverse().find((p) => p.anchor);
+      openSection = {
+        section: path.map((p) => p.text).join(" › "),
+        anchor: nearest?.anchor,
+        platforms: currentScope().platforms,
+        intro: [],
+      };
+      sections.push(openSection);
+    }
+    if (openSection.intro.length < MAX_NOTES) {
+      openSection.intro.push(text.slice(0, 1000));
+      lastContext = { list: openSection.intro, text: text.slice(0, 1000) };
+    }
+  };
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -156,11 +265,18 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       while (path.length && path[path.length - 1]!.level >= level) path.pop();
       path.push({ level, text: stripMd(h[2]!), anchor: h[3] });
       inChangeLog = /change log/i.test(h[2]!);
+      openRule = null;
+      openSection = null;
       continue;
     }
     if (inChangeLog) changeLog += line + "\n";
     if (!sawHeading) {
-      if (line.trim() && !summary) summary = stripMd(line); // the abstract is the first paragraph
+      // The abstract is the first paragraph; the rest is the topic's introduction, which defines
+      // the component and says when to use it — context a rule alone does not carry.
+      if (!line.trim()) continue;
+      if (FIGURE.test(line.trim())) continue; // a decorative page header image carries no guidance
+      if (!summary) summary = stripMd(line);
+      else if (overview.length < MAX_NOTES) overview.push(contextText(line).slice(0, 1000));
       continue;
     }
     if (skipping()) continue;
@@ -169,12 +285,15 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       tableBuf.push(line.trim());
       continue;
     }
-    if (line.trim()) lastProse = line.trim();
+    if (!line.trim()) continue;
+    // A figure placeholder is the preceding illustration, not this table's lead-in text.
+    if (!FIGURE.test(line.trim())) lastProse = line.trim();
 
     let statement: string;
     let rationale: string | undefined;
     let kind: "rule" | "term" = "rule";
-    const m = BOLD_LEAD.exec(line.trim());
+    const isIndented = /^\s/.test(raw) && !!openRule; // a continuation line of the rule above
+    const m = isIndented ? null : BOLD_LEAD.exec(line.trim());
     if (m) {
       statement = stripMd(m[1]!);
       rationale = stripMdKeepLinks(m[2] ?? "") || undefined;
@@ -185,31 +304,56 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
         rationale = punct[2] || undefined;
       }
       kind = classify(statement);
-      if (kind === "term" && !rationale) continue; // bare "**Style**" list labels carry nothing
+      if (kind === "term" && !rationale) {
+        addContext(contextText(line)); // a bare "**Sizes**" label is a caption for what follows
+        continue;
+      }
     } else {
       // Overview pages ("Designing for iOS") list best practices as plain bullets.
       const inBestPractices = path.some((p) => /best practices/i.test(p.text));
-      const item = inBestPractices ? PLAIN_ITEM.exec(line.trim()) : null;
-      if (!item) continue;
+      const item = inBestPractices && !isIndented ? PLAIN_ITEM.exec(line.trim()) : null;
+      if (!item) {
+        // Not a rule: keep it as context rather than dropping guidance on the floor. A figure is kept
+        // too — the prose often depends on it ("use the sizes below"), and an unmarked gap is worse
+        // than an explicit "there is a picture here that the text does not describe".
+        addContext(contextText(line));
+        continue;
+      }
       const text = stripMdKeepLinks(item[1]!);
       const fs = FIRST_SENTENCE.exec(text);
       statement = stripMd(fs ? fs[1]! : text);
       rationale = fs?.[2] || undefined;
-      if (statement.split(" ").length < 4) continue;
+      if (statement.split(" ").length < 4) {
+        addContext(contextText(line));
+        continue;
+      }
     }
     const nearest = [...path].reverse().find((p) => p.anchor);
-    rules.push({
+    const { platforms, scope } = currentScope();
+    const rule: ExtractedRule = {
       kind,
       section: path.map((p) => p.text).join(" › "),
       anchor: nearest?.anchor,
-      platforms: currentPlatforms(),
+      platforms,
+      scope,
       severity: severityOf(statement),
       statement: statement.slice(0, 400),
       rationale: rationale?.slice(0, 2000),
+      notes: [],
       value: valueOf(`${statement} ${rationale ?? ""}`),
-    });
+    };
+    rules.push(rule);
+    openRule = rule;
   }
 
   flushTable();
-  return { summary: summary.slice(0, 1000), source_version: latestDate(changeLog), rules, tables };
+  return {
+    summary: summary.slice(0, 1000),
+    source_version: latestDate(changeLog),
+    overview,
+    platforms: pagePlatforms,
+    sections: sections.filter((s) => s.intro.length),
+    rules,
+    tables,
+  };
 }

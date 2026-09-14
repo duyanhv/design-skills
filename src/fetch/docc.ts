@@ -41,6 +41,7 @@ export async function fetchDocc(source: Source, opts: { limit?: number } = {}): 
     { url: source.entry, category: "root", parent: null },
   ];
   const seen = new Set<string>([source.entry]);
+  const failed: { url: string; error: string }[] = [];
 
   while (queue.length) {
     const batch = queue.splice(0, 8);
@@ -51,7 +52,10 @@ export async function fetchDocc(source: Source, opts: { limit?: number } = {}): 
       try {
         text = await fetchText(dataUrl);
       } catch (err) {
-        log.warn(`skip ${url}: ${(err as Error).message}`);
+        // A failed page is a hole in the crawl, not a page that stopped existing. Record it so the
+        // build is marked partial and later stages refuse to treat the gap as an upstream removal.
+        failed.push({ url, error: (err as Error).message });
+        log.warn(`failed ${url}: ${(err as Error).message}`);
         return;
       }
       const page = JSON.parse(text) as DoccPage;
@@ -88,6 +92,10 @@ export async function fetchDocc(source: Source, opts: { limit?: number } = {}): 
     log.info(`fetched ${Object.keys(manifest.pages).length} pages, ${queue.length} queued`);
   }
 
+  manifest.limited = Boolean(opts.limit);
+  if (failed.length) manifest.failed = failed;
+  manifest.partial = failed.length > 0 || Boolean(opts.limit);
+  if (manifest.partial) log.warn(`partial crawl: ${failed.length} failed${opts.limit ? `, capped at ${opts.limit}` : ""}`);
   await writeJson(paths.manifest(source.id), manifest);
   return manifest;
 }

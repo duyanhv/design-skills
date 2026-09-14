@@ -24,6 +24,8 @@ Toggles are made of three things:
 
 **Be brief.** Keep labels short.
 
+> **Note:** Exception: a long label is fine in a settings list.
+
 **Keep visuals consistent**. Once set, keep it.
 
 **Translate only the word Hey in “Hey Siri.”** Siri is a trademark.
@@ -43,6 +45,8 @@ Toggles are made of three things:
 | Width | 155 pt |
 
 ## Content {#Content}
+
+> **Note:** labels are localized.
 
 **Use a label that names the setting, not the state.** "Wi-Fi" is clearer than "On". Keep about 10 pixels of padding.
 

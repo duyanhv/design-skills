@@ -4,14 +4,20 @@
  *   section:   "1.4.3 Contrast (Minimum)"
  *   statement: the first normative paragraph (the criterion itself)
  *   rationale: what follows — exceptions, notes — flattened
- *   severity:  A/AA → must (required for typical conformance targets), AAA → may
- *   value:     "Level AA"
+ *   conformance_level: "A" | "AA" | "AAA" — the only authority WCAG actually defines
+ *
+ * Severity is deliberately *not* derived from the level. WCAG's conformance model
+ * (https://www.w3.org/TR/WCAG22/#conformance-reqs) makes a criterion required or not depending on
+ * the target a project claims: at Level AA, A and AA criteria are required and AAA are not; at
+ * Level AAA all three are. Baking one target into the rule would misstate the source, so every
+ * success criterion is a MUST *for the levels at or above it*, and the skill tells the reader to
+ * select by target level.
  * An SC with no level (e.g. 4.1.1 Parsing, obsolete) is kept as a term.
  */
 import type { ExtractedPage, ExtractedRule } from "./rules.ts";
 import { valueOf } from "./severity.ts";
 
-export const WCAG_EXTRACTOR = "wcag-sc@3";
+export const WCAG_EXTRACTOR = "wcag-sc@4";
 
 const HEADING = /^##\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
 const LEVEL = /^\*\*Level (A{1,3})\*\*$/;
@@ -38,16 +44,21 @@ export function extractWcag(markdown: string): ExtractedPage {
       rest = [statement, ...rest];
       statement = cur.title;
     }
-    const rationale = rest.join(" ") || undefined;
+    // Exceptions and notes stay as separate blocks: an SC without its exceptions is a different rule.
+    const notes = rest.map((t) => t.slice(0, 1000));
     rules.push({
       kind: isRule ? "rule" : "term",
       section: cur.title,
       anchor: cur.anchor,
       platforms: [],
-      severity: level === "AAA" ? "may" : "must",
+      scope: "general",
+      // Normative text; whether it applies to you is decided by the conformance target, not by us.
+      severity: "must",
+      conformance_level: level as "A" | "AA" | "AAA" | undefined,
       statement,
-      rationale: rationale?.slice(0, 4000),
-      value: level ? `Level ${level}` : valueOf(rationale ?? ""),
+      rationale: undefined,
+      notes,
+      value: valueOf(`${statement} ${notes.join(" ")}`),
     });
     cur = null;
   };
@@ -74,7 +85,7 @@ export function extractWcag(markdown: string): ExtractedPage {
     if (line) cur.text.push(line);
   }
   flush();
-  return { summary: summary.slice(0, 1000), source_version: undefined, rules, tables: [] };
+  return { summary: summary.slice(0, 1000), source_version: undefined, overview: [], platforms: [], sections: [], rules, tables: [] };
 }
 
 /** Glossary page: every `## term {#id}` becomes a term (kind: term) with the definition as rationale. */
@@ -88,9 +99,11 @@ export function extractGlossary(markdown: string): ExtractedPage {
       section: "Glossary",
       anchor: cur.anchor,
       platforms: [],
+      scope: "general",
       severity: "may",
       statement: cur.title,
       rationale: strip(cur.text.join(" ")).slice(0, 4000) || undefined,
+      notes: [],
       value: undefined,
     });
     cur = null;
@@ -106,5 +119,13 @@ export function extractGlossary(markdown: string): ExtractedPage {
     if (cur && line) cur.text.push(line);
   }
   flush();
-  return { summary: "Definitions of the terms the success criteria depend on.", source_version: undefined, rules, tables: [] };
+  return {
+    summary: "Definitions of the terms the success criteria depend on.",
+    source_version: undefined,
+    overview: [],
+    platforms: [],
+    sections: [],
+    rules,
+    tables: [],
+  };
 }

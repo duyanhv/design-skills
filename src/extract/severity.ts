@@ -1,9 +1,24 @@
 /**
  * Severity from wording. Deliberately simple and documented so it can be reviewed and tuned.
- * Order matters: "must" phrasing wins over "may" phrasing in the same sentence.
+ *
+ * The only job here is to report how strongly the *source* worded a rule — never to promote a
+ * keyword guess into a normative requirement. Two guards keep that honest:
+ *   1. Strength words must be doing grammatical work. "only" in "an icon-only button" is part of a
+ *      compound adjective, not a restriction, so it does not make the rule a MUST.
+ *   2. Explicitly soft phrasing ("Consider…", "In rare cases…") wins over any strong word.
+ * Anything we cannot read as prohibitive or optional stays SHOULD, the source's default voice.
  */
-const MUST = /\b(avoid|never|don't|do not|always|must|ensure|make sure|be sure|only|required|shouldn't|should not)\b/i;
-const MAY = /\b(consider|can|may|might|optionally|it's fine|it is fine)\b/i;
+
+/** Prohibitions and absolutes: the source is ruling something out. */
+const PROHIBITIVE = /\b(avoid|never|don't|do not|must|must not|shouldn't|should not|cannot|can't|required|refrain from)\b/i;
+/** Directives the source states without hedging. */
+const EMPHATIC = /\b(always|ensure|make sure|be sure|be certain)\b/i;
+/**
+ * "only" restricts when it governs a clause ("Use a sheet only when…", "Display only one sheet"),
+ * not when it is glued to a noun as a compound modifier ("an icon-only button", "keyboard-only users").
+ */
+const RESTRICTIVE_ONLY = /(^|[^\w-])only(?=\s+(?:when|if|after|for|in|on|to|with|as|the|a|an|one|two|three|those|these|that|this|your|its|people|use|include|display|show|present|support|offer|allow|enable|apply|\d))/i;
+const MAY = /\b(consider|can|may|might|optionally|it's fine|it is fine|if you want|if needed|feel free)\b/i;
 
 export type Severity = "must" | "should" | "may";
 
@@ -12,13 +27,16 @@ export function foldQuotes(s: string): string {
   return s.replace(/[\u2018\u2019\u02BC]/g, "'").replace(/[\u201C\u201D]/g, '"');
 }
 
-/** Explicitly soft phrasing wins over strong words in the same sentence ("In rare cases, consider using only…"). */
-const SOFT = /\b(consider|optionally|in rare cases|it's fine|it is fine)\b/i;
+/** Explicitly optional phrasing wins over strong words in the same sentence ("In rare cases, consider using only…"). */
+const OPTIONAL = /\b(consider|optionally|in rare cases|if you want|it's fine|it is fine)\b/i;
+/** Hedged phrasing: a recommendation, not an absolute. Caps severity at SHOULD. */
+const HEDGED = /\b(prefer|try to|aim to|in general|generally|typically|usually|when possible|where possible|if possible|whenever possible)\b/i;
 
 export function severityOf(statement: string): Severity {
   const s = foldQuotes(statement);
-  if (SOFT.test(s)) return "may";
-  if (MUST.test(s)) return "must";
+  if (OPTIONAL.test(s)) return "may";
+  const strong = PROHIBITIVE.test(s) || EMPHATIC.test(s) || RESTRICTIVE_ONLY.test(s);
+  if (strong) return HEDGED.test(s) ? "should" : "must";
   if (MAY.test(s)) return "may";
   return "should";
 }

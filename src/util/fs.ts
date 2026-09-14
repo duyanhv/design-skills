@@ -55,6 +55,14 @@ export async function listFiles(dir: string, ext: string): Promise<string[]> {
   }
 }
 
+export async function listDirs(dir: string): Promise<string[]> {
+  try {
+    return (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch {
+    return [];
+  }
+}
+
 export async function loadSource(id: string): Promise<Source> {
   const raw = await readFile(join(paths.sources, `${id}.yaml`), "utf8");
   return SourceSchema.parse(parseYaml(raw));

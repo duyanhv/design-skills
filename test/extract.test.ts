@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
-import { extractRules, platformsIn, latestDate, classify } from "../src/extract/rules.ts";
+import { extractRules, platformsIn, latestDate, classify, pagePlatformsOf } from "../src/extract/rules.ts";
 import { severityOf, valueOf } from "../src/extract/severity.ts";
 
 const md = readFileSync(new URL("./fixtures/page.md", import.meta.url), "utf8");
@@ -102,4 +102,70 @@ test("helpers", () => {
   expect(severityOf("Use system colors.")).toBe("should");
   expect(valueOf("Keep alerts under 3 seconds.")).toBe("3 seconds");
   expect(valueOf("Nothing numeric here.")).toBeUndefined();
+});
+
+test("severity reports the source's wording and does not invent authority", () => {
+  // Regression: "only" inside a compound adjective used to promote a suggestion to MUST.
+  expect(severityOf("Consider using an icon-only button.")).toBe("may");
+  expect(severityOf("Support keyboard-only work styles.")).toBe("should");
+  expect(severityOf("Use an icon-only button in a toolbar.")).toBe("should");
+  // "only" that genuinely restricts still reads as a requirement.
+  expect(severityOf("Display only one sheet at a time.")).toBe("must");
+  expect(severityOf("Use a sheet only when the task requires it.")).toBe("must");
+  expect(severityOf("Request access only to data that you actually need.")).toBe("must");
+  // Hedged phrasing caps a strong word at SHOULD instead of asserting an absolute.
+  expect(severityOf("In general, avoid long labels.")).toBe("should");
+  expect(severityOf("Prefer to avoid custom controls.")).toBe("should");
+});
+
+test("page-level platform scope", () => {
+  expect(pagePlatformsOf("Designing for visionOS", PLATFORMS)).toEqual(["visionOS"]);
+  expect(pagePlatformsOf("Designing for tvOS", PLATFORMS)).toEqual(["tvOS"]);
+  expect(pagePlatformsOf("Buttons", PLATFORMS)).toEqual([]);
+  // "iPadOS" must not be read as an iOS page, and vice versa.
+  expect(pagePlatformsOf("Designing for iPadOS", PLATFORMS)).toEqual(["iPadOS"]);
+});
+
+test("platform-specific pages do not produce universal rules", () => {
+  const md = readFileSync(new URL("./fixtures/overview.md", import.meta.url), "utf8");
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP, title: "Designing for tvOS" });
+  expect(page.platforms).toEqual(["tvOS"]);
+  for (const r of page.rules) {
+    expect(r.scope).toBe("page");
+    expect(r.platforms).toEqual(["tvOS"]);
+  }
+  // A manifest override wins over title detection for pages whose title names no platform.
+  const digital = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP, title: "Digital Crown", pagePlatforms: ["watchOS"] });
+  expect(digital.rules[0]!.platforms).toEqual(["watchOS"]);
+  expect(digital.rules[0]!.scope).toBe("page");
+});
+
+test("context that is not a rule is kept, not dropped", () => {
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });
+
+  // Prose after the abstract and before the first heading: what the component is.
+  expect(page.overview).toEqual([]); // this fixture's abstract is its only pre-heading paragraph
+
+  // A section's framing sentence survives as its intro.
+  const best = page.sections.find((s) => s.section === "Best practices")!;
+  expect(best.intro).toContain("Toggles are made of three things:");
+  expect(best.anchor).toBe("Best-practices");
+
+  // Supporting prose that follows a rule is attached to that rule, not thrown away.
+  const checkbox = page.rules.find((r) => r.statement.startsWith("Use a checkbox"))!;
+  expect(checkbox.platforms).toEqual(["macOS"]);
+
+  // A note under a rule carries its exception.
+  const brief = page.rules.find((r) => r.statement === "Be brief.")!;
+  expect(brief.notes.join(" ")).toContain("Exception: a long label is fine in a settings list.");
+
+  // An aside before any rule in a section lands in the section intro.
+  const content = page.sections.find((s) => s.section === "Content");
+  expect(content?.intro.join(" ")).toContain("**Note:** labels are localized.");
+
+  // Context is kept verbatim — bold labels and list markers are part of the meaning.
+  const overview = readFileSync(new URL("./fixtures/overview.md", import.meta.url), "utf8");
+  const tv = extractRules(overview, { platforms: PLATFORMS, skipSections: SKIP });
+  expect(tv.overview).toContain("Some more preamble that is not the abstract.");
+  expect(tv.overview).toContain("**Display.** The TV is large.");
 });

@@ -17,9 +17,28 @@ test("docc → markdown covers headings, inline, lists, tables, asides, unknown 
   expect(body).toContain("> **Note:** Widgets refresh on a budget.");
   expect(body).toContain("Unknown blocks still surface text.");
   expect(body).not.toContain("img-1");
-  expect(body).toContain("**Small**\n\n#### Small widget {#Small-widget}\n\n| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+  // A tab whose heading already carries the label ("Small" / "Small widget") is not labelled twice,
+  // and its content follows its own heading rather than the previous section's.
+  expect(body).toContain("#### Small widget {#Small-widget}\n\n| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+  expect(body).not.toContain("**Small**\n\n#### Small widget");
   expect(body).not.toContain("**Empty**");
   expect(body).toContain("See `fooColor`"); // API symbol refs have fragments, not a title
+});
+
+test("images become visible placeholders instead of disappearing", () => {
+  // Regression: figures were dropped silently, so "use the sizes below" pointed at nothing and
+  // image-only table cells rendered blank.
+  const { body } = doccToMarkdown(doc);
+  expect(body).toContain("_[figure: A small widget showing one statistic.]_");
+  expect(body).toContain("for spacing. _[figure:"); // kept out of the sentence it follows
+  // A cell that is nothing but a checkmark image says "available" rather than being empty.
+  expect(body).toContain("| Circular | ✓ |");
+});
+
+test("a link's overriding title is used, not the target page's title", () => {
+  // "motion" pointing at motion#visionOS used to render as "visionOS", inverting the sentence.
+  const { body } = doccToMarkdown(doc);
+  expect(body).toContain("Avoid displaying [motion](/design/human-interface-guidelines/motion) that’s jarring.");
 });
 
 test("slugs are stable and flat", () => {

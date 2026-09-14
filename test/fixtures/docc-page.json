@@ -258,6 +258,85 @@
               "identifier": "doc://api/NSColor/foo"
             }
           ]
+        },
+        {
+          "type": "paragraph",
+          "inlineContent": [
+            {
+              "type": "text",
+              "text": "Avoid displaying "
+            },
+            {
+              "type": "reference",
+              "identifier": "doc://com.apple.HIG/design/Human-Interface-Guidelines/motion",
+              "isActive": true,
+              "overridingTitle": "motion",
+              "overridingTitleInlineContent": [
+                {
+                  "type": "text",
+                  "text": "motion"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " that’s jarring."
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "header": "row",
+          "rows": [
+            [
+              [
+                {
+                  "type": "paragraph",
+                  "inlineContent": [
+                    {
+                      "type": "text",
+                      "text": "Shape"
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "type": "paragraph",
+                  "inlineContent": [
+                    {
+                      "type": "text",
+                      "text": "Small"
+                    }
+                  ]
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "paragraph",
+                  "inlineContent": [
+                    {
+                      "type": "text",
+                      "text": "Circular"
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "type": "paragraph",
+                  "inlineContent": [
+                    {
+                      "type": "image",
+                      "identifier": "img-check"
+                    }
+                  ]
+                }
+              ]
+            ]
+          ]
         }
       ]
     }
@@ -269,7 +348,8 @@
       "url": "/design/human-interface-guidelines/layout"
     },
     "img-1": {
-      "type": "image"
+      "type": "image",
+      "alt": "A small widget showing one statistic."
     },
     "doc://api/NSColor/foo": {
       "fragments": [
@@ -286,6 +366,14 @@
           "text": "fooColor"
         }
       ]
+    },
+    "img-check": {
+      "type": "image",
+      "alt": "A checkmark denoting availability."
+    },
+    "doc://com.apple.HIG/design/Human-Interface-Guidelines/motion": {
+      "title": "Motion",
+      "url": "/design/human-interface-guidelines/motion"
     }
   }
 }

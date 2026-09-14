@@ -5,8 +5,8 @@
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
 import type { Source } from "../schema/source.ts";
-import { PageIRSchema, type PageIR, type Rule, type Table } from "../schema/ir.ts";
-import { listFiles, paths, readJson, writeText, ensureDir } from "../util/fs.ts";
+import { PageIRSchema, type PageIR, type Rule, type Section, type Table } from "../schema/ir.ts";
+import { listFiles, paths, readJson, writeJson, writeText, ensureDir } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 
 const SEV_ORDER = { must: 0, should: 1, may: 2 } as const;
@@ -51,21 +51,42 @@ function cite(r: Rule): string {
   return `[src](${url})`;
 }
 
-function ruleLine(r: Rule, opts: { withTopic?: boolean; label?: string; linker?: Linker; category?: string } = {}): string {
+/**
+ * Platform tag. "general" prints nothing (the source scoped it to nothing narrower); a page- or
+ * section-scoped rule always prints its platforms, so tvOS guidance can never read as universal.
+ */
+function platformTag(r: Rule): string {
+  if (r.scope === "general" || !r.platforms.length) return "";
+  return `_[${r.platforms.join(", ")}${r.scope === "page" ? " only" : ""}]_`;
+}
+
+function ruleLine(r: Rule, opts: { withTopic?: boolean; label?: string; linker?: Linker; category?: string; withId?: boolean } = {}): string {
   const parts = [`- **${r.severity.toUpperCase()}**`];
+  if (r.conformance_level) parts.push(`**(Level ${r.conformance_level})**`);
   if (opts.withTopic) parts.push(`(${r.topic})`);
   parts.push(r.statement);
   if (r.value) parts.push(`— \`${r.value}\``);
-  if (r.platforms.length) parts.push(`_[${r.platforms.join(", ")}]_`);
+  const tag = platformTag(r);
+  if (tag) parts.push(tag);
   parts.push(cite(r));
-  const line = parts.join(" ");
-  if (!r.rationale) return line;
-  const rationale = opts.linker && opts.category ? opts.linker.localize(r.rationale, opts.category) : r.rationale;
-  return `${line}\n  - ${opts.label ?? "Why"}: ${rationale}`;
+  if (opts.withId) parts.push(`\`${r.id}\``);
+  const out = [parts.join(" ")];
+  const local = (t: string) => (opts.linker && opts.category ? opts.linker.localize(t, opts.category) : t);
+  if (r.rationale) out.push(`  - ${opts.label ?? "Why"}: ${local(r.rationale)}`);
+  // Notes carry exceptions and caveats: applying the statement without them is how an agent gets it
+  // wrong, so they are rendered with the rule rather than summarised away. A note that was already a
+  // list item in the source keeps its marker instead of gaining a second one.
+  for (const n of r.notes) out.push(`  ${/^(?:[-*]\s|\d+\.\s)/.test(n) ? local(n) : `- ${local(n)}`}`);
+  return out.join("\n");
 }
 
 function tableBlock(t: Table): string {
   return t.caption && !/^\|/.test(t.caption) ? `\n${t.caption}\n\n${t.markdown}` : `\n${t.markdown}`;
+}
+
+function sectionIntro(s: Section | undefined, linker: Linker, category: string): string[] {
+  if (!s?.intro.length) return [];
+  return [s.intro.map((t) => linker.localize(t, category)).join("\n\n"), ``];
 }
 
 interface Rendered { main: string; tables?: string }
@@ -74,14 +95,20 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
   const label = source.skill.rationale_label;
   const rules = page.rules.filter((r) => r.kind === "rule");
   const terms = page.rules.filter((r) => r.kind === "term");
+  const scopeNote = page.platforms.length
+    ? `> Scope: this page is **${page.platforms.join(", ")} only**. Do not apply its rules to other platforms.`
+    : undefined;
   const header = [
     `# ${page.title}`,
     ``,
     `> Source: [${source.name}](${page.url}) · version ${page.source_version ?? meta.source_version} · ${rules.length} rules`,
     `> ${source.license.attribution}`,
+    ...(scopeNote ? [scopeNote] : []),
     ``,
     page.summary,
     ``,
+    // The introduction defines the component and says when to use it; rules alone do not.
+    ...(page.overview.length ? [page.overview.map((t) => linker.localize(t, page.category)).join("\n\n"), ``] : []),
   ];
 
   // Large spec tables go to a sibling file so the rulebook itself stays cheap to load.
@@ -92,10 +119,12 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
 
   const bySection = new Map<string, Rule[]>();
   for (const r of rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
-  const order = [...new Set([...bySection.keys(), ...tablesBySection.keys()])];
+  const introBySection = new Map(page.sections.map((s) => [s.section, s]));
+  const order = [...new Set([...bySection.keys(), ...tablesBySection.keys(), ...introBySection.keys()])];
   const sections = order.map((section) => {
     const body = [
-      ...(bySection.get(section) ?? []).map((r) => ruleLine(r, { label, linker, category: page.category })),
+      ...sectionIntro(introBySection.get(section), linker, page.category),
+      ...(bySection.get(section) ?? []).map((r) => ruleLine(r, { label, linker, category: page.category, withId: true })),
       ...(tablesBySection.get(section) ?? []).map(tableBlock),
     ];
     return `\n### ${section}\n` + body.join("\n");
@@ -123,7 +152,7 @@ function severitiesPresent(pages: PageIR[]): string[] {
   return (["must", "should", "may"] as const).filter((s) => set.has(s));
 }
 
-function skillDoc(source: Source, pages: PageIR[], meta: { source_version: string; rule_count: number }): string {
+function skillDoc(source: Source, pages: PageIR[], meta: { source_version: string; rule_count: number; revision?: string; fetched_at?: string }): string {
   const { skill } = source;
   const byCategory = new Map<string, PageIR[]>();
   for (const p of pages) byCategory.set(p.category, [...(byCategory.get(p.category) ?? []), p]);
@@ -140,16 +169,20 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     should: "**SHOULD** as defaults you deviate from only with a reason",
     may: "**MAY** as options",
   };
+  // The Agent Skills specification requires every metadata value to be a string, so numbers are
+  // quoted rather than emitted as YAML scalars.
   const lines: string[] = [
     `---`,
     `name: ${skill.name}`,
     `description: ${JSON.stringify(skill.description.trim())}`,
     `license: ${JSON.stringify(source.license.attribution)}`,
     `metadata:`,
-    `  source: ${source.id}`,
-    `  source_version: ${meta.source_version}`,
-    `  rules: ${meta.rule_count}`,
-    `  generated_by: design-skills`,
+    `  source: ${JSON.stringify(source.id)}`,
+    `  source_version: ${JSON.stringify(meta.source_version)}`,
+    ...(meta.revision ? [`  source_revision: ${JSON.stringify(meta.revision)}`] : []),
+    ...(meta.fetched_at ? [`  fetched_at: ${JSON.stringify(meta.fetched_at)}`] : []),
+    `  rules: ${JSON.stringify(String(meta.rule_count))}`,
+    `  generated_by: ${JSON.stringify("design-skills")}`,
     `---`,
     ``,
     `# ${source.name}`,
@@ -159,13 +192,25 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     ``,
     `## How to use this skill`,
     ``,
-    `1. Find the topic in **Where to look** or the **Index** below.`,
-    `2. Read that file under \`references/\` — it holds every rule for the topic, with the reasoning and a citation. Large spec tables live in a sibling \`<topic>.tables.md\`.`,
-    `3. Apply ${severitiesPresent(pages).map((s) => sevText[s]).join(", ")}.`,
-    `4. When reviewing existing UI, quote the rule and its link so the finding is verifiable.`,
+    ...(source.platforms.length
+      ? [`1. **Establish the target** — which of ${source.platforms.join(", ")} the work is for. A rule tagged for another platform does not apply.`]
+      : [`1. **Establish the target** — what is being built or audited, and to which conformance level.`]),
+    `2. **Find the topic** in **Where to look** or the **Index**, and read that file under \`references/\`. It holds every rule for the topic with its reasoning, exceptions and a citation. Large spec tables live in a sibling \`<topic>.tables.md\`.`,
+    `3. **Read the whole rule** — the statement, its \`Why\`, and the indented notes under it. The notes hold the exceptions; a statement applied without them is frequently wrong.`,
+    `4. **Apply** ${severitiesPresent(pages).map((s) => sevText[s]).join(", ")}.`,
+    `5. **Report evidence** — quote the rule, its id, and its link, so any finding can be checked against the source.`,
+    ``,
+    `Rules are the source's own sentences. Severity is inferred from that wording, not asserted by Apple or W3C; when a decision turns on it, follow the citation. Text marked \`_[figure: …]_\` stands for an image that carries information the text does not.`,
     ``,
   ];
-  if (source.platforms.length) lines.push(`Platforms: ${source.platforms.join(", ")}. A rule with no platform tag applies to all of them; platform-specific sections come after the general ones in each file.`, ``);
+  if (source.platforms.length) {
+    lines.push(
+      `**Platform tags.** \`_[macOS]_\` means the rule comes from a macOS-specific section. ` +
+        `\`_[tvOS only]_\` means the whole page is tvOS-specific. An untagged rule is stated by the source without platform scope. ` +
+        `Never carry a tagged rule to a platform it is not tagged for.`,
+      ``,
+    );
+  }
   if (skill.notes) lines.push(skill.notes.trim(), ``);
 
   if (skill.routing.length) {
@@ -214,7 +259,11 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     for (const cat of categories) {
       for (const p of byCategory.get(cat)!) {
         for (const r of p.rules.filter((r) => r.kind === "rule")) {
-          const tag = source.platforms.length ? r.platforms.join(", ") || "all" : r.value ?? "";
+          const tag = source.platforms.length
+            ? r.scope === "general"
+              ? "all"
+              : `${r.platforms.join(", ")}${r.scope === "page" ? " only" : ""}`
+            : r.conformance_level ?? r.value ?? "";
           lines.push(`| ${titleCase(cat)} | ${r.section} | ${tag} | [${p.page}.md](${pageFile(p)}#${anchorOf(r.section)}) |`);
         }
         if (p.rules.every((r) => r.kind === "term")) lines.push(`| ${titleCase(cat)} | ${p.title} (${p.rules.length} definitions) | | [${p.page}.md](${pageFile(p)}) |`);
@@ -241,10 +290,21 @@ function titleCase(s: string) {
   return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Everything needed to tell what a copied skill directory was built from, without the IR. */
+interface IRMeta {
+  source_version: string;
+  rule_count: number;
+  revision?: string;
+  fetched_at?: string;
+  extractor?: string;
+  partial?: boolean;
+  page_count?: number;
+}
+
 export async function composeSource(source: Source): Promise<{ pages: number; rules: number; skillLines: number }> {
   const pages = await loadIR(source);
   if (!pages.length) throw new Error(`no IR for ${source.id}; run extract first`);
-  const metaFile = (await readJson<{ source_version: string; rule_count: number }>(paths.irMeta(source.id))) ?? {
+  const metaFile = (await readJson<IRMeta>(paths.irMeta(source.id))) ?? {
     source_version: "unknown",
     rule_count: pages.reduce((n, p) => n + p.rules.length, 0),
   };
@@ -264,6 +324,32 @@ export async function composeSource(source: Source): Promise<{ pages: number; ru
   }
   const skill = skillDoc(source, pages, metaFile);
   await writeText(join(dir, "SKILL.md"), skill);
+
+  // A skill is often copied on its own, away from ir/. This travels with it and answers "what was
+  // this built from, when, and is it complete?" per page, without needing the IR.
+  await writeJson(join(dir, "provenance.json"), {
+    generated_by: "design-skills",
+    source: source.id,
+    name: source.name,
+    license: source.license,
+    source_version: metaFile.source_version,
+    source_revision: metaFile.revision ?? null,
+    fetched_at: metaFile.fetched_at ?? null,
+    extractor: metaFile.extractor ?? null,
+    partial: metaFile.partial ?? false,
+    rule_count: metaFile.rule_count,
+    pages: pages.map((p) => ({
+      page: p.page,
+      category: p.category,
+      url: p.url,
+      source_version: p.source_version ?? null,
+      source_hash: p.source_hash,
+      fetched_at: p.fetched_at,
+      rules: p.rules.filter((r) => r.kind === "rule").length,
+      platforms: p.platforms,
+    })),
+  });
+
   const skillLines = skill.split("\n").length;
   log.info(`wrote skills/${source.skill.name}: ${pages.length} references (${splitCount} with split spec tables), SKILL.md ${skillLines} lines`);
   return { pages: pages.length, rules: metaFile.rule_count, skillLines };

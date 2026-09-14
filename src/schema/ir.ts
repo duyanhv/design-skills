@@ -16,8 +16,17 @@ export const RuleSchema = z.object({
   topic: z.string(),
   /** Heading path the rule sits under, e.g. "Platform considerations › macOS › Push buttons". */
   section: z.string(),
-  /** Empty array = applies to every platform the source covers. */
+  /** Platforms the rule applies to. Read together with `scope` — never on its own. */
   platforms: z.array(z.string()).default([]),
+  /**
+   * Why `platforms` holds what it holds:
+   *   "section" — a platform-named heading scoped it ("### macOS")
+   *   "page"    — the whole page is about that platform ("Designing for visionOS")
+   *   "general" — the source states it without platform scope, so it applies to all platforms it covers
+   * Only "general" means universal. An empty `platforms` with any other scope is a bug, not a licence
+   * to apply tvOS guidance to an iPhone.
+   */
+  scope: z.enum(["section", "page", "general"]).default("general"),
   /**
    * "rule": an imperative guideline. "term": a bold label + description (e.g. "Long delay." or
    * "San Francisco (SF)") that carries facts but no instruction; kept for reference, excluded from counts.
@@ -25,10 +34,20 @@ export const RuleSchema = z.object({
   kind: z.enum(["rule", "term"]).default("rule"),
   /** Heuristic from the statement's wording — see extract/severity.ts. */
   severity: z.enum(["must", "should", "may"]),
+  /**
+   * Formal conformance level where the source defines one (WCAG A/AA/AAA). Independent of
+   * `severity`: whether the rule binds you depends on the conformance target you claim.
+   */
+  conformance_level: z.enum(["A", "AA", "AAA"]).optional(),
   /** The guideline's lead sentence, verbatim. */
   statement: z.string().min(2).max(600),
   /** The explanatory text that follows the lead sentence, verbatim. */
   rationale: z.string().max(4000).optional(),
+  /**
+   * Blocks that qualify the rule and follow it in the source: exceptions, platform caveats,
+   * supporting bullets, notes. Verbatim and in document order — a rule is often wrong without them.
+   */
+  notes: z.array(z.string().max(1000)).default([]),
   /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,
@@ -44,6 +63,15 @@ export const TableSchema = z.object({
 });
 export type Table = z.infer<typeof TableSchema>;
 
+/** Prose that frames a section's rules (definitions, when-to-use), kept verbatim. */
+export const SectionSchema = z.object({
+  section: z.string(),
+  anchor: z.string().optional(),
+  platforms: z.array(z.string()).default([]),
+  intro: z.array(z.string().max(1000)).default([]),
+});
+export type Section = z.infer<typeof SectionSchema>;
+
 export const PageIRSchema = z.object({
   source: z.string(),
   page: z.string(),
@@ -57,8 +85,19 @@ export const PageIRSchema = z.object({
   extracted_at: z.string().datetime(),
   /** Extractor implementation + version, so IR produced by older heuristics is identifiable. */
   extractor: z.string(),
+  /**
+   * Hash of every semantic input to extraction: page body, extractor id, and the manifest settings
+   * that change the output (skip_sections, platforms, title, category, url). Reuse is keyed on this,
+   * so a configuration-only change still re-extracts.
+   */
+  input_hash: z.string().length(16).optional(),
   /** The page abstract. */
   summary: z.string().max(1000),
+  /** Paragraphs after the abstract and before the first heading: what this topic is, when to use it. */
+  overview: z.array(z.string().max(1000)).default([]),
+  /** Platforms the page as a whole is about, when it is platform-specific. */
+  platforms: z.array(z.string()).default([]),
+  sections: z.array(SectionSchema).default([]),
   rules: z.array(RuleSchema),
   tables: z.array(TableSchema).default([]),
 });
