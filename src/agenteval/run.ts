@@ -22,6 +22,7 @@
  *   bun run src/agenteval/run.ts                  # both arms, all tasks
  *   bun run src/agenteval/run.ts --task buttons   # one task
  *   bun run src/agenteval/run.ts --arm skill      # one arm
+ *   bun run src/agenteval/run.ts --runs 3         # three samples per arm, reported as a range
  *   bun run src/agenteval/run.ts --rescore        # re-score saved transcripts, no model calls
  */
 import { join } from "node:path";
@@ -30,58 +31,10 @@ import { tmpdir } from "node:os";
 import { paths, ROOT, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 import { TASKS, type Task } from "./tasks.ts";
+import { score, type Score } from "./score.ts";
 
 const ARMS = ["none", "skill"] as const;
 type Arm = (typeof ARMS)[number];
-
-interface Score {
-  found: string[];
-  missed: string[];
-  falsePositives: string[];
-  /** Decoys the agent named and explicitly set aside — evidence it read the rule's exceptions. */
-  dismissedCorrectly: string[];
-  cited: number;
-  findings: number;
-  scopeErrors: string[];
-}
-
-/**
- * A good review often ends with "checked and deliberately not flagged", which is exactly the
- * behaviour we want from an agent reading a rule's exceptions. Naive substring scoring would count
- * those as false positives, so the transcript is split: everything from such a heading onward is
- * the agent's *non*-findings and is scored separately.
- */
-const NOT_FLAGGED =
-  /^(?:#{1,6}\s*|\*\*)\s*.{0,80}?(?:not flagged|not report|deliberately not|non-?issues|no(?:t a)? violation|checked and (?:ok|fine|correct)|verified as conforming|conform(?:s|ing)?\b.{0,20}not|correctly implemented|what'?s correct|done right|passes? at aa|distractors?)/im;
-
-function splitFindings(transcript: string): { findings: string; dismissed: string } {
-  const m = NOT_FLAGGED.exec(transcript);
-  return m ? { findings: transcript.slice(0, m.index), dismissed: transcript.slice(m.index) } : { findings: transcript, dismissed: "" };
-}
-
-/** Does the transcript show the agent recognised this issue? All of a check's cues must appear. */
-function hit(transcript: string, cues: string[]): boolean {
-  const t = transcript.toLowerCase();
-  return cues.every((c) => t.includes(c.toLowerCase()));
-}
-
-function score(task: Task, transcript: string): Score {
-  const { findings: body, dismissed } = splitFindings(transcript);
-  const found: string[] = [];
-  const missed: string[] = [];
-  // A violation counts wherever it is reported; a *dismissal* of a real violation is not a find.
-  for (const v of task.violations) (hit(body, v.cues) ? found : missed).push(v.id);
-  // A decoy only costs you if you asserted it as a problem, not if you named it and set it aside.
-  const falsePositives = task.decoys.filter((d) => hit(body, d.cues)).map((d) => d.id);
-  const scopeErrors = task.scopeTraps.filter((s) => hit(body, s.cues)).map((s) => s.id);
-  const dismissedCorrectly = task.decoys.filter((d) => hit(dismissed, d.dismissCues)).map((d) => d.id);
-
-  // A finding is checkable when it carries a rule id or a source link.
-  const cited = [...transcript.matchAll(/\b[a-z0-9-]+\/[a-z0-9-]+\/\d{3}\b|https?:\/\/\S*(?:developer\.apple\.com|w3\.org)\S*/gi)].length;
-  // Bulleted/numbered lines are the agent's findings; a rough denominator for citation rate.
-  const findings = [...body.matchAll(/^\s*(?:\*\*\d+\.|[-*]|\d+\.)\s+\S/gm)].length;
-  return { found, missed, falsePositives, dismissedCorrectly, cited, findings, scopeErrors };
-}
 
 async function runArm(task: Task, arm: Arm): Promise<{ transcript: string; ms: number }> {
   const dir = await mkdtemp(join(tmpdir(), `ds-agenteval-${task.id}-${arm}-`));
@@ -108,55 +61,86 @@ async function runArm(task: Task, arm: Arm): Promise<{ transcript: string; ms: n
   }
 }
 
+interface Row extends Score {
+  task: string;
+  arm: string;
+  /** 0-based repeat index. Model output varies run to run, so a single row is one sample. */
+  run: number;
+  recall: number;
+  precision: number;
+  ms: number;
+  transcript: string;
+}
+
 const args = process.argv.slice(2);
 const only = args.includes("--task") ? args[args.indexOf("--task") + 1] : undefined;
 const armFilter = args.includes("--arm") ? (args[args.indexOf("--arm") + 1] as Arm) : undefined;
 const rescore = args.includes("--rescore");
+const repeats = args.includes("--runs") ? Number(args[args.indexOf("--runs") + 1]) : 1;
+if (!Number.isInteger(repeats) || repeats < 1) throw new Error("--runs must be a positive integer");
 const tasks = only ? TASKS.filter((t) => t.id === only) : TASKS;
 if (!tasks.length) throw new Error(`no task matching "${only}"`);
 const arms = armFilter ? [armFilter] : ARMS;
 
 const resultsPath = join(ROOT, "evals", "agent-results.json");
-/** Scoring is heuristic and gets tuned; rescoring lets that happen without paying for new runs. */
-const saved: Record<string, string> = {};
-if (rescore) {
-  const prior = JSON.parse(await readFile(resultsPath, "utf8")) as { rows: { task: string; arm: string; transcript: string }[] };
-  for (const r of prior.rows) saved[`${r.task}/${r.arm}`] = r.transcript;
-}
+// Previous rows are always loaded, for two reasons: --rescore re-scores them without new model
+// calls, and a subset run (--task/--arm) must not wipe the transcripts it did not regenerate.
+const prior: Row[] = await readFile(resultsPath, "utf8")
+  .then((t) => (JSON.parse(t) as { rows: Row[] }).rows ?? [])
+  .catch(() => []);
+const saved = new Map(prior.map((r) => [`${r.task}/${r.arm}/${r.run ?? 0}`, r.transcript]));
 
-const rows: Record<string, unknown>[] = [];
+const rows: Row[] = [];
 for (const task of tasks) {
   for (const arm of arms) {
-    log.step(`${task.id} · ${arm}`);
-    const cached = saved[`${task.id}/${arm}`];
-    if (rescore && !cached) throw new Error(`no saved transcript for ${task.id}/${arm}`);
-    const { transcript, ms } = cached ? { transcript: cached, ms: 0 } : await runArm(task, arm);
-    const s = score(task, transcript);
-    const recall = s.found.length / task.violations.length;
-    const precision = s.found.length / Math.max(1, s.found.length + s.falsePositives.length);
-    console.log(
-      `  recall ${s.found.length}/${task.violations.length} (${(recall * 100).toFixed(0)}%) · ` +
-        `false positives ${s.falsePositives.length} · decoys correctly dismissed ${s.dismissedCorrectly.length}/${task.decoys.length} · ` +
-        `scope errors ${s.scopeErrors.length} · citations ${s.cited} over ~${s.findings} findings · ${(ms / 1000).toFixed(0)}s`,
-    );
-    if (s.missed.length) console.log(`  missed: ${s.missed.join(", ")}`);
-    if (s.falsePositives.length) console.log(`  false positives: ${s.falsePositives.join(", ")}`);
-    if (s.scopeErrors.length) console.log(`  scope errors: ${s.scopeErrors.join(", ")}`);
-    rows.push({ task: task.id, arm, recall, precision, ...s, ms, transcript });
+    // When rescoring, replay however many samples are on disk rather than the requested count.
+    const n = rescore ? prior.filter((r) => r.task === task.id && r.arm === arm).length : repeats;
+    for (let run = 0; run < n; run++) {
+      log.step(`${task.id} · ${arm}${n > 1 ? ` · run ${run + 1}/${n}` : ""}`);
+      const cached = rescore ? saved.get(`${task.id}/${arm}/${run}`) : undefined;
+      if (rescore && !cached) throw new Error(`no saved transcript for ${task.id}/${arm}/${run}`);
+      const { transcript, ms } = cached ? { transcript: cached, ms: 0 } : await runArm(task, arm);
+      const s = score(task, transcript);
+      const recall = s.found.length / task.violations.length;
+      const precision = s.found.length / Math.max(1, s.found.length + s.falsePositives.length);
+      console.log(
+        `  recall ${s.found.length}/${task.violations.length} (${(recall * 100).toFixed(0)}%) · ` +
+          `false positives ${s.falsePositives.length} · decoys correctly dismissed ${s.dismissedCorrectly.length}/${task.decoys.length} · ` +
+          `scope errors ${s.scopeErrors.length} · citations ${s.cited} over ~${s.findings} findings · ${(ms / 1000).toFixed(0)}s`,
+      );
+      if (s.missed.length) console.log(`  missed: ${s.missed.join(", ")}`);
+      if (s.falsePositives.length) console.log(`  false positives: ${s.falsePositives.join(", ")}`);
+      if (s.scopeErrors.length) console.log(`  scope errors: ${s.scopeErrors.join(", ")}`);
+      rows.push({ task: task.id, arm, run, recall, precision, ...s, ms, transcript });
+    }
   }
 }
 
-await writeJson(resultsPath, { generated_at: new Date().toISOString(), rescored: rescore, rows });
+// A fresh run replaces every sample for the task/arm it covered; untouched pairs are preserved.
+const fresh = new Set(rows.map((r) => `${r.task}/${r.arm}`));
+const merged = [...rows, ...prior.filter((r) => !fresh.has(`${r.task}/${r.arm}`))].sort(
+  (a, b) => a.task.localeCompare(b.task) || a.arm.localeCompare(b.arm) || (a.run ?? 0) - (b.run ?? 0),
+);
+await writeJson(resultsPath, { generated_at: new Date().toISOString(), rescored: rescore, rows: merged });
 log.info(`wrote ${resultsPath}`);
 
-for (const task of tasks) {
-  const byArm = Object.fromEntries(arms.map((a) => [a, rows.find((r) => r.task === task.id && r.arm === a)]));
+// Summarise from the merged set, so a subset run still shows the whole picture. Ranges rather than
+// single figures: one sample per arm says nothing about whether a difference is real.
+const range = (xs: number[]) => (xs.length > 1 && Math.min(...xs) !== Math.max(...xs) ? `${Math.min(...xs)}-${Math.max(...xs)}` : `${xs[0] ?? 0}`);
+for (const task of TASKS) {
+  const forTask = merged.filter((r) => r.task === task.id);
+  if (!forTask.length) continue;
   const fmt = (a: Arm) => {
-    const r = byArm[a] as Score | undefined;
-    return r
-      ? `${r.found.length}/${task.violations.length} found · ${r.falsePositives.length} false positives · ` +
-        `${r.dismissedCorrectly.length}/${task.decoys.length} decoys dismissed · ${r.scopeErrors.length} scope errors · ${r.cited} citations`
-      : "—";
+    const rs = forTask.filter((x) => x.arm === a);
+    if (!rs.length) return "—";
+    return (
+      `${range(rs.map((r) => r.found.length))}/${task.violations.length} found · ` +
+      `${range(rs.map((r) => r.falsePositives.length))} false positives · ` +
+      `${range(rs.map((r) => r.dismissedCorrectly.length))}/${task.decoys.length} decoys dismissed · ` +
+      `${range(rs.map((r) => r.scopeErrors.length))} scope errors · ` +
+      `${range(rs.map((r) => r.cited))} citations` +
+      (rs.length > 1 ? `  (n=${rs.length})` : "")
+    );
   };
   console.log(`\n${task.id}\n  no skill: ${fmt("none")}\n  skill:    ${fmt("skill")}`);
 }

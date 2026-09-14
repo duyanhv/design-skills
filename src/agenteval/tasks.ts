@@ -190,4 +190,89 @@ struct CheckoutView: View {
       { id: "aaa-target-enhanced", cues: ["2.5.5", "fail"] },
     ],
   },
+  {
+    // Built to tempt a scope error: a watch screen is small, so an agent may import visionOS or tvOS
+    // numbers that do not apply to watchOS.
+    //
+    // Writing this task also caught a mistake of *mine*. The first draft treated "44x44 pt" as an
+    // iOS-only figure and scored it as a scope error. The skill arm quoted it, and quoted Apple's
+    // control-size table back: watchOS is also 44x44 pt default / 28x28 pt minimum. The agent was
+    // right and the trap was wrong — a useful reminder that these tasks assert facts and have to be
+    // checked against the source like anything else. The trap is now the figures watchOS genuinely
+    // does not share.
+    id: "watchos-scope",
+    skill: "apple-hig",
+    file: "WorkoutSummary.swift",
+    prompt:
+      "Review WorkoutSummary.swift against Apple's Human Interface Guidelines for watchOS. List every issue as a bullet with the specific guidance it breaks. Only report guidance that applies to watchOS — say so explicitly if a rule you considered belongs to another platform.",
+    skillHint: APPLE_HINT,
+    code: `import SwiftUI
+
+/// Post-workout summary, watchOS.
+struct WorkoutSummary: View {
+    @State private var page = 0
+
+    var body: some View {
+        ScrollView {
+            VStack {
+                // Six tappable stat tiles crammed into a watch screen.
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(38)), count: 3)) {
+                    ForEach(stats) { stat in
+                        Button { open(stat) } label: { StatTile(stat) }
+                            .frame(width: 38, height: 38)
+                    }
+                }
+
+                // A five-level drill-down inside a watch app.
+                NavigationLink("Splits") {
+                    SplitsList { NavigationLink("Split detail") {
+                        SplitDetail { NavigationLink("Segment") {
+                            SegmentDetail { NavigationLink("Lap") { LapDetail() } }
+                        } }
+                    } }
+                }
+
+                // The Digital Crown is not wired to scrolling; only drag works.
+                Text(longNotes)
+                    .font(.system(size: 11))
+
+                // Correct: complication data is glanceable and updates on wrist raise.
+                ComplicationPreview(family: .graphicCircular, data: .heartRate)
+
+                // Correct on watchOS: a full-width capsule button at the bottom of a scroll view.
+                Button("Done") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+        }
+    }
+}
+`,
+    violations: [
+      // 38x38 tiles sit below the 44x44 pt default for watchOS.
+      { id: "small-targets", cues: ["38"] },
+      // Deep hierarchy contradicts watchOS's own "minimize the depth of hierarchy" guidance.
+      { id: "deep-hierarchy", cues: ["hierarchy"] },
+      // The Digital Crown should drive vertical navigation/scrolling.
+      { id: "no-crown", cues: ["digital crown"] },
+      // Hardcoded 11 pt defeats the watch's text-size settings.
+      { id: "fixed-font", cues: ["11"] },
+    ],
+    decoys: [
+      // A full-width prominent button is the watchOS pattern (apple-hig/buttons/034: "Prefer buttons
+      // that span the width of the screen for primary actions"). Flagging it is a false positive.
+      { id: "full-width-button-is-fine", cues: ["done", "span", "breaks"], dismissCues: ["done", "span"] },
+      // Complications on the watch face are exactly what Apple recommends.
+      { id: "complication-is-fine", cues: ["complication", "remove"], dismissCues: ["complication"] },
+    ],
+    scopeTraps: [
+      // 60x60 pt is the visionOS control size; 66x66 pt is tvOS. Neither applies to a watch.
+      { id: "visionos-60-on-watchos", cues: ["60x60"] },
+      { id: "tvos-66-on-watchos", cues: ["66x66"] },
+      // The 60 pt centre-to-centre spacing is visionOS eye-targeting guidance.
+      { id: "visionos-spacing-on-watchos", cues: ["60 pt", "apart"] },
+      // Hover effects do not exist on watchOS; that is visionOS/macOS guidance.
+      { id: "hover-on-watchos", cues: ["hover effect"] },
+    ],
+  },
 ];
