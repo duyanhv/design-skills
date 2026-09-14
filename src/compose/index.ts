@@ -157,7 +157,11 @@ function severitiesPresent(pages: PageIR[]): string[] {
   return (["must", "should", "may"] as const).filter((s) => set.has(s));
 }
 
-function skillDoc(source: Source, pages: PageIR[], meta: { source_version: string; rule_count: number; revision?: string; fetched_at?: string }): string {
+function skillDoc(
+  source: Source,
+  pages: PageIR[],
+  meta: { source_version: string; rule_count: number; revision?: string; fetched_at?: string },
+): { skill: string; index?: string } {
   const { skill } = source;
   const byCategory = new Map<string, PageIR[]>();
   for (const p of pages) byCategory.set(p.category, [...(byCategory.get(p.category) ?? []), p]);
@@ -260,9 +264,9 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
     if (blocks.length) lines.push(`## Highest-leverage rules`, ``, `One rule per topic, to orient — not a checklist. The reference files are the checklist.`, ``, ...blocks.flat());
   }
 
-  lines.push(`## Index`, ``);
+  const index: string[] = [];
   if (skill.index === "rules") {
-    lines.push(`| Category | Rule | ${source.platforms.length ? "Platforms" : "Level"} | Reference |`, `| --- | --- | --- | --- |`);
+    index.push(`| Category | Rule | ${source.platforms.length ? "Platforms" : "Level"} | Reference |`, `| --- | --- | --- | --- |`);
     for (const cat of categories) {
       for (const p of byCategory.get(cat)!) {
         for (const r of p.rules.filter((r) => r.kind === "rule")) {
@@ -271,21 +275,37 @@ function skillDoc(source: Source, pages: PageIR[], meta: { source_version: strin
               ? "all"
               : `${r.platforms.join(", ")}${r.scope === "page" ? " only" : ""}`
             : r.conformance_level ?? r.value ?? "";
-          lines.push(`| ${titleCase(cat)} | ${r.section} | ${tag} | [${p.page}.md](${pageFile(p)}#${anchorOf(r.section)}) |`);
+          index.push(`| ${titleCase(cat)} | ${r.section} | ${tag} | [${p.page}.md](${pageFile(p)}#${anchorOf(r.section)}) |`);
         }
-        if (p.rules.every((r) => r.kind === "term")) lines.push(`| ${titleCase(cat)} | ${p.title} (${p.rules.length} definitions) | | [${p.page}.md](${pageFile(p)}) |`);
+        if (p.rules.every((r) => r.kind === "term")) index.push(`| ${titleCase(cat)} | ${p.title} (${p.rules.length} definitions) | | [${p.page}.md](${pageFile(p)}) |`);
       }
     }
   } else {
-    lines.push(`| Category | Topic | Rules | Reference |`, `| --- | --- | --- | --- |`);
+    index.push(`| Category | Topic | Rules | Reference |`, `| --- | --- | --- | --- |`);
     for (const cat of categories) {
       for (const p of byCategory.get(cat)!) {
-        lines.push(`| ${titleCase(cat)} | ${p.title} | ${p.rules.filter((r) => r.kind === "rule").length} | [${p.page}.md](${pageFile(p)}) |`);
+        index.push(`| ${titleCase(cat)} | ${p.title} | ${p.rules.filter((r) => r.kind === "rule").length} | [${p.page}.md](${pageFile(p)}) |`);
       }
     }
   }
-  lines.push(``);
-  return lines.join("\n");
+
+  // SKILL.md is loaded on every activation. A long index costs that budget without helping the
+  // agent choose, so past a threshold it moves to index.md and the entry file keeps a map of
+  // categories — enough to know whether the full index is worth opening.
+  const split = index.join("\n").length > skill.split_index_over;
+  if (split) {
+    lines.push(`## Index`, ``, `${pages.length} topics, ${meta.rule_count} rules. The full table is in [index.md](index.md).`, ``);
+    lines.push(`| Category | Topics | Rules |`, `| --- | --- | --- |`);
+    for (const cat of categories) {
+      const ps = byCategory.get(cat)!;
+      const n = ps.reduce((acc, p) => acc + p.rules.filter((r) => r.kind === "rule").length, 0);
+      lines.push(`| ${titleCase(cat)} | ${ps.length} | ${n} |`);
+    }
+    lines.push(``);
+  } else {
+    lines.push(`## Index`, ``, ...index, ``);
+  }
+  return { skill: lines.join("\n"), index: split ? index.join("\n") : undefined };
 }
 
 /** GitHub-style heading anchor for a "### section" line. */
@@ -339,8 +359,25 @@ export async function composeSource(source: Source): Promise<{ pages: number; ru
       splitCount++;
     }
   }
-  const skill = skillDoc(source, pages, metaFile);
+  const { skill, index } = skillDoc(source, pages, metaFile);
   await writeText(join(dir, "SKILL.md"), skill);
+  if (index) {
+    await writeText(
+      join(dir, "index.md"),
+      [
+        `# ${source.name} — index`,
+        ``,
+        `> ${source.license.attribution}`,
+        ``,
+        `Every topic in this skill. Use [SKILL.md](SKILL.md)'s **Where to look** table first; open this when the task does not match a routing row.`,
+        ``,
+        index,
+        ``,
+      ].join("\n"),
+    );
+  } else {
+    await rm(join(dir, "index.md"), { force: true });
+  }
 
   // A skill is often copied on its own, away from ir/. This travels with it and answers "what was
   // this built from, when, and is it complete?" per page, without needing the IR.

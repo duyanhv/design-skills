@@ -55,6 +55,13 @@ export const SourceSchema = z.object({
     notes: z.string().optional(),
     /** Tables larger than this (chars) are moved to <page>.tables.md so the rulebook stays small. */
     split_tables_over: z.number().int().positive().default(6000),
+    /**
+     * When the full index exceeds this many characters it moves to `index.md`, leaving SKILL.md with
+     * routing plus a per-category summary. The entry file is loaded on every activation, and the
+     * Agent Skills spec suggests keeping that under ~5k tokens; a 158-row table blows the budget on
+     * its own without helping the agent choose.
+     */
+    split_index_over: z.number().int().positive().default(6000),
   }),
 });
 

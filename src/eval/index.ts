@@ -106,7 +106,10 @@ export async function evalSource(source: Source): Promise<EvalResult[] | null> {
   const questions = z.array(QuestionSchema).parse(parseYaml(await readFile(file, "utf8")));
   const skillDir = paths.skill(source.skill.name);
   const skill = await readFile(join(skillDir, "SKILL.md"), "utf8");
-  const skillNorm = norm(skill);
+  // A large index lives in index.md, linked from SKILL.md. Both count as "the skill routes here".
+  const indexPath = join(skillDir, "index.md");
+  const indexDoc = (await exists(indexPath)) ? await readFile(indexPath, "utf8") : "";
+  const skillNorm = norm(`${skill}\n${indexDoc}`);
   const irBySlug = new Map((await loadIR(source)).map((p) => [p.page, p]));
 
   const results: EvalResult[] = [];
@@ -114,7 +117,7 @@ export async function evalSource(source: Source): Promise<EvalResult[] | null> {
     const m = new RegExp(`references/([a-z0-9-]+)/${q.source}\\.md`).exec(skillNorm);
     const missing: string[] = [];
     if (!m) {
-      missing.push(`SKILL.md does not route to page "${q.source}"`);
+      missing.push(`the skill does not route to page "${q.source}"`);
     } else {
       const refRaw = await readFile(join(skillDir, "references", m[1]!, `${q.source}.md`), "utf8");
       for (const e of q.expect ? (Array.isArray(q.expect) ? q.expect : [q.expect]) : []) {

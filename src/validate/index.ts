@@ -114,11 +114,17 @@ export async function validateSource(source: Source): Promise<Finding[]> {
 
   if (!(await exists(join(skillDir, "provenance.json")))) warn("skill", "provenance.json missing (run compose)");
 
-  for (const m of skill.matchAll(/\]\((references\/[^)#]+)(?:#[^)]*)?\)/g)) {
+  // A large index moves to index.md; both files are part of the skill's navigation surface, so link
+  // checking and index coverage must consider them together.
+  const indexPath = join(skillDir, "index.md");
+  const indexDoc = (await exists(indexPath)) ? await readFile(indexPath, "utf8") : "";
+  if (indexDoc && !skill.includes("index.md")) err("skill", "index.md exists but SKILL.md does not link to it");
+  const navigation = `${skill}\n${indexDoc}`;
+  for (const m of navigation.matchAll(/\]\((references\/[^)#]+)(?:#[^)]*)?\)/g)) {
     if (!(await exists(join(skillDir, m[1]!)))) err("skill", `broken reference link ${m[1]}`);
   }
   for (const page of irPages) {
-    if (!skill.includes(`/${page}.md`)) warn("skill", `IR page ${page} not linked from SKILL.md index`);
+    if (!navigation.includes(`/${page}.md`)) warn("skill", `IR page ${page} is not reachable from SKILL.md or index.md`);
   }
 
   // 4. References must not outlive their IR: a stale file means a removed page is still shipping.
