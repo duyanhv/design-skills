@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { splitFindings, score } from "../src/agenteval/score.ts";
+import { splitFindings, score, findingBlocks } from "../src/agenteval/score.ts";
 import { TASKS } from "../src/agenteval/tasks.ts";
 import type { Task } from "../src/agenteval/tasks.ts";
 
@@ -77,6 +77,35 @@ test("citations count rule ids and source links", () => {
   expect(s.cited).toBe(2);
   const none = score(task, "- something with no citation at all");
   expect(none.cited).toBe(0);
+});
+
+test("cues must co-occur inside one finding, not across the whole document", () => {
+  // Regression from a real run: a preamble mentioning every colour it had checked, plus a later
+  // heading called "## Failures", satisfied both halves of a decoy the review actually dismissed.
+  const transcript = `I verified every claim myself: the ellipsis, the spacing, the labels.
+
+## Failures
+- Remove the redundant aria-label from the zip field.
+
+## Checked and conforming — not reported
+- The trailing ellipsis is required here, so I left it.`;
+  const s = score(task, transcript);
+  expect(s.falsePositives).toEqual([]);
+  expect(s.dismissedCorrectly).toEqual(["d1"]);
+
+  // The same two words inside one finding is a genuine assertion and still counts.
+  expect(score(task, "## Failures\n- Remove the trailing ellipsis.").falsePositives).toEqual(["d1"]);
+});
+
+test("findings are split at list markers, numbered items and bold leads", () => {
+  const blocks = findingBlocks(`## Failures
+**Line 9** — the contrast is too low.
+  continuation of line 9
+- a bullet finding
+1. a numbered finding`);
+  expect(blocks.length).toBe(4); // heading, bold lead + continuation, bullet, numbered
+  expect(blocks[1]).toContain("continuation of line 9");
+  expect(blocks[2]!.trim()).toBe("- a bullet finding");
 });
 
 test("every task's decoy and scope-trap cues are distinct from its violation cues", () => {

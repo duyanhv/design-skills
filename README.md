@@ -65,6 +65,11 @@ its conformance level as a separate field instead of collapsing A/AA into MUST a
 criteria bind you depends on the [conformance target](https://www.w3.org/TR/WCAG22/#conformance-reqs)
 you claim, so the skill tells the agent to establish that target first.
 
+**No invented hierarchy.** There used to be a "highest-leverage rules" section that picked one rule
+per topic, ranked partly by how short the sentence was. No guideline states which of its rules matter
+most, so that ranking was the compiler's opinion printed in the source's voice. It is gone; the
+routing table sends a reader to the right rulebook without pretending to know what matters.
+
 ## Skill shape
 
 `SKILL.md` is the always-loaded entry point and is kept small (~1.2k tokens for the HIG): a decision
@@ -89,6 +94,16 @@ Evals assert facts about *rules*, not substrings on a page. An eval locates one 
 an agent acts on, because a substring test passes happily while a criterion loses the exception list
 that made it satisfiable. Each was verified by reintroducing the original bug and confirming the eval
 fails with a precise diagnostic.
+
+`agenteval` runs the same review twice — no skill, then the compiled skill — over files seeded with
+real violations, decoys the guideline permits, and guidance from the wrong platform. Over three
+tasks × three samples per arm, the categorical result is **citations: 0 in every unaided run,
+11-40 in every skill run**. Recall is near-saturated either way, and precision differences are small
+at that sample size, so the honest claim is narrow: the skill does not mainly make an agent find
+more, it makes every finding checkable against the source, and it stops the agent inventing rules —
+in the unaided arm it asked to remove a trailing ellipsis that Apple in fact requires, and demanded
+a press state on a static text label. See [AUDIT-RESOLUTION.md](AUDIT-RESOLUTION.md) for the full
+table and for the three scoring bugs found while building it.
 
 `examples/` is not needed: the `lumen-ds` skill under `skills/lumen-ds/` is generated from a synthetic
 MIT-licensed guideline and **committed**, so you can read real output of this compiler without

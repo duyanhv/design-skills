@@ -4,10 +4,10 @@ Responses to [AUDIT.md](AUDIT.md). Every finding is addressed, with the check th
 regresses. Verification below is from this working tree at the time of writing.
 
 ```
-bun run check     typecheck · 21 tests, 137 assertions · e2e build · 3 manifests valid
+bun run check     typecheck · 29 tests, 191 assertions · e2e build · 3 manifests valid
 bun run validate  apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval      apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
-bun run agenteval 2 review tasks × 2 arms (summary below)
+bun run agenteval 3 review tasks × 2 arms × 3 samples = 18 runs (summary below)
 ```
 
 ## Findings
@@ -145,30 +145,57 @@ Each eval was verified by reintroducing the original bug and confirming it fails
 | drop declared page platforms | scope eval fails: `scope is "general", expected "page"` |
 | restore the bare-`only` heuristic | severity eval fails: `severity is "must", expected "should"` |
 
-**Agent usefulness.** `bun run agenteval` runs the same review task twice, once with no skill and
-once with the compiled skill mounted at `.claude/skills`. Each task seeds real violations, decoys
-(code that pattern-matches to a violation but is explicitly permitted), and scope traps.
+**Agent usefulness.** `bun run agenteval` runs the same review task in two arms — no skill, and the
+compiled skill mounted at `.claude/skills` — over files seeded with real violations, decoys (code
+that pattern-matches to a violation but the guideline explicitly permits), and scope traps (guidance
+belonging to another platform). Three samples per arm, because a single run of a stochastic model is
+an anecdote:
 
-| Task | Arm | Violations found | False positives | Decoys correctly dismissed | Scope errors | Citations |
+| Task | Arm | Violations found | False positives | Decoys dismissed | Scope errors | Citations |
 | --- | --- | --- | --- | --- | --- | --- |
-| iOS buttons | no skill | 4/4 | 2 | 0/2 | 0 | 3 |
-| iOS buttons | **skill** | 4/4 | **0** | **2/2** | 0 | **38** |
-| WCAG form | no skill | 6/6 | 0 | 2/3 | 0 | 0 |
-| WCAG form | **skill** | 6/6 | **0** | **3/3** | 0 | **10** |
+| iOS buttons | no skill | 3-4 / 4 | 0-1 | 0-1 / 2 | 0 | **0, 0, 0** |
+| iOS buttons | **skill** | **4, 4, 4** / 4 | **0** | **2/2 every run** | 0 | **37-40** |
+| WCAG form | no skill | 5-6 / 6 | 0 | 3/3 | 0 | **0, 0, 0** |
+| WCAG form | **skill** | 5-6 / 6 | 0 | 3/3 | 0 | **11-14** |
+| watchOS scope | no skill | 3-4 / 4 | 0 | 1-2 / 2 | 0 | **0, 0, 0** |
+| watchOS scope | **skill** | **4, 4, 4** / 4 | 0 | 1-2 / 2 | 0 | **35-40** |
 
-Recall was already saturated on these tasks — a strong model finds obvious violations without help.
-The difference is in the qualities the audit cared about. Without the skill the agent invented a
-rule ("remove the trailing ellipsis") that Apple in fact requires, and demanded a press state on a
-static `Text` label. With the skill it flagged neither, and said why: the ellipsis rule is *macOS
-only*, and the press-state MUST is scoped to *custom buttons*. Both are conclusions the platform-scope
-and exception-preservation work made reachable. Citations went from 3 to 38 and 0 to 10, so every
-finding can be checked against the source.
+What this does and does not show:
 
-An earlier run scored the skill arm with false positives; inspection showed the agent had listed
-those items under "deliberately not flagged" and the scorer was counting a dismissal as an assertion.
-The scorer now separates the two, and `--rescore` re-scores saved transcripts so scoring can be
-corrected without paying for new runs. Scoring remains keyword-based: evidence about a direction, not
-a benchmark.
+- **Citations are the unambiguous result.** Every no-skill run across all three tasks produced zero
+  verifiable citations; every skill run produced 11-40. A reviewer can check a skill-armed finding
+  against the source and cannot check an unaided one. That is the property the whole compiler exists
+  to deliver, and it is categorical rather than marginal.
+- **Recall is near-saturated either way**, as expected: a strong model finds an obviously undersized
+  tap target without help. The skill arm was consistent (4/4 on every iOS and watchOS run) where the
+  unaided arm varied (3-4), but three samples cannot distinguish that from noise.
+- **Precision differences are real but small at this sample size.** The unaided arm produced a false
+  positive in one run of nine and missed decoy dismissals more often; the skill arm's only recurring
+  gap was a decoy it simply did not mention. An earlier single-sample run showed a much larger
+  precision gap; three samples shrank it, which is the honest reason to report ranges.
+- **Scope errors are 0 everywhere**, including in the watchOS task built specifically to provoke them.
+  The metric is live — an earlier draft of that task did fire it — so 0 is a measurement, not a
+  vacuous pass.
+
+The qualitative difference is the most informative part. In the unaided arm the agent invented a rule
+Apple in fact *requires* ("remove the trailing ellipsis") and demanded a press state on a static
+`Text` label. In the skill arm it flagged neither and said why: the ellipsis rule is tagged *macOS
+only*, and the press-state MUST is scoped to *custom buttons*. Both conclusions are only reachable
+because platform scope and rule exceptions survive into the reference files.
+
+Three scoring bugs were found and fixed while building this, all in the harness rather than the
+compiler, and each made the earlier numbers look better than they were:
+
+1. A scope trap asserted 44x44 pt was iOS-only. The skill arm quoted Apple's control-size table back:
+   watchOS is also 44x44 pt. The agent was right and my eval was wrong.
+2. The "considered and dismissed" split matched a list of literal headings, so "Correct as annotated"
+   was scored as an assertion — penalising exactly the behaviour the skill should produce.
+3. Cues matched anywhere in the document, so a preamble listing every colour checked could satisfy a
+   decoy that the transcript went on to dismiss correctly. Cues must now co-occur within one finding.
+
+`src/agenteval/score.ts` is unit-tested (8 tests) precisely because it decides every number above.
+`--rescore` re-scores saved transcripts so a scoring fix does not require paying for new runs.
+Scoring remains keyword-based: evidence about a direction, not a benchmark.
 
 ### 10 · P2 — Contributor checks and publication safeguards are incomplete → fixed
 
@@ -207,6 +234,9 @@ which version it reflects or show you a diff when the guideline changes.
 
 - **Figure alt text** is preserved and marked, but nothing verifies that a figure's alt text actually
   carries the information the prose defers to it.
-- **Agent evaluation breadth** is two tasks, one model, one run per arm. It shows a direction, not a
-  distribution. Worth widening to more tasks, several runs, and an implement-a-screen task before any
-  quantitative claim is made from it.
+- **Agent evaluation breadth** is three tasks, one model, three samples per arm (18 runs). That is
+  enough to show the citation result is categorical and to stop me over-claiming on precision; it is
+  not enough to put a confidence interval on anything. All three tasks are *review* tasks — an
+  implement-a-screen task would test a different and arguably more important behaviour.
+- **Scoring is keyword-based.** Three bugs in it were found by inspection, not by the harness. It is
+  unit-tested now, but a cue that silently stops matching would still look like a clean result.
