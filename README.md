@@ -162,6 +162,9 @@ ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
 4. `bun run build <id>` and open a PR. CI runs typecheck, tests, the end-to-end build and manifest
    validation; the weekly refresh workflow opens PRs when the upstream content hash changes.
 
+[CONTRIBUTING.md](CONTRIBUTING.md) has the adapter contract, the fixture conventions, and the one
+rule the compiler is built around: never say something the source did not.
+
 ## Layout
 
 ```
