@@ -9,7 +9,8 @@
  * Usage: `bun run src/e2e/run.ts` (add `--keep` to leave the build in place for inspection).
  */
 import { join } from "node:path";
-import { rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import type { Manifest, PageEntry } from "../fetch/types.ts";
 import { normalizeSource } from "../normalize/index.ts";
 import { extractSource } from "../extract/index.ts";
@@ -93,6 +94,12 @@ if (again.extracted !== 0 || again.skipped !== PAGES.length) {
   throw new Error(`rerun re-extracted ${again.extracted} pages; expected all ${PAGES.length} to be reused`);
 }
 
+// The probes below deliberately corrupt the build to prove the compiler notices. Left as-is they
+// would rewrite the committed IR with fresh timestamps, so snapshot it first: the probes are tests,
+// not builds, and must not show up as a diff.
+const snapshot = await mkdtemp(join(tmpdir(), "ds-e2e-ir-"));
+await cp(paths.ir(SOURCE_ID), snapshot, { recursive: true });
+
 // …and a configuration change must invalidate it, even though no page content changed.
 const retuned = { ...source, skip_sections: [...source.skip_sections, "Roles"] };
 const afterConfigChange = await extractSource(retuned);
@@ -109,9 +116,14 @@ if (afterRemoval.removed !== 1) throw new Error(`removing a page upstream left i
 const partialRun = await extractSource(source, { partial: true });
 if (partialRun.removed !== 0) throw new Error("a partial run must never delete pages it did not visit");
 
-// Put the real configuration and the full page set back so the committed example matches.
+// Restore the pre-probe IR, then rebuild normally. The restored IR carries the same input_hash, so
+// extraction reuses it and timestamps stay put: an unchanged compiler produces an unchanged example.
+await rm(paths.ir(SOURCE_ID), { recursive: true, force: true });
+await cp(snapshot, paths.ir(SOURCE_ID), { recursive: true });
+await rm(snapshot, { recursive: true, force: true });
 await normalizeSource(source);
-await extractSource(source, { force: true });
+const restored = await extractSource(source);
+if (restored.extracted !== 0) throw new Error(`restore re-extracted ${restored.extracted} pages; the snapshot should have been reused`);
 await composeSource(source);
 
 log.info(`e2e passed: ${pages.length} pages, ${rules} rules, ${results.length} evals`);
