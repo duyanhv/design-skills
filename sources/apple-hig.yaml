@@ -1,0 +1,28 @@
+# Source manifest: Apple Human Interface Guidelines
+id: apple-hig
+name: Apple Human Interface Guidelines
+kind: docc                      # fetcher/normalizer implementation to use
+base_url: https://developer.apple.com
+entry: /design/human-interface-guidelines
+data_prefix: /tutorials/data    # DocC render JSON lives at {data_prefix}{page_url}.json
+cadence: weekly
+
+license:
+  spdx: LicenseRef-Apple-Proprietary
+  allow_verbatim: false         # extract must paraphrase; normalized text stays in .cache
+  attribution: "Apple Human Interface Guidelines — © Apple Inc. Rules are paraphrased summaries with citations."
+
+platforms: [iOS, iPadOS, macOS, watchOS, visionOS, tvOS]
+
+# Category is derived from the top-level topic section a page hangs under.
+categories: [getting-started, foundations, patterns, components, inputs, technologies]
+
+skill:
+  name: apple-hig
+  description: >-
+    Apple Human Interface Guidelines as actionable rules with citations, for building or
+    reviewing iOS, iPadOS, macOS, watchOS, visionOS and tvOS interfaces (SwiftUI, UIKit,
+    React Native, Flutter). Use when designing screens, choosing components, checking
+    layout/typography/color/accessibility, or reviewing UI against Apple's guidance.
+  max_skill_lines: 300
+  top_rules_per_topic: 1

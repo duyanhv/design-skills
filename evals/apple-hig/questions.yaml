@@ -1,0 +1,17 @@
+# Golden questions for the generated apple-hig skill.
+# `expect` is matched loosely (substring / number); `source` is the page slug the answer must cite.
+- q: What is the minimum recommended tappable area for controls on iOS?
+  expect: "44"
+  source: accessibility
+- q: Should a destructive action be the default (highlighted) button in an alert?
+  expect: "no"
+  source: alerts
+- q: When should you use a sheet instead of a full-screen modal view on iOS?
+  expect: "nonimmersive"
+  source: sheets
+- q: What Dynamic Type consideration applies to custom fonts?
+  expect: "Dynamic Type"
+  source: typography
+- q: How many tabs should a tab bar on iPhone typically contain?
+  expect: "five"
+  source: tab-bars

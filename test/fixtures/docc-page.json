@@ -1,0 +1,46 @@
+{
+  "kind": "article",
+  "metadata": { "title": "Widgets" },
+  "identifier": { "url": "doc://com.apple.HIG/design/Human-Interface-Guidelines/widgets" },
+  "abstract": [{ "type": "text", "text": "A widget shows a glanceable slice of an app." }],
+  "primaryContentSections": [
+    {
+      "kind": "content",
+      "content": [
+        { "type": "heading", "level": 2, "text": "Best practices", "anchor": "Best-practices" },
+        {
+          "type": "paragraph",
+          "inlineContent": [
+            { "type": "strong", "inlineContent": [{ "type": "text", "text": "Keep it glanceable." }] },
+            { "type": "text", "text": " Show one idea. See " },
+            { "type": "reference", "identifier": "doc://com.apple.HIG/design/Human-Interface-Guidelines/layout", "isActive": true },
+            { "type": "text", "text": " for spacing." },
+            { "type": "image", "identifier": "img-1" }
+          ]
+        },
+        {
+          "type": "unorderedList",
+          "items": [
+            { "content": [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Use " }, { "type": "codeVoice", "code": "TimelineProvider" }] }] },
+            { "content": [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Avoid scrolling" }] }] }
+          ]
+        },
+        {
+          "type": "table",
+          "header": "row",
+          "rows": [
+            [[{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Size" }] }], [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Use" }] }]],
+            [[{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Small" }] }], [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "One stat" }] }]]
+          ]
+        },
+        { "type": "aside", "style": "note", "name": "Note", "content": [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Widgets refresh on a budget." }] }] },
+        { "type": "mysteryBlock", "content": [{ "type": "paragraph", "inlineContent": [{ "type": "text", "text": "Unknown blocks still surface text." }] }] }
+      ]
+    }
+  ],
+  "sections": [],
+  "references": {
+    "doc://com.apple.HIG/design/Human-Interface-Guidelines/layout": { "title": "Layout", "url": "/design/human-interface-guidelines/layout" },
+    "img-1": { "type": "image" }
+  }
+}
