@@ -28,6 +28,12 @@ Toggles are made of three things:
 
 **Translate only the word Hey in “Hey Siri.”** Siri is a trademark.
 
+**Use the sizes below.** Pick by context; see [Layout](/design/human-interface-guidelines/layout).
+
+| Attribute | Value |
+| --- | --- |
+| Width | 100 pt |
+
 **Sizes**
 
 #### Small {#Small}

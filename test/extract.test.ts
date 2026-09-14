@@ -19,6 +19,7 @@ test("bold-lead paragraphs become rules; labels become terms; nav and change log
     "Be brief.",
     "Keep visuals consistent.",
     "Translate only the word Hey in “Hey Siri.”",
+    "Use the sizes below.",
     "Use a label that names the setting, not the state.",
     "Prefer the switch style in lists of settings.",
     "Use a checkbox instead of a switch inside a form.",
@@ -30,7 +31,7 @@ test("section path, anchor, platforms, severity and value", () => {
   const all = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP }).rules;
   expect(all.filter((r) => r.kind === "term").map((r) => r.statement)).toEqual(["Style", "Content", "Role", "Long delay.", "San Francisco (SF)"]);
   const rules = all.filter((r) => r.kind === "rule");
-  const [reach, avoid, consider, , consistent, , label, ios, mac, vision] = rules;
+  const [reach, avoid, consider, , consistent, , , label, ios, mac, vision] = rules;
   expect(consistent!.rationale).toBe("Once set, keep it.");
   expect(reach!.section).toBe("Best practices");
   expect(reach!.anchor).toBe("Best-practices");
@@ -57,11 +58,14 @@ test("section path, anchor, platforms, severity and value", () => {
 
 test("tables under guidance sections are captured with section, anchor and caption; change-log tables are not", () => {
   const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });
-  expect(page.tables.length).toBe(1);
-  expect(page.tables[0]!.section).toBe("Style › Small");
-  expect(page.tables[0]!.anchor).toBe("Small");
-  expect(page.tables[0]!.caption).toBe("Sizes");
-  expect(page.tables[0]!.markdown).toBe("| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+  expect(page.tables.length).toBe(2);
+  expect(page.tables[0]!.caption).toBeUndefined(); // preceded by a rule paragraph, not a caption
+  expect(page.tables[1]!.section).toBe("Style › Small");
+  expect(page.tables[1]!.anchor).toBe("Small");
+  expect(page.tables[1]!.caption).toBe("Sizes");
+  expect(page.tables[1]!.markdown).toBe("| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
+  const sizes = page.rules.find((r) => r.statement === "Use the sizes below.")!;
+  expect(sizes.rationale).toBe("Pick by context; see [Layout](/design/human-interface-guidelines/layout)."); // links survive for cross-referencing
 });
 
 test("overview pages: abstract is first paragraph; plain best-practice bullets become rules", () => {
@@ -94,6 +98,7 @@ test("helpers", () => {
   expect(severityOf("Never block the main thread.")).toBe("must");
   expect(severityOf("Don’t block the main thread.")).toBe("must");
   expect(severityOf("Configure a spinner when you need to wait.")).toBe("should");
+  expect(severityOf("In rare cases, consider using only a dark appearance.")).toBe("may");
   expect(severityOf("Use system colors.")).toBe("should");
   expect(valueOf("Keep alerts under 3 seconds.")).toBe("3 seconds");
   expect(valueOf("Nothing numeric here.")).toBeUndefined();

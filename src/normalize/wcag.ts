@@ -60,8 +60,29 @@ function block(el: HTMLElement): string {
   }
 }
 
+const INLINE_TAGS = new Set(["A", "EM", "I", "STRONG", "B", "CODE", "SPAN", "DFN", "ABBR"]);
+
+/** Children of a container: block elements, or (for <dd>/<li> written without <p>) mixed inline content. */
 function blocks(el: HTMLElement): string {
-  return el.childNodes
+  const kids = el.childNodes;
+  const mixed = kids.some((n) => (n.nodeType === 3 && n.rawText.trim()) || (n.nodeType === 1 && INLINE_TAGS.has((n as HTMLElement).tagName)));
+  if (mixed) {
+    // Render inline runs and block children in order, so "text <p>…</p> text" doesn't lose either.
+    const out: string[] = [];
+    let run = "";
+    for (const n of kids) {
+      if (n.nodeType === 1 && !INLINE_TAGS.has((n as HTMLElement).tagName)) {
+        if (run.trim()) out.push(run.trim());
+        run = "";
+        out.push(block(n as HTMLElement));
+      } else {
+        run += inline(n);
+      }
+    }
+    if (run.trim()) out.push(run.trim());
+    return out.filter(Boolean).join("\n\n").replace(/[ \t]+\n/g, "\n");
+  }
+  return kids
     .filter((n) => n.nodeType === 1)
     .map((n) => block(n as HTMLElement))
     .filter(Boolean)
@@ -69,6 +90,7 @@ function blocks(el: HTMLElement): string {
 }
 
 export function wcagToMarkdown(html: string): { title: string; abstract: string; body: string } {
+  if (/<!-- glossary -->/.test(html)) return glossaryToMarkdown(html);
   const number = /<!-- number:([\d.]+) -->/.exec(html)?.[1] ?? "";
   const root = parse(html);
   const guideline = root.querySelector("section.guideline") ?? root;
@@ -81,7 +103,8 @@ export function wcagToMarkdown(html: string): { title: string; abstract: string;
     scNo++;
     const id = sc.getAttribute("id") ?? `sc-${scNo}`;
     const heading = sc.querySelector("h4")?.text.trim() ?? id;
-    out.push(`## ${number}.${scNo} ${heading} {#${id}}`);
+    const isNew = /\bnew\b/.test(sc.getAttribute("class") ?? "");
+    out.push(`## ${number}.${scNo} ${heading}${isNew ? " (new in 2.2)" : ""} {#${id}}`);
     for (const child of sc.childNodes) {
       if (child.nodeType !== 1) continue;
       const el = child as HTMLElement;
@@ -91,4 +114,25 @@ export function wcagToMarkdown(html: string): { title: string; abstract: string;
     }
   }
   return { title, abstract, body: out.join("\n\n") };
+}
+
+/**
+ * Glossary: a concatenation of guidelines/terms/*.html includes, each
+ *   <dt><dfn id="dfn-x" data-lt="x">term</dfn> (qualifier)</dt><dd>definition…</dd>
+ * → `## term (qualifier) {#dfn-x}` followed by the definition.
+ */
+export function glossaryToMarkdown(html: string): { title: string; abstract: string; body: string } {
+  const root = parse(html);
+  const out: string[] = [];
+  const dts = root.querySelectorAll("dt");
+  for (const dt of dts) {
+    const dfn = dt.querySelector("dfn");
+    const id = dfn?.getAttribute("id") ?? dt.text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const term = dt.text.replace(/\s+/g, " ").trim();
+    let dd = dt.nextElementSibling;
+    while (dd && dd.tagName !== "DD") dd = dd.nextElementSibling;
+    if (!dd) continue;
+    out.push(`## ${term} {#${id}}`, blocks(dd));
+  }
+  return { title: "Glossary", abstract: "Definitions of the terms the success criteria depend on.", body: out.join("\n\n") };
 }

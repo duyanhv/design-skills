@@ -27,5 +27,24 @@ skill:
     reviewing iOS, iPadOS, macOS, watchOS, visionOS and tvOS interfaces (SwiftUI, UIKit,
     React Native, Flutter). Use when designing screens, choosing components, checking
     layout/typography/color/accessibility, or reviewing UI against Apple's guidance.
-  max_skill_lines: 300
-  top_rules_per_topic: 1
+  max_skill_lines: 320
+  highlights: false          # the routing table below orients better than one arbitrary rule per page
+  routing:
+    - when: "any iOS/iPadOS screen review"
+      read: [accessibility, layout, typography, color, dark-mode]
+    - when: "a settings or preferences screen"
+      read: [settings, lists-and-tables, toggles]
+    - when: "buttons, tap targets, primary/destructive actions"
+      read: [buttons, accessibility]
+    - when: "alerts, confirmations, destructive flows"
+      read: [alerts, action-sheets, modality]
+    - when: "navigation structure, tabs, back navigation, search"
+      read: [tab-bars, toolbars, sidebars, searching, modality]
+    - when: "forms, text input, keyboards, pickers"
+      read: [text-fields, virtual-keyboards, pickers, entering-data]
+    - when: "onboarding, permissions, sign-in"
+      read: [onboarding, privacy, sign-in-with-apple, managing-accounts]
+    - when: "icons, images, symbols, app icon"
+      read: [icons, images, sf-symbols, app-icons]
+    - when: "visionOS spatial UI"
+      read: [designing-for-visionos, immersive-experiences, spatial-layout, eyes, ornaments]

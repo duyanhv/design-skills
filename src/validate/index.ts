@@ -25,7 +25,7 @@ export async function validateSource(source: Source): Promise<Finding[]> {
     }
     const ir = parsed.data;
     irPages.push(ir.page);
-    if (!ir.rules.some((r) => r.kind === "rule")) warn(where, "page has zero rules");
+    if (!ir.rules.length) warn(where, "page has zero rules and zero terms");
     for (const r of ir.rules) {
       if (ids.has(r.id)) err(where, `duplicate rule id ${r.id}`);
       ids.add(r.id);
@@ -57,7 +57,7 @@ export async function validateSource(source: Source): Promise<Finding[]> {
   if (!/^---\nname: [a-z0-9-]+\ndescription: /.test(skill)) err("skill", "frontmatter must start with name + description");
   const descMatch = /^description: "(.*)"$/m.exec(skill);
   if (descMatch && descMatch[1]!.length > 1024) err("skill", "description exceeds 1024 chars");
-  for (const m of skill.matchAll(/\]\((references\/[^)]+)\)/g)) {
+  for (const m of skill.matchAll(/\]\((references\/[^)#]+)(?:#[^)]*)?\)/g)) {
     if (!(await exists(join(skillDir, m[1]!)))) err("skill", `broken reference link ${m[1]}`);
   }
   for (const page of irPages) {

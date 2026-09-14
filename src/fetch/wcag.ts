@@ -49,21 +49,28 @@ export async function fetchWcag(source: Source, opts: { limit?: number } = {}): 
     }
   });
 
+  // Glossary: every terms/* include, as one extra page
+  const termIncludes = index.querySelectorAll("[data-include]").map((s) => s.getAttribute("data-include")!).filter((p) => p.startsWith("terms/"));
+  if (termIncludes.length) {
+    jobs.push({ slug: "glossary", title: "Glossary", category: "glossary", number: "", html: "<!-- glossary -->\n", includes: termIncludes });
+  }
+
   const todo = opts.limit ? jobs.slice(0, opts.limit) : jobs;
   await mapLimit(todo, 4, async (job) => {
     let html = job.html;
     for (const inc of job.includes) {
       const sc = await fetchText(`${source.base_url}/${inc}`);
-      html = html.replace(new RegExp(`<section[^>]*data-include="${inc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*></section>`), sc);
+      if (job.slug === "glossary") html += sc + "\n";
+      else html = html.replace(new RegExp(`<section[^>]*data-include="${inc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*></section>`), sc);
     }
-    const stamped = `<!-- number:${job.number} -->\n${html}`;
+    const stamped = job.number ? `<!-- number:${job.number} -->\n${html}` : html;
     const raw_hash = shortHash(stamped);
     const prev = previous?.pages[job.slug];
     const entry: PageEntry = {
       slug: job.slug,
       url: `${canonical.replace(/#.*$/, "")}#${job.slug}`,
       data_url: `${source.base_url}${source.entry}`,
-      title: `${job.number} ${job.title}`,
+      title: job.number ? `${job.number} ${job.title}` : job.title,
       category: job.category,
       parent: null,
       raw_hash,
@@ -73,7 +80,9 @@ export async function fetchWcag(source: Source, opts: { limit?: number } = {}): 
     await writeText(join(paths.raw(source.id), `${job.slug}.html`), stamped);
   });
 
-  log.info(`fetched ${Object.keys(manifest.pages).length} guidelines, ${todo.reduce((n, j) => n + j.includes.length, 0)} success criteria`);
+  const scCount = todo.filter((j) => j.slug !== "glossary").reduce((n, j) => n + j.includes.length, 0);
+  const termCount = todo.find((j) => j.slug === "glossary")?.includes.length ?? 0;
+  log.info(`fetched ${Object.keys(manifest.pages).length} pages: ${scCount} success criteria, ${termCount} glossary terms`);
   await writeJson(paths.manifest(source.id), manifest);
   return manifest;
 }

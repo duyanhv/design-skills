@@ -8,7 +8,7 @@
  */
 import { severityOf, valueOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@4";
+export const EXTRACTOR = "bold-lead@5";
 
 export interface ExtractedRule {
   kind: "rule" | "term";
@@ -80,6 +80,11 @@ function stripMd(s: string): string {
     .trim();
 }
 
+/** Like stripMd but keeps `[label](url)` links so compose can turn cross-references into local links. */
+function stripMdKeepLinks(s: string): string {
+  return s.replace(/(^|[^\]])[*_`]/g, "$1").replace(/\s+/g, " ").trim();
+}
+
 /** Match a heading to platform names, e.g. "iOS, iPadOS" → ["iOS","iPadOS"]. */
 export function platformsIn(heading: string, known: string[]): string[] {
   const parts = heading.split(/[,/&]|\band\b/).map((p) => p.trim());
@@ -97,6 +102,14 @@ export function latestDate(text: string): string | undefined {
   return best;
 }
 
+/** A caption is short lead-in prose or a bare bold label ("**Two-column**") — never a rule paragraph. */
+function isCaption(prose: string): boolean {
+  if (!prose) return false;
+  const m = BOLD_LEAD.exec(prose);
+  if (m && (m[2] ?? "").trim()) return false;
+  return stripMd(prose).length <= 200;
+}
+
 export function extractRules(markdown: string, opts: ExtractOptions): ExtractedPage {
   const lines = markdown.split("\n");
   const rules: ExtractedRule[] = [];
@@ -110,7 +123,8 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       tables.push({
         section: path.map((p) => p.text).join(" › "),
         anchor: nearest?.anchor,
-        caption: lastProse ? stripMd(lastProse).slice(0, 200) : undefined,
+        // caption = a short lead-in ("Two-column", "Sizes vary by platform.") — never a rule paragraph
+      caption: isCaption(lastProse) ? stripMd(lastProse) : undefined,
         markdown: tableBuf.join("\n"),
       });
     }
@@ -163,7 +177,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
     const m = BOLD_LEAD.exec(line.trim());
     if (m) {
       statement = stripMd(m[1]!);
-      rationale = stripMd(m[2] ?? "") || undefined;
+      rationale = stripMdKeepLinks(m[2] ?? "") || undefined;
       // Apple sometimes closes the bold before the period: "**Keep it consistent**. Once you…"
       const punct = /^([.!?:])\s*(.*)$/.exec(rationale ?? "");
       if (punct) {
@@ -177,9 +191,9 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       const inBestPractices = path.some((p) => /best practices/i.test(p.text));
       const item = inBestPractices ? PLAIN_ITEM.exec(line.trim()) : null;
       if (!item) continue;
-      const text = stripMd(item[1]!);
+      const text = stripMdKeepLinks(item[1]!);
       const fs = FIRST_SENTENCE.exec(text);
-      statement = fs ? fs[1]! : text;
+      statement = stripMd(fs ? fs[1]! : text);
       rationale = fs?.[2] || undefined;
       if (statement.split(" ").length < 4) continue;
     }

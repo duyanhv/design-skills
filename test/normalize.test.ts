@@ -19,6 +19,7 @@ test("docc → markdown covers headings, inline, lists, tables, asides, unknown 
   expect(body).not.toContain("img-1");
   expect(body).toContain("**Small**\n\n#### Small widget {#Small-widget}\n\n| Attribute | Value |\n| --- | --- |\n| Width | 155 pt |");
   expect(body).not.toContain("**Empty**");
+  expect(body).toContain("See `fooColor`"); // API symbol refs have fragments, not a title
 });
 
 test("slugs are stable and flat", () => {

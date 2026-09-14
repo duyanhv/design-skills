@@ -11,7 +11,7 @@
 import type { ExtractedPage, ExtractedRule } from "./rules.ts";
 import { valueOf } from "./severity.ts";
 
-export const WCAG_EXTRACTOR = "wcag-sc@2";
+export const WCAG_EXTRACTOR = "wcag-sc@3";
 
 const HEADING = /^##\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
 const LEVEL = /^\*\*Level (A{1,3})\*\*$/;
@@ -21,6 +21,7 @@ function strip(s: string): string {
 }
 
 export function extractWcag(markdown: string): ExtractedPage {
+  if (/^# Glossary$/m.test(markdown)) return extractGlossary(markdown);
   const rules: ExtractedRule[] = [];
   let summary = "";
   let cur: { title: string; anchor?: string; level?: string; text: string[]; obsolete: boolean } | null = null;
@@ -74,4 +75,36 @@ export function extractWcag(markdown: string): ExtractedPage {
   }
   flush();
   return { summary: summary.slice(0, 1000), source_version: undefined, rules, tables: [] };
+}
+
+/** Glossary page: every `## term {#id}` becomes a term (kind: term) with the definition as rationale. */
+export function extractGlossary(markdown: string): ExtractedPage {
+  const rules: ExtractedRule[] = [];
+  let cur: { title: string; anchor?: string; text: string[] } | null = null;
+  const flush = () => {
+    if (!cur) return;
+    rules.push({
+      kind: "term",
+      section: "Glossary",
+      anchor: cur.anchor,
+      platforms: [],
+      severity: "may",
+      statement: cur.title,
+      rationale: strip(cur.text.join(" ")).slice(0, 4000) || undefined,
+      value: undefined,
+    });
+    cur = null;
+  };
+  for (const raw of markdown.split("\n")) {
+    const line = raw.trim();
+    const h = HEADING.exec(line);
+    if (h) {
+      flush();
+      cur = { title: h[1]!, anchor: h[2], text: [] };
+      continue;
+    }
+    if (cur && line) cur.text.push(line);
+  }
+  flush();
+  return { summary: "Definitions of the terms the success criteria depend on.", source_version: undefined, rules, tables: [] };
 }

@@ -12,8 +12,12 @@ export function foldQuotes(s: string): string {
   return s.replace(/[\u2018\u2019\u02BC]/g, "'").replace(/[\u201C\u201D]/g, '"');
 }
 
+/** Explicitly soft phrasing wins over strong words in the same sentence ("In rare cases, consider using only…"). */
+const SOFT = /\b(consider|optionally|in rare cases|it's fine|it is fine)\b/i;
+
 export function severityOf(statement: string): Severity {
   const s = foldQuotes(statement);
+  if (SOFT.test(s)) return "may";
   if (MUST.test(s)) return "must";
   if (MAY.test(s)) return "may";
   return "should";

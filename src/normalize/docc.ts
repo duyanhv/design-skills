@@ -3,7 +3,7 @@
  * Kept tolerant: unknown block/inline types degrade to their text content instead of throwing.
  */
 
-export interface DoccRef { url?: string; title?: string }
+export interface DoccRef { url?: string; title?: string; fragments?: { kind?: string; text?: string }[] }
 export interface DoccDocument {
   metadata?: { title?: string };
   abstract?: Inline[];
@@ -54,7 +54,8 @@ export function inlineToText(nodes: Inline[] | undefined, refs: Record<string, D
           return "_" + inlineToText(n.inlineContent, refs) + "_";
         case "reference": {
           const ref = n.identifier ? refs[n.identifier] : undefined;
-          const label = inlineToText(n.inlineContent, refs) || ref?.title || "";
+          const symbol = ref?.fragments?.filter((f) => f.kind === "identifier").map((f) => f.text).join("") ?? "";
+          const label = inlineToText(n.inlineContent, refs) || ref?.title || (symbol && `\`${symbol}\``) || "";
           return ref?.url ? `[${label}](${ref.url})` : label;
         }
         case "image":

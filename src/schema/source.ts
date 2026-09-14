@@ -34,6 +34,16 @@ export const SourceSchema = z.object({
     top_rules_per_topic: z.number().int().positive().default(1),
     /** Label for the text that follows a rule's statement in reference files. */
     rationale_label: z.string().default("Why"),
+    /** Include the "Highest-leverage rules" section in SKILL.md. */
+    highlights: z.boolean().default(true),
+    /** "pages": one index row per page. "rules": one row per rule (good for small sources like WCAG). */
+    index: z.enum(["pages", "rules"]).default("pages"),
+    /** Curated routing hints: task keywords → pages to read. Rendered as a "Where to look" table. */
+    routing: z.array(z.object({ when: z.string(), read: z.array(z.string()) })).default([]),
+    /** Free-form markdown appended to the "How to use" section (e.g. how severities map to levels). */
+    notes: z.string().optional(),
+    /** Tables larger than this (chars) are moved to <page>.tables.md so the rulebook stays small. */
+    split_tables_over: z.number().int().positive().default(6000),
   }),
 });
 

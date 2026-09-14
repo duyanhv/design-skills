@@ -20,9 +20,43 @@ skip_sections: []
 skill:
   name: wcag22
   description: >-
-    WCAG 2.2 success criteria as rules with conformance levels (A/AA/AAA) and citations, for
-    building or auditing accessible web and hybrid-app UI. Use when checking contrast, keyboard
-    access, focus, forms, timing, motion, or any accessibility/a11y compliance question.
+    WCAG 2.2 success criteria as rules with conformance levels (A/AA/AAA), a glossary, and
+    citations, for building or auditing accessible web and hybrid-app UI. Use when checking
+    contrast, keyboard access, focus, forms, timing, motion, target size, or any
+    accessibility/a11y compliance question.
   max_skill_lines: 300
-  top_rules_per_topic: 2
   rationale_label: Details
+  highlights: false
+  index: rules
+  notes: |
+    Severity is derived from the conformance level: **Level A and AA → MUST** (required for the usual
+    AA target), **Level AAA → MAY**. Criteria added in 2.2 are marked "(new in 2.2)". Terms in
+    italics or otherwise undefined in a rule ("large-scale text", "essential", "target") are defined
+    in [references/glossary/glossary.md](references/glossary/glossary.md).
+  routing:
+    - when: "contrast, color, text size, reflow, hover/tooltip content"
+      read: [distinguishable, glossary]
+    - when: "images, icons, CAPTCHA alternatives"
+      read: [text-alternatives]
+    - when: "video, audio, captions, transcripts"
+      read: [time-based-media]
+    - when: "semantics, headings, form labels, autocomplete, reading order"
+      read: [adaptable]
+    - when: "keyboard, shortcuts, focus traps"
+      read: [keyboard-accessible]
+    - when: "timeouts, session expiry, auto-updating or moving content"
+      read: [enough-time]
+    - when: "animation, flashing, motion"
+      read: [seizures-and-physical-reactions]
+    - when: "focus order, focus visibility, skip links, page titles, headings, help placement"
+      read: [navigable]
+    - when: "touch/pointer targets, gestures, drag and drop, motion actuation, label in name"
+      read: [input-modalities]
+    - when: "language, unusual words, abbreviations"
+      read: [readable]
+    - when: "unexpected context changes, consistent navigation, consistent help"
+      read: [predictable]
+    - when: "forms, validation errors, login, CAPTCHA, re-entering data, authentication"
+      read: [input-assistance]
+    - when: "ARIA name/role/value, custom widgets, status messages / live regions"
+      read: [compatible]

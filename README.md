@@ -42,9 +42,21 @@ change log at the bottom. The extractor (`src/extract/rules.ts`) reads exactly t
 | bold label without an instruction ("Long delay.", "San Francisco (SF)") | `kind: term` — kept in the reference file, excluded from rule counts |
 | plain bullets under "Best practices" (overview pages) | rules, first sentence as statement |
 
-Heuristics are small, tested and versioned (`extractor: bold-lead@4` is stamped into every IR file), so a
+Heuristics are small, tested and versioned (`extractor: bold-lead@5` is stamped into every IR file), so a
 change to them re-extracts every page and shows up as a reviewable diff. On the current HIG this yields
 ~2,340 rules across 158 pages, every one with a section anchor, in about a minute.
+
+## Skill shape
+
+`SKILL.md` is the always-loaded entry point and is kept small: how to use, a curated **Where to look**
+table (task keywords → files, from the manifest), and an index — one row per page, or one row per rule
+for small sources like WCAG. Each `references/<category>/<page>.md` holds every rule for a topic with
+severity, verbatim statement, the explanatory text, platform tags, and a citation; cross-references to
+other pages are rewritten as relative links. Spec tables larger than a few KB move to a sibling
+`<page>.tables.md` so a rulebook stays cheap to load.
+
+The shape was tuned by handing the generated skills to agents that had never seen this project and
+reading their usability reports; `evals/` keeps the facts they needed from regressing.
 
 ## Why an intermediate representation
 
@@ -59,7 +71,7 @@ regenerated 40 KB markdown blob.
 | --- | --- | --- | --- | --- |
 | `apple-hig` | Apple Human Interface Guidelines | `docc` | proprietary → build locally, not committed | in progress |
 | `material-3` | Material Design 3 | — | CC-BY 4.0 | blocked: JS app shell, needs a headless-browser fetcher |
-| `wcag22` | WCAG 2.2 (from the w3c/wcag source tree) | `wcag` | W3C Document License → build locally, not committed | working |
+| `wcag22` | WCAG 2.2 + glossary (from the w3c/wcag source tree) | `wcag` | W3C Document License → build locally, not committed | working |
 
 See [LICENSING.md](LICENSING.md) for how proprietary sources are handled.
 

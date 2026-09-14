@@ -245,6 +245,19 @@
               "content": []
             }
           ]
+        },
+        {
+          "type": "paragraph",
+          "inlineContent": [
+            {
+              "type": "text",
+              "text": "See "
+            },
+            {
+              "type": "reference",
+              "identifier": "doc://api/NSColor/foo"
+            }
+          ]
         }
       ]
     }
@@ -257,6 +270,22 @@
     },
     "img-1": {
       "type": "image"
+    },
+    "doc://api/NSColor/foo": {
+      "fragments": [
+        {
+          "kind": "keyword",
+          "text": "var"
+        },
+        {
+          "kind": "text",
+          "text": " "
+        },
+        {
+          "kind": "identifier",
+          "text": "fooColor"
+        }
+      ]
     }
   }
 }
