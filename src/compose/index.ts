@@ -171,8 +171,13 @@ type Block =
   | { order: number; kind: "rule"; rule: Rule }
   | { order: number; kind: "table"; table: Table };
 
-/** Reference files are long; past this many lines they open with a table of contents. */
+/**
+ * When a reference opens with a table of contents. Length alone was not the right test: Design
+ * principles is 115 lines across 16 sections and The menu bar is 175 across 15, both of which cost a
+ * full read to find one section, while a 210-line page with four sections does not.
+ */
 const TOC_OVER_LINES = 200;
+const TOC_OVER_SECTIONS = 10;
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }, linker: Linker): Rendered {
   const label = source.skill.rationale_label;
@@ -240,7 +245,12 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
     : undefined;
   // Blank lines are load-bearing in Markdown but three in a row are just noise; collapse runs.
   const body = main.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
-  return { main: withContents(body, headings, page.rules), tables };
+  // A split spec file gets the same treatment: typography.tables.md is 923 lines of spec tables, and
+  // an agent looking for one weight otherwise has to read all of them.
+  return {
+    main: withContents(body, headings, page.rules),
+    tables: tables ? withContents(tables, [...new Set(page.tables.map((t) => t.section))], []) : undefined,
+  };
 }
 
 /**
@@ -249,7 +259,7 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
  * need one and would only pay tokens for it.
  */
 function withContents(doc: string, headings: string[], rules: Rule[]): string {
-  if (doc.split("\n").length <= TOC_OVER_LINES || headings.length < 3) return doc;
+  if ((doc.split("\n").length <= TOC_OVER_LINES && headings.length <= TOC_OVER_SECTIONS) || headings.length < 3) return doc;
   const counts = new Map<string, number>();
   for (const r of rules) if (r.kind === "rule") counts.set(r.section, (counts.get(r.section) ?? 0) + 1);
   const toc = [
@@ -261,9 +271,12 @@ function withContents(doc: string, headings: string[], rules: Rule[]): string {
     }),
     ``,
   ].join("\n");
-  // After the header block (summary + overview), before "## Rules".
+  // After the header block (summary + overview), before the body starts. A spec file has no
+  // "## Rules", so fall back to its first section heading — appending the list at the end would put
+  // the navigation after the thing it is meant to help you navigate.
   const at = doc.indexOf("## Rules");
-  return at < 0 ? `${doc}\n${toc}` : `${doc.slice(0, at)}${toc}\n${doc.slice(at)}`;
+  const start = at >= 0 ? at : doc.search(/^### /m);
+  return start < 0 ? `${doc}\n${toc}` : `${doc.slice(0, start)}${toc}\n${doc.slice(start)}`;
 }
 
 function severitiesPresent(pages: PageIR[]): string[] {

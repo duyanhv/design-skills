@@ -144,6 +144,29 @@ const CASES: Case[] = [
         s.replace(/\n {2}- Changes in context include changes of:\n(?: {4}- [^\n]*\n)+/, " Changes in context include changes of: - user agent; - viewport;\n"),
       ),
   },
+  {
+    finding: "O-6 / O-10",
+    name: "a topic dropped from the entry file's index",
+    break: async (d) =>
+      editRef(d, "apple-hig/SKILL.md", (s) => s.replace(" · [Watch faces](references/components/watch-faces.md)", "")),
+  },
+  {
+    finding: "O-6 / O-10",
+    name: "the routing table cut back to a handful of rows",
+    break: async (d) =>
+      editRef(d, "apple-hig/SKILL.md", (s) => {
+        const start = s.indexOf("| icons, images, symbols, app icon");
+        const end = s.indexOf("\n## Index");
+        if (start < 0 || end < 0) throw new Error("the routing table is not where this fixture expects it");
+        return s.slice(0, start) + "\n" + s.slice(end);
+      }),
+  },
+  {
+    finding: "O-6 / O-10",
+    name: "a long reference with its table of contents removed",
+    break: async (d) =>
+      editRef(d, "apple-hig/references/components/widgets.md", (s) => s.replace(/## Contents\n\n(?:- \[[^\n]*\n)+\n/, "")),
+  },
 ];
 
 /** A scratch tree holding the built skills and IR, so trace reads the corrupted copy. */

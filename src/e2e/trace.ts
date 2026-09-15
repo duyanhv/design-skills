@@ -358,6 +358,43 @@ const CHECKS: Check[] = [
       return `${total} cross-references across two skills, 0 dead; glossary keeps its structure and carries no entities`;
     },
   },
+  {
+    finding: "O-6 / O-10",
+    requirement: "Every topic is reachable from the entry file, and a long reference can be navigated without reading it",
+    observe: async () => {
+      const skill = await readFile(join(paths.skill("apple-hig"), "SKILL.md"), "utf8");
+      const pages = await loadPages("apple-hig");
+      // The entry file used to name 33 of 158 topics and count the rest by category, so any task
+      // outside a routing row cost an extra file read before the agent knew what existed.
+      // Checked against the *index section* rather than the whole file: a topic that appears only
+      // in a routing row is reachable for the tasks that row names and invisible for every other,
+      // which is the gap this was supposed to close.
+      const index = skill.slice(skill.indexOf("## Index"));
+      if (!index) throw new Error("SKILL.md has no Index section");
+      const unnamed = pages.filter((p) => !index.includes(`/${p.page}.md)`));
+      if (unnamed.length) throw new Error(`${unnamed.length} topics are missing from the index, e.g. ${unnamed[0]!.page}`);
+      const tokens = Math.ceil(skill.length / 4);
+      if (tokens > 5000) throw new Error(`naming every topic pushed SKILL.md to ~${tokens} tokens, over the 5k guidance`);
+      const routing = [...skill.matchAll(/^\| (?!---|When the task)[^|]+\|/gm)].length;
+      if (routing < 20) throw new Error(`only ${routing} routing rows; platform and category coverage regressed`);
+
+      // A file that is long or heavily sectioned must open with a way to find a section.
+      const root = join(paths.skill("apple-hig"), "references");
+      let withToc = 0;
+      const missing: string[] = [];
+      for (const cat of await listDirs(root)) {
+        for (const f of await listFiles(join(root, cat), ".md")) {
+          const doc = await readFile(join(root, cat, f), "utf8");
+          const sections = new Set(doc.match(/^### .+$/gm) ?? []).size;
+          const hasToc = /^## Contents$/m.test(doc);
+          if (hasToc) withToc++;
+          if ((doc.split("\n").length > 200 || sections > 10) && sections >= 3 && !hasToc) missing.push(`${cat}/${f}`);
+        }
+      }
+      if (missing.length) throw new Error(`${missing.length} long references have no table of contents, e.g. ${missing[0]}`);
+      return `all ${pages.length} topics linked from a ~${tokens}-token entry file with ${routing} routing rows; ${withToc} long references carry a table of contents`;
+    },
+  },
 ];
 
 let failed = 0;
