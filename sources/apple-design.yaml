@@ -1,0 +1,13 @@
+id: apple-design
+name: Apple Design Guide
+kind: authored
+base_url: https://developer.apple.com/design/human-interface-guidelines
+entry: /
+license:
+  spdx: MIT
+  redistributable: true
+  attribution: "Original workflow instructions by design-skills contributors (MIT). Apple guidance is linked, not bundled. Not affiliated with Apple."
+skill:
+  name: apple-design
+  description: "Design or review Apple-platform interfaces using an original workflow and official HIG references. Use for component choices, navigation, accessibility, and platform-specific UI decisions. Requires reading the linked guidance; this is not an offline HIG copy."
+  max_skill_lines: 150

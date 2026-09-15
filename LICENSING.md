@@ -6,7 +6,8 @@ the pipeline is built so we never redistribute text we aren't allowed to.
 | Situation | What gets committed | Current sources |
 | --- | --- | --- |
 | `license.redistributable: false` | **Nothing derived from the text.** `ir/<id>/` and `skills/<name>/` must be git-ignored, and `validate` fails if they aren't. Users run `bun run build <id>` and get the skill on their own machine, the same way they'd read the guideline in a browser. | `apple-hig`, `wcag22` |
-| `license.redistributable: true` | `ir/` and `skills/` are committed and refreshed by CI. The attribution string from the manifest is embedded in every generated file. | `lumen-ds` |
+| `kind: authored`, `license.redistributable: true` | Original Markdown from `guidance/` is published under `skills/`, with authorship metadata and provenance. No upstream guideline corpus or extracted IR is bundled. | `apple-design`, `material-3` |
+| Extracted source, `license.redistributable: true` | `ir/` and `skills/` are committed and refreshed by CI. The attribution string from the manifest is embedded in every generated file. | `lumen-ds` |
 
 The gate is enforced against git's actual behaviour, not against the text of `.gitignore`: `validate`
 runs `git check-ignore` (so a later negation pattern cannot quietly re-include a path) and
@@ -25,8 +26,8 @@ WCAG 2.2 is published under the [W3C Document License](https://www.w3.org/copyri
 which permits copying but **not** the creation of derivative works. Splitting the criteria into a
 restructured rule set with added severity and scope metadata is a derivative work, so `wcag22` is
 built locally like Apple's HIG, even though the W3C's terms are far more permissive than Apple's.
-A CC-BY source (Material Design 3, when its fetcher exists) does allow derivatives with attribution,
-and would be committed.
+The public `material-3` guide licenses only our original instructions under MIT. It does not
+assert a redistribution license for the Material Design website.
 
 This is a conservative reading, not legal advice. If you are the rights holder of a guideline and
 want it handled differently or removed, open an issue.
@@ -34,5 +35,14 @@ want it handled differently or removed, open an issue.
 ## Requirements for a new source
 
 Every source manifest must declare `license.spdx`, `license.redistributable` and
-`license.attribution`. The attribution string is embedded in `SKILL.md`, every reference file, and
-`provenance.json`, so it travels with the skill even if the directory is copied somewhere else.
+`license.attribution`. For extracted output, attribution is embedded in `SKILL.md`, every
+reference file, and `provenance.json`. Authored output records the manifest attribution in
+`provenance.json`, with authorship and source metadata in `SKILL.md`. Install whole bundles so
+these records travel with the skill.
+
+## Original authored guides
+
+`apple-design` and `material-3` contain original contributor-written workflows and official links.
+Their MIT license covers that writing, not linked Apple or Google content. They are not affiliated
+with either company and do not claim to reproduce the complete guidelines. Authorship and source
+are declared in each entry file and in the generated provenance.

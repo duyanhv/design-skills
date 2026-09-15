@@ -1,0 +1,24 @@
+{
+  "source": "material-3",
+  "kind": "authored",
+  "authorship": "original",
+  "license": {
+    "spdx": "MIT",
+    "redistributable": true,
+    "attribution": "Original workflow instructions by design-skills contributors (MIT). Google documentation is linked, not bundled. Not affiliated with Google."
+  },
+  "format": "authored-skill@1",
+  "partial": false,
+  "note": "Original design-skills workflow instructions. Linked upstream guidelines are not bundled; upstream completeness and freshness are not asserted.",
+  "files": {
+    "references/research/sources.md": "85bf4cba843a1cac",
+    "references/review/evidence.md": "2d448d2a490aa0ea",
+    "SKILL.md": "2bd6402315affd9d"
+  },
+  "references": [
+    "https://developer.android.com/develop/ui/compose/designsystems/material3",
+    "https://github.com/material-components/material-web",
+    "https://github.com/material-components/material-web/blob/main/docs/theming/README.md",
+    "https://m3.material.io/"
+  ]
+}

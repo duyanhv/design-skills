@@ -11,7 +11,7 @@ bun run example   # rebuild the committed synthetic example
 
 `bun run check` is what CI runs. If it passes locally it should pass there.
 
-## The one rule that matters
+## Extracted guideline rules
 
 **The compiler must never say something the source did not.** Everything else here follows from it:
 
@@ -26,7 +26,19 @@ bun run example   # rebuild the committed synthetic example
 When in doubt, preserve more and mark it clearly. A rule that is visibly incomplete is recoverable; a
 rule that is silently wrong is not.
 
-## Adding a source
+## Adding an original guide
+
+Use `kind: authored` for original workflow instructions, with redistributable MIT text. Put the
+entry file and linked Markdown references in `guidance/<source-id>/`; use the existing guides as
+examples. Declare `metadata.authorship: original`, link official sources, and distinguish your
+review method from upstream requirements. Do not paste a guideline corpus into this path.
+
+`bun run build <id>` validates the entry file and local reference graph, copies the Markdown,
+and records deterministic hashes and source URLs. There is no extraction or IR. Rebuild changed
+guides and commit both input and output. Smoke assertions check selected content; they do not
+prove that an agent reads or correctly applies external guidance.
+
+## Adding an extracted source
 
 1. **Write the manifest.** Copy `sources/apple-hig.yaml`. Set `license.redistributable` honestly. If
    it is false, add `ir/<id>/` and `skills/<name>/` to `.gitignore`; `validate` checks this against

@@ -94,3 +94,25 @@ for (const [name, opts, message] of [
     expect(await readFile(join(cwd, "skills/lumen-ds/SKILL.md"), "utf8")).toContain("Synthetic skill");
   });
 }
+
+test("publisher pushes authored bundles using skill provenance without requiring extracted IR", async () => {
+  const { cwd, remote } = await fixture();
+  await writeFile(join(cwd, "sources/original-guide.yaml"), JSON.stringify({
+    id: "original-guide", name: "Original", kind: "authored", base_url: "https://example.invalid", entry: "/",
+    license: { spdx: "MIT", redistributable: true, attribution: "Original writing" },
+    skill: { name: "original-guide", description: "Original workflow" },
+  }));
+  await writeFile(join(cwd, "src/cli.ts"), `
+    import {mkdir,writeFile} from 'node:fs/promises';
+    if (process.argv[2] === 'build') {
+      await mkdir('skills/original-guide',{recursive:true});
+      await writeFile('skills/original-guide/SKILL.md','# Original workflow');
+      await writeFile('skills/original-guide/provenance.json',JSON.stringify({partial:false,kind:'authored'}));
+    }
+  `);
+  await git(cwd, "add", "."); await git(cwd, "commit", "-m", "authored fixture");
+  await publishSkills(cwd, ["original-guide"]);
+  expect(await git(remote, "rev-parse", "refs/heads/main")).toBe(await git(cwd, "rev-parse", "HEAD"));
+  expect(await Bun.file(join(cwd, "ir/original-guide/meta.json")).exists()).toBe(false);
+  expect(await git(cwd, "status", "--porcelain")).toBe("");
+});

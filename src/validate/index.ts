@@ -6,6 +6,7 @@ import type { Source } from "../schema/source.ts";
 import { PageIRSchema } from "../schema/ir.ts";
 import { exists, listDirs, listFiles, paths, readJson } from "../util/fs.ts";
 import { gitIgnores, gitTracked } from "../util/git.ts";
+import { validateAuthoredSource } from "../authored/index.ts";
 
 export interface Finding { level: "error" | "warn"; where: string; message: string }
 
@@ -32,6 +33,7 @@ export function splitFrontmatter(text: string): { yaml: string; body: string } |
 }
 
 export async function validateSource(source: Source): Promise<Finding[]> {
+  if (source.kind === "authored") return validateAuthoredSource(source);
   const findings: Finding[] = [];
   const err = (where: string, message: string) => findings.push({ level: "error", where, message });
   const warn = (where: string, message: string) => findings.push({ level: "warn", where, message });

@@ -13,8 +13,8 @@ export const LicenseSchema = z.object({
 export const SourceSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string(),
-  /** docc: Apple DocC JSON sites · wcag: the w3c/wcag guidelines source tree · html: generic (todo) */
-  kind: z.enum(["docc", "wcag", "html"]),
+  /** docc: Apple DocC · wcag: W3C source tree · html: generic (todo) · authored: original local Markdown */
+  kind: z.enum(["docc", "wcag", "html", "authored"]),
   /** Where the fetcher reads from. */
   base_url: z.string().url(),
   entry: z.string().startsWith("/"),

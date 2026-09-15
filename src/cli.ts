@@ -8,6 +8,7 @@ import { validateSource } from "./validate/index.ts";
 import { evalSource } from "./eval/index.ts";
 import { listSources, loadSource } from "./util/fs.ts";
 import { log } from "./util/log.ts";
+import { buildAuthoredSource } from "./authored/index.ts";
 
 const USAGE = `design-skills — compile design guidelines into Agent Skills
 
@@ -21,6 +22,7 @@ commands
   validate    schema, provenance, license gate and size checks
   eval        assert evals/<id>/questions.yaml facts are present in the generated skill
   build       fetch → normalize → extract → compose → validate → eval
+              authored sources: copy local guidance → validate → eval
 
 options
   --limit N        cap pages (fetch/extract)
@@ -78,6 +80,12 @@ for (const id of ids) {
       failed = reportEval(await evalSource(source)) || failed;
       break;
     case "build":
+      if (source.kind === "authored") {
+        await buildAuthoredSource(source);
+        failed = report(await validateSource(source)) || failed;
+        failed = reportEval(await evalSource(source)) || failed;
+        break;
+      }
       await fetchSource(source, { limit });
       await normalizeSource(source, { allowPartial });
       await extractSource(source, { limit, force: values.force, partial: Boolean(limit) || allowPartial });

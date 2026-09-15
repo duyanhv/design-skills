@@ -1,0 +1,6 @@
+- q: Where should the agent research platform-specific component decisions?
+  source: topics
+  expect: ["Buttons", "designing-for-tvos", "platform scope"]
+- q: Does the public guide distinguish authored advice from extracted rule IDs?
+  source: evidence
+  expect: ["Do not invent rule IDs", "unverified", "exceptions"]

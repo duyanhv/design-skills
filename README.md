@@ -16,7 +16,11 @@ requires no model API key.
 **Status: experimental.** The skills are usable for assisted design and review. Extraction and
 evaluation still have [known limitations](#verification-and-limitations).
 
-[Browse an example skill](skills/lumen-ds/SKILL.md) · [Generated skills](skills/README.md) · [Contribute](CONTRIBUTING.md)
+[Apple design skill](skills/apple-design/SKILL.md) · [Material Design 3 skill](skills/material-3/SKILL.md) · [Generated skills](skills/README.md) · [Contribute](CONTRIBUTING.md)
+
+The repository also ships **original, authored guides** for Apple design and Google Material Design 3.
+These provide task workflows and official reference links. They require an agent that can read the
+linked documentation; they are not offline copies of the guidelines.
 
 ## Quick start
 
@@ -27,13 +31,22 @@ git clone https://github.com/duyanhv/design-skills.git
 cd design-skills
 bun install --frozen-lockfile
 
-# Build either or both guidelines.
+# Rebuild the two public guides (no network or model calls).
+bun run build:public
+```
+
+The public folders `skills/apple-design/` and `skills/material-3/` are already included in the clone.
+The command rebuilds them from `guidance/`, validates local links and provenance, and runs smoke checks.
+
+To extract the larger guideline corpora for local use:
+
+```sh
 bun run build apple-hig
 bun run build wcag22
 ```
 
-The generated folders are `skills/apple-hig/` and `skills/wcag22/`. Each build fetches the source,
-extracts its guidance, writes the skill, then runs validation and source-specific assertions.
+These builds fetch the source, extract its guidance, write the skill, and run validation and
+source-specific assertions. Their output stays local.
 
 To try the pipeline without fetching an external guideline:
 
@@ -48,6 +61,8 @@ readable example. It is not guidance for a real platform.
 
 | Source | Build command | Generated output on GitHub |
 | --- | --- | --- |
+| Apple design — original workflow and HIG links | `bun run build apple-design` | [skills/apple-design/](skills/apple-design/) |
+| Google Material Design 3 — original workflow and official links | `bun run build material-3` | [skills/material-3/](skills/material-3/) |
 | [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/) | `bun run build apple-hig` | Local build only |
 | [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and glossary | `bun run build wcag22` | Local build only |
 | Lumen Design System — synthetic example | `bun run example` | [skills/lumen-ds/](skills/lumen-ds/) |
@@ -56,22 +71,23 @@ The repository publishes the compiler and eligible generated skills. The current
 mark Apple HIG and WCAG as nonredistributable, so their generated text stays out of Git. See
 [source and output licensing](LICENSING.md) for the project's policy.
 
-Material Design 3 and a generic HTML adapter are planned; they are not currently supported.
+Full Material Design 3 extraction and a generic HTML adapter remain planned. The public Material 3
+skill is an authored guide, distinct from an extraction adapter and from the MUI React library.
 
 ## Use a generated skill
 
 Install the **whole skill folder**, including references and provenance. Copying only `SKILL.md`
 leaves the agent without the guidance it links to.
 
-Run the following from this repository's root after building the skills. The symlinks point to
+Run the following from this repository's root to install the included public guides. The symlinks point to
 your local output, so rebuilding updates what the agent reads.
 
 ### Codex
 
 ```sh
 mkdir -p ~/.agents/skills
-ln -s "$PWD/skills/apple-hig" ~/.agents/skills/apple-hig
-ln -s "$PWD/skills/wcag22" ~/.agents/skills/wcag22
+ln -s "$PWD/skills/apple-design" ~/.agents/skills/apple-design
+ln -s "$PWD/skills/material-3" ~/.agents/skills/material-3
 ```
 
 Codex supports symlinked skill folders in its user skill directory. See the
@@ -81,16 +97,19 @@ Codex supports symlinked skill folders in its user skill directory. See the
 
 ```sh
 mkdir -p ~/.claude/skills
-ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
-ln -s "$PWD/skills/wcag22" ~/.claude/skills/wcag22
+ln -s "$PWD/skills/apple-design" ~/.claude/skills/apple-design
+ln -s "$PWD/skills/material-3" ~/.claude/skills/material-3
 ```
 
 If a destination already exists, inspect the existing installation before replacing it.
 
 ### Example requests
 
-> Use the apple-hig skill to review this iOS settings screen. Include the applicable rule ID,
-> source link, platform scope, and exceptions for each finding.
+> Use the apple-design skill to review this iOS settings screen. Read the relevant HIG pages,
+> then include the source link, platform scope, and exceptions for each finding.
+
+> Use the material-3 skill to plan this adaptive settings form. Check the official guidance and
+> our framework’s supported APIs before choosing components and theme roles.
 
 > Use the wcag22 skill to review this form against Level AA. Explain which criteria apply and
 > which checks require testing the running interface.
@@ -99,6 +118,10 @@ Other agents can use the generated Markdown when their runtime supports Agent Sk
 a way to load the entry file and follow its local references.
 
 ## What gets generated
+
+Extracted skills contain the following artifacts. Authored guides contain `SKILL.md`, original
+reference notes, and file hashes plus official URLs in `provenance.json`; they have no extracted
+rule IDs, fetch dates, or IR.
 
 ```text
 skills/<name>/
@@ -132,18 +155,18 @@ bun run publish:skills
 ```
 
 This command builds sources marked `license.redistributable: true`, validates their output,
-commits changes under `skills/<name>/` and the matching `ir/<source-id>/`, and pushes the current
+commits changes under `skills/<name>/` (plus `ir/<source-id>/` for extracted sources), and pushes the current
 branch to `origin`. It skips local-only sources and creates no empty commit when output is unchanged.
 
 To select an eligible source or commit locally for review:
 
 ```sh
-bun run publish:skills lumen-ds
-bun run publish:skills lumen-ds --no-push
+bun run publish:skills apple-design material-3
+bun run publish:skills apple-design material-3 --no-push
 ```
 
-`--no-push` still creates a local commit when output changes. Lumen is currently the only eligible
-source. [The publishing guide](skills/README.md) describes failure handling and folder contents.
+`--no-push` still creates a local commit when output changes. Apple Design, Material 3, and the
+Lumen example are eligible sources. [The publishing guide](skills/README.md) describes failure handling and folder contents.
 
 ## Verification and limitations
 
@@ -157,6 +180,8 @@ bun run trace              # Selected audit assertions; needs Apple HIG and WCAG
 The checks exercise extraction, scope, context retention, publishing, and validation. They do not
 establish complete source fidelity or guarantee correct agent decisions:
 
+- **Authored guides depend on upstream reading.** Build checks verify packaging and selected content,
+  not whether remote pages are reachable, current, or correctly applied by an agent.
 - **Coverage is heuristic.** It compares vocabulary in normalized pages and generated references.
   It can miss changed numbers, short instructions, tables, and losses introduced during normalization.
   Missing caches are skipped; the current CI coverage step does not establish source coverage.
@@ -184,5 +209,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the adapter contracts and development
 
 ## License
 
-The compiler and synthetic example are [MIT licensed](LICENSE). Upstream guidelines retain their
+The compiler, original authored guides, and synthetic example are [MIT licensed](LICENSE). Upstream guidelines retain their
 own terms; the code license does not apply to their text. See [LICENSING.md](LICENSING.md).

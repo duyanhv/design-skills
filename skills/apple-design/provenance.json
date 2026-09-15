@@ -1,0 +1,45 @@
+{
+  "source": "apple-design",
+  "kind": "authored",
+  "authorship": "original",
+  "license": {
+    "spdx": "MIT",
+    "redistributable": true,
+    "attribution": "Original workflow instructions by design-skills contributors (MIT). Apple guidance is linked, not bundled. Not affiliated with Apple."
+  },
+  "format": "authored-skill@1",
+  "partial": false,
+  "note": "Original design-skills workflow instructions. Linked upstream guidelines are not bundled; upstream completeness and freshness are not asserted.",
+  "files": {
+    "references/research/topics.md": "fc56665f4e42229a",
+    "references/review/evidence.md": "6232524086a5f829",
+    "SKILL.md": "9753145c3a8238bb"
+  },
+  "references": [
+    "https://developer.apple.com/design/human-interface-guidelines",
+    "https://developer.apple.com/design/human-interface-guidelines/accessibility",
+    "https://developer.apple.com/design/human-interface-guidelines/alerts",
+    "https://developer.apple.com/design/human-interface-guidelines/buttons",
+    "https://developer.apple.com/design/human-interface-guidelines/color",
+    "https://developer.apple.com/design/human-interface-guidelines/dark-mode",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-ios",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-ipados",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-macos",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-tvos",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-visionos",
+    "https://developer.apple.com/design/human-interface-guidelines/designing-for-watchos",
+    "https://developer.apple.com/design/human-interface-guidelines/layout",
+    "https://developer.apple.com/design/human-interface-guidelines/modality",
+    "https://developer.apple.com/design/human-interface-guidelines/motion",
+    "https://developer.apple.com/design/human-interface-guidelines/settings",
+    "https://developer.apple.com/design/human-interface-guidelines/sf-symbols",
+    "https://developer.apple.com/design/human-interface-guidelines/sheets",
+    "https://developer.apple.com/design/human-interface-guidelines/sidebars",
+    "https://developer.apple.com/design/human-interface-guidelines/tab-bars",
+    "https://developer.apple.com/design/human-interface-guidelines/text-fields",
+    "https://developer.apple.com/design/human-interface-guidelines/toggles",
+    "https://developer.apple.com/design/human-interface-guidelines/toolbars",
+    "https://developer.apple.com/design/human-interface-guidelines/typography",
+    "https://developer.apple.com/documentation/"
+  ]
+}

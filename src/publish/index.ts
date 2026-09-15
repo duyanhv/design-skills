@@ -53,14 +53,15 @@ export async function publishSkills(cwd: string, requested: string[] = [], push 
   const branch = (await run(cwd, ["git", "symbolic-ref", "--quiet", "--short", "HEAD"])).trim();
   if (push) await run(cwd, ["git", "remote", "get-url", "origin"]);
 
-  const outputPaths = selected.flatMap((s) => [`skills/${s.skill.name}`, `ir/${s.id}`]);
+  const outputPaths = selected.flatMap((s) => s.kind === "authored" ? [`skills/${s.skill.name}`] : [`skills/${s.skill.name}`, `ir/${s.id}`]);
   for (const source of selected) {
     console.log(`Build ${source.id} → skills/${source.skill.name}/`);
     const build = source.synthetic ? ["src/e2e/run.ts", "--keep"] : ["src/cli.ts", "build", source.id];
     await run(cwd, [process.execPath, "run", ...build], true);
     await run(cwd, [process.execPath, "run", "src/cli.ts", "validate", source.id], true);
     await run(cwd, [process.execPath, "run", "src/cli.ts", "eval", source.id], true);
-    const meta = JSON.parse(await readFile(join(cwd, "ir", source.id, "meta.json"), "utf8"));
+    const metaPath = source.kind === "authored" ? join(cwd, "skills", source.skill.name, "provenance.json") : join(cwd, "ir", source.id, "meta.json");
+    const meta = JSON.parse(await readFile(metaPath, "utf8"));
     if (meta.partial !== false) throw new Error(`${source.id}: cannot publish an incomplete or unmarked build.`);
     await readFile(join(cwd, "skills", source.skill.name, "SKILL.md"), "utf8");
     await readFile(join(cwd, "skills", source.skill.name, "provenance.json"), "utf8");

@@ -1,0 +1,13 @@
+id: material-3
+name: Material Design 3 Guide
+kind: authored
+base_url: https://m3.material.io/
+entry: /
+license:
+  spdx: MIT
+  redistributable: true
+  attribution: "Original workflow instructions by design-skills contributors (MIT). Google documentation is linked, not bundled. Not affiliated with Google."
+skill:
+  name: material-3
+  description: "Design or review interfaces using Google Material Design 3, with original workflows and official references for theming, components, and adaptive layouts. Use for Material 3 tasks, not as documentation for the MUI React library."
+  max_skill_lines: 150

@@ -1,0 +1,6 @@
+- q: Does implementation research distinguish theming layers and library assumptions?
+  source: sources
+  expect: ["MaterialTheme", "component tokens", "MUI React"]
+- q: Does review require actual evidence rather than a decorative source link?
+  source: evidence
+  expect: ["assigns no extracted rule IDs", "Merely attaching a link", "runtime test"]

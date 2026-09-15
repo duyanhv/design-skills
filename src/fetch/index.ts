@@ -5,6 +5,8 @@ import { fetchWcag } from "./wcag.ts";
 
 export async function fetchSource(source: Source, opts: { limit?: number } = {}): Promise<Manifest> {
   switch (source.kind) {
+    case "authored":
+      throw new Error(`Source ${source.id} is authored locally; use build instead of fetch.`);
     case "docc":
       return fetchDocc(source, opts);
     case "wcag":

@@ -15,6 +15,10 @@ jobs:
         run: bun run typecheck
       - name: Unit tests
         run: bun test
+      - name: Build public authored guides
+        run: bun run build:public
+      - name: Published guides match their inputs
+        run: git diff --exit-code -- skills/apple-design skills/material-3
       # An end-to-end build over a synthetic source: no network, no proprietary text, but it
       # exercises normalize → extract → compose → validate → eval exactly as a real source does.
       # This is what catches a pipeline break that unit tests alone would not.
