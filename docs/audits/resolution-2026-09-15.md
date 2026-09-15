@@ -3,7 +3,7 @@
 Date: 2026-09-15
 Audited revision: `fa7dca949be40652bad7ee997d91a1925d564623`
 Resolved revision: `f87b0ae`
-Status: **A1, A2, A3, A4, A5, A7 resolved with guards. A6 measured; the budget decision is open.**
+Status: **All seven findings resolved with guards.**
 
 Companion to [generated-output-2026-09-15.md](generated-output-2026-09-15.md), which states the
 findings. This records what changed, what proves it, and what is still a judgement call rather than
@@ -118,7 +118,7 @@ Both acceptance fixtures are covered: a small glyph inside a large hit region, a
 inherited from a framework component. No landing-page recipe, font-count rule or mandatory motion
 was added, per the audit's warning against importing a web-design aesthetic into platform guidance.
 
-### A6 · Retrieval cost · measured, decision open
+### A6 · Retrieval cost · resolved
 
 `bun run budget` replaces the audit's estimates with measurements, and two of them were wrong:
 
@@ -129,13 +129,25 @@ was added, per the audit's warning against importing a web-design aesthetic into
 
 Apple: entry ~4,541 tok, index ~3,774, 158 pages ~550,910 total, median 2,485, p90 7,356.
 
-The actionable finding is navigational, not size-related: **100% of Apple rules sit under a rendered
-anchor, but only 28.7% are in a Contents list**, because compose adds one to just 20 of 158 pages.
-Lowering that threshold improves retrieval without removing anything.
+The actionable finding was navigational, not size-related. 100% of Apple rules sit under a rendered
+anchor, but only 28.7% were in a Contents list, because compose added one to 22 of 164 pages on a
+length test.
 
-This is left open deliberately. The audit asked for the budget to be *set from* the numbers, and the
-numbers now exist; choosing thresholds is a judgement call, and `budget` never fails a build.
-Recommended starting point: entry ≤5k, page ≤15k, routing row ≤25k, narrow decision ≤12k.
+The threshold is now set from the measurement, using the comparison that matters to a reader, who
+reads one page and not the corpus: header plus contents list plus the largest single section,
+against reading the file whole. Across all 145 pages with three or more sections, in both sources,
+the list wins every time — median saving 1,869 tokens on Apple, 472 on WCAG, and the worst case
+still saves 26. So three sections is the whole test. Rules reachable from a page's own contents list
+go from **28.7% to 94.1%** on Apple and **13.8% to 45.7%** on WCAG, and nothing was removed to get
+there.
+
+Corpus-wide cost was the wrong lens and is recorded here to say why: adding 110 lists costs ~7,257
+tokens across a 552,840-token corpus, which sounds like a cost and is actually a saving, because no
+reader reads the corpus.
+
+The remaining numeric budgets — entry ≤5k, page ≤15k, routing row ≤25k, narrow decision ≤12k — are
+reported by `budget`, which never fails a build. Those stay advisory: the audit asked for a budget
+derived from the numbers, not for a size limit that would force dropping source material.
 
 ### A7 · Verification · resolved
 
@@ -160,10 +172,12 @@ Every number below was observed, not projected.
 | Unit tests | 51 | 64 |
 | Trace requirements | 19 | 41 |
 | Trace negative probes | 22 | 57 |
-| Validate guards | 20 | 21 |
+| Validate guards | 20 | 22 |
 | Apple media occurrences rendered | 0 block videos, 0 captions | 1,322/1,536, 214 enumerated |
 | WCAG sentences retained | 625 | 760 |
 | Apple sentences retained | 10,883 | 10,883 |
+| Apple rules reachable from their page's contents list | 28.7% | 94.1% |
+| WCAG rules reachable from their page's contents list | 13.8% | 45.7% |
 | Apple evals | 13/13 | 13/13 |
 | WCAG evals | 10/10 | 17/17 |
 
@@ -182,9 +196,14 @@ independently proven, rather than being claimed as guarded.
 
 ## Still open
 
-- **A6's budget thresholds** and the Contents-list threshold change. Measured, not decided.
 - Verification is now broader, not complete. S-1 to S-3 establish that what IR holds is reachable and
-  correctly attached; they do not establish that IR holds everything the upstream source states.
+  correctly attached; they do not establish that IR holds everything the upstream source states. The
+  Apple media probe is the one check that starts from the raw corpus, and it covers media only.
+- The numeric budgets `bun run budget` reports (entry ≤5k, page ≤15k, routing row ≤25k) are
+  advisory and do not fail a build. Making them binding would mean dropping source material to meet
+  a number, which is the wrong trade for this project.
 - WCAG extraction remains pinned to a repository commit while citations point at the published
   Recommendation. The audit's uncertainty about edition equivalence is unchanged.
-- README links to audit documents removed in earlier history still need a documentation decision.
+- No fresh model-based agent evaluation was run. `bun run agenteval` costs model calls and is outside
+  `bun run check`; the scorer was corrected and unit-tested, but the behavioural claims in A4 and A5
+  rest on executed fixtures rather than on sampled agent runs.

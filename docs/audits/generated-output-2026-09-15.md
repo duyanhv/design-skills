@@ -4,11 +4,10 @@ Date: 2026-09-15
 Repository revision: `fa7dca949be40652bad7ee997d91a1925d564623`  
 Status: **Findings addressed. See [resolution-2026-09-15.md](resolution-2026-09-15.md).**
 
-A1–A5 and A7 are resolved with guards; A6 is measured and its budget decision is open. Two of the
-findings turned out to have causes outside the code they implicated: the media loss in A1 was
-compounded by two defects in `src/extract/rules.ts` that were deleting figures from the sections
-they illustrate. The text below is the audit as written, unchanged, and still describes the state of
-revision `fa7dca9`.
+All seven findings are resolved with guards. Two of them turned out to have causes outside the code
+they implicated: the media loss in A1 was compounded by two defects in `src/extract/rules.ts` that
+were deleting figures from the sections they illustrate. The text below is the audit as written,
+unchanged, and still describes the state of revision `fa7dca9`.
 
 ## Assessment
 

@@ -131,7 +131,7 @@ fixture text moved, or that never covered the case at all looks exactly like a c
 not hypothetical — it is how most of this project's real defects were found:
 
 - `src/e2e/validate-negative.ts` corrupts a real build, one defect at a time, and asserts `validate`
-  reports each. 21 guards.
+  reports each. 22 guards.
 - `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 57 defects the project has
   actually shipped and asserting the named requirement fails. Two of those probes caught a *guard*
   that was too weak rather than a regression: one searched the whole of `SKILL.md` when it should
