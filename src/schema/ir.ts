@@ -64,6 +64,16 @@ export const RuleSchema = z.object({
    * supporting bullets, notes. Verbatim and in document order — a rule is often wrong without them.
    */
   notes: z.array(z.string().max(MAX_BLOCK)).default([]),
+  /**
+   * Whether each `notes` block is normative, parallel to `notes` and the same length when set.
+   *
+   * Only a source that draws the line itself can fill this in. W3C classifies WCAG's notes and
+   * examples as informative: they aid interpretation and never create a conformance requirement
+   * (https://www.w3.org/TR/WCAG22/#interpreting-normative-requirements), so an exception and a note
+   * sitting next to each other in `notes` carry different force. An empty array means the source
+   * does not make the distinction, which is not the same as everything being normative.
+   */
+  note_authority: z.array(z.enum(["normative", "informative"])).default([]),
   /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,

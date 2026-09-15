@@ -54,6 +54,14 @@ const CASES: Case[] = [
     expect: "unknown platform fridgeOS",
   },
   {
+    // note_authority is positional, so a short array relabels notes by index: note 2's "informative"
+    // slides onto note 1 and an informative note starts reading as part of the requirement.
+    name: "note_authority shorter than the notes it labels",
+    break: async (d) =>
+      mutateRule(d, "buttons", (r) => ({ ...r, notes: ["a note", "another note"], note_authority: ["normative"] })),
+    expect: "note_authority entries for 2 notes",
+  },
+  {
     name: "provenance url outside the source",
     break: async (d) =>
       mutateRule(d, "buttons", (r) => ({ ...r, provenance: { ...r.provenance, url: "https://evil.example/x" } })),

@@ -66,6 +66,11 @@ export async function validateSource(source: Source): Promise<Finding[]> {
       if (r.scope === "general" && r.platforms.length) err(where, `${r.id}: scope "general" but platforms ${r.platforms.join(",")}`);
       // A page about one platform must not emit rules that claim to apply everywhere.
       if (ir.platforms.length && r.scope === "general") err(where, `${r.id}: page is ${ir.platforms.join(",")}-specific but the rule is unscoped`);
+      // note_authority is positional. A short or long array silently relabels notes from some other
+      // index, which turns an informative note into a requirement — the defect it exists to prevent.
+      if (r.note_authority.length && r.note_authority.length !== r.notes.length) {
+        err(where, `${r.id}: ${r.note_authority.length} note_authority entries for ${r.notes.length} notes`);
+      }
     }
   }
 
