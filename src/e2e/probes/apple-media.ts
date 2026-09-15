@@ -172,39 +172,7 @@ type Excuse =
   /** Page-header art above the first heading: decoration, dropped by the extractor on purpose. */
   | "page header art"
   /** Past the extractor's per-rule context cap, where it leaves its own explicit overflow marker. */
-  | "context overflow"
-  /**
-   * KNOWN DEFECT, not a legitimate exclusion. `src/extract/rules.ts` does not reset `lastContext`
-   * when a heading closes a section, so a later table in a *different* section adopts the previous
-   * section's last context block as its caption and pops it out of that section's intro. Twelve
-   * figures are lost this way (airplay, game-center, top-shelf, wallet). It is enumerated rather
-   * than tolerated silently, and `MAX_KNOWN_DEFECT` below keeps it from growing. Delete this arm
-   * when the one-line fix lands in `rules.ts` — that file has another owner.
-   */
-  | "extractor lastContext defect";
-
-/**
- * The exact occurrences lost to that defect, named one by one rather than counted.
- *
- * A numeric ceiling was the first attempt and it was too weak: deleting an unrelated figure simply
- * took a slot under the cap, so a real regression was absorbed by the allowance and reported as the
- * known bug. Naming them means any *other* omission is unexplained, which is the whole point.
- * When the `rules.ts` fix lands this list empties and both it and the `Excuse` arm come out.
- */
-const KNOWN_DEFECT = new Set([
-  "airplay/airplay-custom-color-icon-set.png",
-  "game-center/ios-achievement-image-layout.png",
-  "game-center/tvos-achievement-image-layout.png",
-  "game-center/leaderboard-image-layout-general.png",
-  "game-center/tvos-multi-layered-leaderboard-image.png",
-  "top-shelf/icons-and-images-content-layout-2x3.png",
-  "top-shelf/icons-and-images-content-layout-1x1.png",
-  "top-shelf/icons-and-images-content-layout-16x9.png",
-  "wallet/wallet-passes-images-logo.png",
-  "wallet/wallet-passes-images-primary-logo-wide.png",
-  "wallet/wallet-passes-images-secondary-logo.png",
-  "wallet/wallet-passes-images-thumbnail.png",
-]);
+  | "context overflow";
 
 interface Coverage {
   total: number;
@@ -284,10 +252,6 @@ async function corpusCoverage(root: string): Promise<Coverage> {
       }
       if (overflow) {
         excuse("context overflow");
-        continue;
-      }
-      if (KNOWN_DEFECT.has(`${o.slug}/${o.identifier}`)) {
-        excuse("extractor lastContext defect");
         continue;
       }
       cov.unexplained.push(o);
@@ -375,6 +339,35 @@ export const CHECKS: Check[] = [
   },
   {
     finding: "A1",
+    requirement: "A table does not delete a figure from the section it illustrates",
+    observe: async () => {
+      // Two defects in `extract/rules.ts` deleted figures from a *different* place than the one the
+      // table was in, and both were found by the coverage check rather than by anything targeted.
+      // They get their own named check because a count that quietly drops by one reads like nothing.
+      //   1. `lastContext` survived a heading, so a table adopted the previous section's last block
+      //      as its caption and popped it (airplay's blue icon set).
+      //   2. `lastProse` skips figures and `lastContext` does not, so with a figure between the
+      //      lead-in and the table the pop removed the figure instead of the duplicated prose
+      //      (11 occurrences across wallet, game-center and top-shelf).
+      const root = process.cwd();
+      const cases: { slug: string; figure: string; section: string }[] = [
+        { slug: "airplay", figure: "Two blue AirPlay icons", section: "Custom color AirPlay icon" },
+        { slug: "wallet", figure: "callout identifying the logo position", section: "Logo" },
+        { slug: "top-shelf", figure: "An illustration showing an outlined square that co", section: "Square (1:1)" },
+        { slug: "game-center", figure: "achievement image in iOS, iPadOS, macOS, and visionOS", section: "Creating achievement images" },
+      ];
+      for (const c of cases) {
+        const ship = await shipped(root, c.slug);
+        const { heading } = sectionOf(ship, c.figure);
+        if (!heading.includes(c.section)) {
+          throw new Error(`${c.slug}: the figure is filed under "${heading}", not the "${c.section}" section it illustrates`);
+        }
+      }
+      return `${cases.length} figures adjacent to a spec table stay in the section they illustrate`;
+    },
+  },
+  {
+    finding: "A1",
     requirement: "Every media occurrence in the raw corpus renders or carries an enumerated exclusion",
     observe: async () => {
       // The complement of the three probes above: they check the cases I thought to look for, this
@@ -385,12 +378,6 @@ export const CHECKS: Check[] = [
         throw new Error(
           `${unexplained.length}/${total} media occurrence(s) are neither rendered nor excused, e.g. ${e.slug} ${e.identifier} (${e.type}${e.caption ? ", captioned" : ""})`,
         );
-      }
-      // The known-defect list must stay exact in both directions: an entry that stops applying is
-      // a fix that nobody removed the exception for, and a stale exception hides the next loss.
-      const known = excused["extractor lastContext defect"] ?? 0;
-      if (known !== KNOWN_DEFECT.size) {
-        throw new Error(`${known} occurrence(s) hit the known rules.ts defect but ${KNOWN_DEFECT.size} are listed; update the list`);
       }
       const reasons = Object.entries(excused).sort().map(([k, v]) => `${v} ${k}`).join(", ");
       return `${rendered}/${total} rendered (${videos} videos, ${captions} captioned), ${total - rendered} excused: ${reasons || "none"}`;
@@ -476,6 +463,11 @@ export const CASES: Case[] = [
         [lines[i], lines[j]] = [lines[j]!, lines[i]!];
         return lines.join("\n");
       }),
+  },
+  {
+    finding: "A1",
+    name: "a table deleting the figure from the section it illustrates",
+    break: (d) => editRef(d, "wallet", (s) => s.replace(/^.*callout identifying the logo position.*$\n?/m, "")),
   },
   {
     finding: "A1",
