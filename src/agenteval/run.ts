@@ -70,6 +70,12 @@ interface Row extends Score {
   precision: number;
   ms: number;
   transcript: string;
+  /**
+   * Why this sample produced no usable transcript, when it did not. A failed run is recorded and
+   * excluded from the summary rather than thrown: it is a fact about the measurement, and deleting
+   * it would quietly turn "9 attempted, 8 scored" into an unqualified "8".
+   */
+  error?: string;
 }
 
 const args = process.argv.slice(2);
@@ -91,6 +97,24 @@ const prior: Row[] = await readFile(resultsPath, "utf8")
 const saved = new Map(prior.map((r) => [`${r.task}/${r.arm}/${r.run ?? 0}`, r.transcript]));
 
 const rows: Row[] = [];
+// A fresh run replaces every sample for the task/arm it covered; untouched pairs are preserved.
+const merge = () => {
+  const fresh = new Set(rows.map((r) => `${r.task}/${r.arm}`));
+  return [...rows, ...prior.filter((r) => !fresh.has(`${r.task}/${r.arm}`))].sort(
+    (a, b) => a.task.localeCompare(b.task) || a.arm.localeCompare(b.arm) || (a.run ?? 0) - (b.run ?? 0),
+  );
+};
+/**
+ * Written after *every* run, not once at the end.
+ *
+ * A nine-run batch used to hold everything in memory and save on completion, so when the ninth run
+ * failed the eight that had succeeded went with it — forty minutes of model calls, and the failing
+ * transcript itself, gone. Samples are expensive and independent; each one is saved as soon as it
+ * exists.
+ */
+const checkpoint = async () =>
+  writeJson(resultsPath, { generated_at: new Date().toISOString(), rescored: rescore, rows: merge() });
+
 for (const task of tasks) {
   for (const arm of arms) {
     // When rescoring, replay however many samples are on disk rather than the requested count.
@@ -98,8 +122,35 @@ for (const task of tasks) {
     for (let run = 0; run < n; run++) {
       log.step(`${task.id} · ${arm}${n > 1 ? ` · run ${run + 1}/${n}` : ""}`);
       const cached = rescore ? saved.get(`${task.id}/${arm}/${run}`) : undefined;
-      if (rescore && !cached) throw new Error(`no saved transcript for ${task.id}/${arm}/${run}`);
-      const { transcript, ms } = cached ? { transcript: cached, ms: 0 } : await runArm(task, arm);
+      if (rescore && !cached) {
+        // A recorded failure has no transcript to re-score. Carry it forward as it stands instead
+        // of refusing to re-score the samples that did succeed.
+        const failed = prior.find((r) => r.task === task.id && r.arm === arm && r.run === run && r.error);
+        if (failed) {
+          console.log(`  – run ${run + 1}: no transcript (${failed.error}); kept as a failure`);
+          rows.push(failed);
+          continue;
+        }
+        throw new Error(`no saved transcript for ${task.id}/${arm}/${run}`);
+      }
+      let transcript: string;
+      let ms: number;
+      try {
+        ({ transcript, ms } = cached ? { transcript: cached, ms: 0 } : await runArm(task, arm));
+      } catch (e) {
+        // One flaky CLI invocation is not a reason to discard the batch. Record the failure as a
+        // sample that produced nothing, so the summary can say "8 of 9 scored" instead of silently
+        // reporting eight as if nine had been asked for.
+        const error = (e as Error).message;
+        console.log(`  ✗ run failed: ${error}`);
+        rows.push({
+          task: task.id, arm, run, recall: 0, precision: 0, ms: 0, transcript: "", error,
+          found: [], missed: task.violations.map((v) => v.id), falsePositives: [],
+          dismissedCorrectly: [], cited: 0, findings: 0, scopeErrors: [],
+        });
+        await checkpoint();
+        continue;
+      }
       const s = score(task, transcript);
       const recall = s.found.length / task.violations.length;
       const precision = s.found.length / Math.max(1, s.found.length + s.falsePositives.length);
@@ -112,23 +163,22 @@ for (const task of tasks) {
       if (s.falsePositives.length) console.log(`  false positives: ${s.falsePositives.join(", ")}`);
       if (s.scopeErrors.length) console.log(`  scope errors: ${s.scopeErrors.join(", ")}`);
       rows.push({ task: task.id, arm, run, recall, precision, ...s, ms, transcript });
+      await checkpoint();
     }
   }
 }
 
-// A fresh run replaces every sample for the task/arm it covered; untouched pairs are preserved.
-const fresh = new Set(rows.map((r) => `${r.task}/${r.arm}`));
-const merged = [...rows, ...prior.filter((r) => !fresh.has(`${r.task}/${r.arm}`))].sort(
-  (a, b) => a.task.localeCompare(b.task) || a.arm.localeCompare(b.arm) || (a.run ?? 0) - (b.run ?? 0),
-);
-await writeJson(resultsPath, { generated_at: new Date().toISOString(), rescored: rescore, rows: merged });
+const merged = merge();
+await checkpoint();
 log.info(`wrote ${resultsPath}`);
 
 // Summarise from the merged set, so a subset run still shows the whole picture. Ranges rather than
 // single figures: one sample per arm says nothing about whether a difference is real.
 const range = (xs: number[]) => (xs.length > 1 && Math.min(...xs) !== Math.max(...xs) ? `${Math.min(...xs)}-${Math.max(...xs)}` : `${xs[0] ?? 0}`);
 for (const task of TASKS) {
-  const forTask = merged.filter((r) => r.task === task.id);
+  // A run that never produced a transcript is not a zero-recall review; averaging it in would
+  // report a harness failure as a skill failure.
+  const forTask = merged.filter((r) => r.task === task.id && !r.error);
   if (!forTask.length) continue;
   const fmt = (a: Arm) => {
     const rs = forTask.filter((x) => x.arm === a);
@@ -147,9 +197,17 @@ for (const task of TASKS) {
   console.log(`\n${task.id}\n  no skill: ${fmt("none")}\n  skill:    ${fmt("skill")}`);
 }
 
+const failures = merged.filter((r) => r.error);
+if (failures.length) {
+  log.warn(
+    `${failures.length} run(s) produced no transcript and are excluded from the figures above: ` +
+      `${failures.map((r) => `${r.task}/${r.arm}#${r.run}`).join(", ")}. Re-run to fill them in.`,
+  );
+}
+
 // Arms with different sample counts print in exactly the same shape, so a lopsided comparison reads
 // as sound. Say so rather than leaving it to be noticed.
-const { lopsided, singleSample } = comparability(merged);
+const { lopsided, singleSample } = comparability(merged.filter((r) => !r.error));
 const describe = (x: { task: string; counts: Record<string, number> }) =>
   `${x.task} (${Object.entries(x.counts).map(([a, n]) => `${a}=${n}`).join(", ")})`;
 if (lopsided.length) {

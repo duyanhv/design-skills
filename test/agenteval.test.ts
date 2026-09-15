@@ -173,3 +173,23 @@ test("a comparison between arms with unequal samples is reported as not comparab
   const mixed = comparability(rows({ "a/none": 3, "a/skill": 3, "b/none": 3, "b/skill": 1 }));
   expect(mixed.lopsided.map((x) => x.task)).toEqual(["b"]);
 });
+
+test("a run that produced no transcript is excluded from the figures, not scored as zero", () => {
+  // A failed CLI invocation used to take the whole batch down with it. It is now recorded as a
+  // sample with an error and no transcript; the summary must not average it in, or a harness
+  // failure reads as a skill scoring 0/6.
+  const rows = [
+    { task: "t", arm: "skill", run: 0, error: undefined },
+    { task: "t", arm: "skill", run: 1, error: "claude exited 1" },
+    { task: "t", arm: "none", run: 0, error: undefined },
+  ];
+  const scored = rows.filter((r) => !r.error);
+  expect(scored.length).toBe(2);
+  // Once failures are dropped, the two arms are one sample each: symmetric, but no range.
+  const c = comparability(scored);
+  expect(c.lopsided).toEqual([]);
+  expect(c.singleSample.map((x) => x.task)).toEqual(["t"]);
+  // Counting the failure would have made the arms look unequal, which is a different — and wrong —
+  // complaint about the same data.
+  expect(comparability(rows).lopsided.map((x) => x.task)).toEqual(["t"]);
+});
