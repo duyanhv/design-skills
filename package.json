@@ -24,7 +24,8 @@
     "agenteval": "bun run src/agenteval/run.ts",
     "validate:negative": "bun run src/e2e/validate-negative.ts",
     "trace": "bun run src/e2e/trace.ts",
-    "coverage": "bun run src/e2e/coverage.ts"
+    "coverage": "bun run src/e2e/coverage.ts",
+    "fidelity": "bun run src/e2e/fidelity.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",
