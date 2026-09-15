@@ -5,14 +5,35 @@ than the compiler itself. Every finding is addressed, with the check that now fa
 Verification below is from this working tree at the time of writing.
 
 ```
-bun run check      typecheck · 45 tests, 276 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 12 trace probes · 5 manifests valid
+bun run check      typecheck · 45 tests, 291 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 15 trace probes · 5 manifests valid
 bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
 bun run coverage   0 unexplained content losses across 158 Apple pages and 14 WCAG guidelines
 bun run fidelity   0 of 10,883 Apple and 0 of 625 WCAG source sentences missing from the shipped references
-bun run trace      15/15 requirements verified against the shipped ir/ and skills/
-bun run trace:negative  12 reintroduced defects, each caught by the trace check that claims to guard it
+bun run trace      16/16 requirements verified against the shipped ir/ and skills/
+bun run trace:negative  15 reintroduced defects, each caught by the trace check that claims to guard it
 ```
+
+Every check above reads files. The audit's actual subject was whether an agent can *use* what the
+compiler produces, so the reorganised Apple skill was also run through `bun run agenteval`, which
+mounts it as a real skill directory and gives an agent three review tasks:
+
+```
+ios-buttons     4/4 found · 0 false positives · 2/2 decoys dismissed · 0 scope errors · 37 citations
+wcag-form       6/6 found · 0 false positives · 3/3 decoys dismissed · 0 scope errors ·  9 citations
+watchos-scope   4/4 found · 0 false positives · 2/2 decoys dismissed · 0 scope errors · 38 citations
+```
+
+The no-skill arm finds 3-4 of 4, 5-6 of 6 and 3-4 of 4 across three samples with **zero** citations,
+so the compiled skill is what makes a finding checkable. Scoring is keyword-based and measures
+seeded cues, not whether every finding is sound; it is evidence about a direction, not a benchmark.
+
+That run also found a scorer bug rather than a skill bug. It reported a scope error on
+`watchos-scope` because the agent had cited the visionOS 60 pt spacing rule — but the transcript
+listed it under "Rules I considered and excluded as out-of-platform" with the note "visionOS-only;
+not applied", which is the behaviour the trap exists to reward. The non-findings vocabulary had no
+word for "excluded" or "out-of", so the dismissal section was scored as findings. Fixed, with
+eleven adversarial findings headings added so the looser vocabulary cannot swallow a real report.
 
 The headline number is `fidelity`. At the time of the audit, 25 Apple sentences and 3 WCAG text
 blocks did not appear verbatim in the shipped references; both are now zero. That check did not
@@ -20,18 +41,24 @@ exist when the compiler was written, and adding it is finding 1's real fix: the 
 were invisible to `coverage`, `trace` and `validate` alike, because all three read whatever is on
 disk and believe it.
 
-Five findings could still silently regress, so each has an assertion in `bun run trace` over the
-shipped artifacts (`O-1` … `O-8`).
+Seven findings could still silently regress, so each has an assertion in `bun run trace` over the
+shipped artifacts (`O-1` … `O-10`).
 
 A trace check that has never been seen to fail is a guess, in exactly the way the project already
 says about `validate`: it reads the shipped artifacts, and a passing report is indistinguishable
 from a check whose regex stopped matching. Several of these assertions are strings in a Markdown
-file, which is the kind that rots quietly. `bun run trace:negative` reintroduces twelve of the
+file, which is the kind that rots quietly. `bun run trace:negative` reintroduces fifteen of the
 original defects into a scratch copy of the built skills — a stale render, a dropped sentence, a
 definition swallowing the paragraph after it, a term named "Consider", a rule with no source
 position, the visionOS table moved after its rules, a badge quoting a figure the rule never states,
-the two badges the audit named, a dead heading link, an HTML entity, a flattened glossary entry —
-and asserts the named check fails on each. All twelve are caught.
+the two badges the audit named, a dead heading link, an HTML entity, a flattened glossary entry, a
+topic dropped from the index, a gutted routing table, a missing table of contents — and asserts the
+named check fails on each. All fifteen are caught.
+
+Writing those probes was not a formality. The first version of the navigability check searched the
+whole of `SKILL.md`, so dropping Watch faces from the index still passed, because a routing row also
+mentions it: reachable for the one task that row names and invisible for every other, which is the
+gap finding 6 was about. The probe caught it; the check now reads the index section.
 
 ## Findings
 
@@ -132,6 +159,9 @@ telling it what any of it was about, so every task outside a routing row cost an
 Rule counts stay in `index.md`, where they answer "how deep is this topic" instead of "which topic
 do I want". SKILL.md is ~4.6k tokens, inside the spec's 5k guidance.
 
+Guard: `O-6 / O-10` in trace asserts every topic appears in the index section, the entry file stays
+inside the token budget, and routing keeps at least 20 rows.
+
 The audit's third suggestion — a "Before you start" block of cross-cutting rules — is **not** done.
 Choosing which five or six rules hold everywhere is the compiler forming an opinion and printing it
 in Apple's voice, which is the thing this project exists to avoid; it is the same reasoning that
@@ -197,13 +227,24 @@ unjustified MUSTs and 0 downgraded prohibitions, so the authority guarantee is u
 
 ### 10 · P3 — Reference files are large and have no table of contents → partly done
 
-References over 200 lines with three or more sections open with a `## Contents` list of headings and
-their rule counts, placed after the summary and before the rules. 12 Apple references now carry one.
+A reference opens with a `## Contents` list of its headings and their rule counts, placed after the
+summary and before the rules.
+
+The trigger is not length alone, which is where the first attempt was wrong. Re-auditing the output
+afterwards turned up two gaps a line threshold could not see: Design principles is 115 lines across
+16 sections and The menu bar is 175 across 15, both of which cost a full read to find one section,
+while a 210-line page with four sections does not. A page now qualifies on length **or** section
+count. The other gap was `typography.tables.md` — 923 lines of spec tables in a split-out file that
+had no navigation at all, because only the main document was considered. Spec files get the same
+treatment. 20 references carry a table of contents, and 0 qualify without one.
 
 Splitting the largest pages into `widgets/<section>.md` is **not** done. It would break every
 citation and cross-reference that currently points at `widgets.md`, and the table of contents
 addresses the actual complaint — finding a section without reading the file. Worth revisiting if the
 references grow further; `widgets.md` is 468 lines.
+
+Guard: `O-6 / O-10` in trace, which fails if any reference over 200 lines or 10 sections ships
+without one.
 
 ## What was not done, and why
 
