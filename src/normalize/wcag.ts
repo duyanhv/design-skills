@@ -41,7 +41,14 @@ function inline(node: Node): string {
   switch (el.tagName) {
     case "A": {
       const href = el.getAttribute("href");
-      return href && href.startsWith("#") ? `[${inner}](${href})` : inner; // glossary links have no href
+      // A glossary reference is written as a bare `<a>` with no href; everything else is a real
+      // link, and the link *is* the dependency — flattening it to its label is how 1.3.5 ended up
+      // naming a section no reader could reach (audit A3).
+      if (!href) return inner;
+      if (href.startsWith("#") || /^https?:\/\//.test(href)) return `[${inner}](${href})`;
+      // A sibling file in the source tree, e.g. `relative-luminance.html`. It is not a page we
+      // publish, so it is cited absolutely against the canonical document.
+      return `[${inner}](https://www.w3.org/TR/WCAG22/#${href.replace(/\.html$/, "")})`;
     }
     case "EM":
     case "I":
@@ -64,6 +71,12 @@ function block(el: HTMLElement): string {
       if (/\bnote\b/.test(cls)) return `> **Note:** ${inline(el).trim()}`;
       if (/\bchange\b/.test(cls)) return `_${text(el).trim()}_`;
       return inline(el).trim();
+    case "ASIDE":
+      // W3C marks examples informative in the same breath as notes
+      // (https://www.w3.org/TR/WCAG22/#interpreting-normative-requirements). They used to fall
+      // through to `default:` and arrive as an ordinary paragraph — normative-looking prose.
+      if (/\bexample\b/.test(cls)) return `> **Example:** ${blocks(el).replace(/\n+/g, " ").trim()}`;
+      return blocks(el);
     case "DL": {
       const items: string[] = [];
       let term = "";
@@ -80,6 +93,10 @@ function block(el: HTMLElement): string {
     case "DIV":
     case "SECTION":
       return blocks(el);
+    case "H2":
+    case "H3":
+      // Only appendix pages reach here; a guideline's headings are consumed by the page builder.
+      return `**${text(el).trim()}**`;
     default:
       return inline(el).trim();
   }
@@ -116,6 +133,8 @@ function blocks(el: HTMLElement): string {
 
 export function wcagToMarkdown(html: string): { title: string; abstract: string; body: string } {
   if (/<!-- glossary -->/.test(html)) return glossaryToMarkdown(html);
+  const appendix = /<!-- appendix:(\w+) -->/.exec(html);
+  if (appendix) return appendixToMarkdown(html);
   const number = /<!-- number:([\d.]+) -->/.exec(html)?.[1] ?? "";
   const root = parse(html);
   const guideline = root.querySelector("section.guideline") ?? root;
@@ -136,6 +155,50 @@ export function wcagToMarkdown(html: string): { title: string; abstract: string;
       if (child.nodeType !== 1) continue;
       const el = child as HTMLElement;
       if (el.tagName === "H4") continue;
+      const md = block(el);
+      if (md) out.push(md);
+    }
+  }
+  return { title, abstract, body: out.join("\n\n") };
+}
+
+/**
+ * An appendix page: Input Purposes, or the Conformance chapter. Neither is a guideline, so there
+ * are no success criteria and no conformance levels; each `<section id>` becomes one `##` heading
+ * so the extractor keeps its prose attached to a citable anchor instead of dropping a page that
+ * matches none of its shapes.
+ *
+ * These pages are bundled because a criterion is unusable without them: 1.3.5 names the Input
+ * Purposes list as a condition of its own text, and "does this conform?" is a question about
+ * cc1–cc5, not about the criteria one happened to review.
+ */
+export function appendixToMarkdown(html: string): { title: string; abstract: string; body: string } {
+  const root = parse(html);
+  // The chapter's own wrapper often carries no id (the Conformance chapter is `<section><h1>…`).
+  // Its heading is the page title and its lead paragraph is the page abstract; dropping either
+  // because it lacked an id would lose the sentence that says what the chapter is for.
+  // Only a wrapper *without* an id contributes an abstract: one with an id is emitted by the
+  // section loop below, and taking its lead paragraph as well printed that paragraph twice.
+  const first = root.querySelector("section");
+  const wrapper = first && !first.getAttribute("id") ? first : undefined;
+  const wrapperHeading = wrapper?.querySelector(":scope > h1, :scope > h2");
+  const sections = root.querySelectorAll("section[id]");
+  const title = wrapperHeading
+    ? text(wrapperHeading).trim()
+    : sections[0]
+      ? text(sections[0].querySelector("h1,h2,h3") ?? sections[0]).trim()
+      : "Appendix";
+  const abstract = wrapper ? inline(wrapper.querySelector(":scope > p") ?? parse("")).trim() : "";
+  const out: string[] = [];
+  // Top-level sections first; a nested section is emitted by its own iteration, not twice.
+  for (const sec of sections) {
+    const heading = sec.querySelector(":scope > h1, :scope > h2, :scope > h3, :scope > h4");
+    out.push(`## ${heading ? text(heading).trim() : (sec.getAttribute("id") ?? "")} {#${sec.getAttribute("id")}}`);
+    for (const child of sec.childNodes) {
+      if (child.nodeType !== 1) continue;
+      const el = child as HTMLElement;
+      if (el === heading) continue;
+      if (el.tagName === "SECTION" && el.getAttribute("id")) continue; // emitted as its own heading
       const md = block(el);
       if (md) out.push(md);
     }

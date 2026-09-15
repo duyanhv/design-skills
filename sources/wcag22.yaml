@@ -14,7 +14,7 @@ license:
   attribution: "Text © W3C (World Wide Web Consortium). Web Content Accessibility Guidelines 2.2, https://www.w3.org/TR/WCAG22/. W3C Document License."
 
 platforms: []
-categories: [perceivable, operable, understandable, robust]
+categories: [perceivable, operable, understandable, robust, reference, conformance, glossary]
 skip_sections: []
 
 skill:
@@ -30,7 +30,7 @@ skill:
   notes: |
     **Applicability is decided by the conformance target, not by this skill.** Every success criterion
     is normative text and is shown as MUST; which ones bind you depends on the level you are claiming
-    ([WCAG conformance requirements](https://www.w3.org/TR/WCAG22/#conformance-reqs)):
+    ([WCAG conformance requirements](references/conformance/conformance-reqs.md#conformance-requirements)):
 
     - Target **Level A** → apply criteria marked `(Level A)`.
     - Target **Level AA** (the usual legal/procurement baseline) → apply `(Level A)` and `(Level AA)`.
@@ -38,10 +38,38 @@ skill:
       all content, so AAA criteria are commonly treated as enhancements unless AAA is the stated goal.
 
     Ask for the target if it is not stated; assume **AA** only when you say so in the finding.
-    Every criterion's exceptions and notes are listed under it and are part of the requirement.
+
+    **Normative vs. informative.** WCAG says which of its own words create requirements
+    ([Interpreting Normative Requirements](references/conformance/conformance-reqs.md#interpreting-normative-requirements)):
+    the criteria are normative; "diagrams, examples, and notes are informative (non-normative)" and
+    "provide advisory information to help interpret the guidelines but do not create requirements
+    that impact a conformance claim". Both are shipped under the criterion they belong to:
+
+    - An **unlabelled** block is part of the criterion — its conditions ("at least one of the
+      following is true"), its exceptions ("except when…"), its definitions. Apply it: a criterion
+      quoted without these is a different rule.
+    - A block marked **`_[informative]_`** is a note or an example. Use it to interpret the
+      criterion; never fail something on it alone. 2.5.3 Label in Name requires the name to
+      *contain* the visible label, and its note says a best practice is to put the label at the
+      *start*: a name that contains the label later satisfies 2.5.3, and reporting otherwise is a
+      false finding.
+
+    Cite the criterion, not the note, and say when a point is advisory.
+
+    **Reviewing criteria is not establishing conformance.** Reviewing the criteria a task touches is
+    the normal request; keep it scoped to that task rather than turning a button review into a site
+    audit. But conformance is defined for whole pages, so a claim that something "conforms" or "is
+    WCAG 2.2 AA" additionally requires
+    [cc1–cc5](references/conformance/conformance-reqs.md#conformance-requirements): the level met in
+    full, full pages, complete processes, only accessibility-supported technologies, and
+    non-interference. If you have not checked those, report what you did check and say the review
+    does not establish conformance.
+
     Criteria added in 2.2 are marked "(new in 2.2)". Terms in italics or otherwise undefined in a rule
     ("large-scale text", "essential", "target") are defined in
     [references/glossary/glossary.md](references/glossary/glossary.md).
+    The defined set of input purposes that criterion 1.3.5 refers to is in
+    [references/reference/input-purposes.md](references/reference/input-purposes.md).
   routing:
     - when: "contrast, color, text size, reflow, hover/tooltip content"
       read: [distinguishable, glossary]
@@ -50,7 +78,7 @@ skill:
     - when: "video, audio, captions, transcripts"
       read: [time-based-media]
     - when: "semantics, headings, form labels, autocomplete, reading order"
-      read: [adaptable]
+      read: [adaptable, input-purposes]
     - when: "keyboard, shortcuts, focus traps"
       read: [keyboard-accessible]
     - when: "timeouts, session expiry, auto-updating or moving content"
@@ -69,3 +97,5 @@ skill:
       read: [input-assistance]
     - when: "ARIA name/role/value, custom widgets, status messages / live regions"
       read: [compatible]
+    - when: "a conformance claim, an audit conclusion, or whether something 'is WCAG AA'"
+      read: [conformance-reqs]

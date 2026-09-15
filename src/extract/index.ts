@@ -160,6 +160,8 @@ export async function extractSource(
       statement: r.statement,
       rationale: r.rationale,
       notes: r.notes,
+      // Positional, parallel to `notes`. Empty when the extractor does not distinguish authority.
+      note_authority: r.note_authority ?? [],
       value: r.value,
       provenance: { url: meta.url!, anchor: r.anchor, source_hash: meta.source_hash!, fetched_at: meta.fetched_at! },
     }));
