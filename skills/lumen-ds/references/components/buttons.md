@@ -10,6 +10,7 @@ A button combines a label, an optional icon, and a role. Use a button for action
 ## Rules
 
 ### Best practices
+
 A button is recognisable when its target is large enough and its label names the action.
 
 - **SHOULD** Give every button a comfortable target. — `at least 44x44 pt` [src](https://example.invalid/design/lumen/buttons#Best-practices) `lumen-ds/buttons/001`
@@ -21,6 +22,7 @@ A button is recognisable when its target is large enough and its label names the
   - Why: Two primary buttons make the default action ambiguous.
 
 ### Roles
+
 A role changes both appearance and behaviour:
 
 - **Primary.** — The action the person is most likely to take. [src](https://example.invalid/design/lumen/buttons#Roles)

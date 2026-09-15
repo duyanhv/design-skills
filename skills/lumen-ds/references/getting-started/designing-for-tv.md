@@ -11,6 +11,7 @@ A television is a shared, ten-foot display driven by a directional remote. There
 ## Rules
 
 ### Best practices
+
 A tv layout is legible from a distance and navigable with four arrows and a select button.
 
 - **SHOULD** Keep the focused element obvious at three metres. _[tv only]_ [src](https://example.invalid/design/lumen/designing-for-tv#Best-practices) `lumen-ds/designing-for-tv/001`
@@ -20,6 +21,7 @@ A tv layout is legible from a distance and navigable with four arrows and a sele
 - **SHOULD** Lay out controls on a grid so that arrow presses move focus predictably between neighbours. _[tv only]_ [src](https://example.invalid/design/lumen/designing-for-tv#Best-practices) `lumen-ds/designing-for-tv/003`
 
 ### Focus
+
 Focus is both the selection and the pointer, so it must never be ambiguous.
 
 - **MUST** Always show exactly one focused element. _[tv only]_ [src](https://example.invalid/design/lumen/designing-for-tv#Focus) `lumen-ds/designing-for-tv/004`

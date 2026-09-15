@@ -28,22 +28,32 @@ class Linker {
    * links pointing at nothing (AUDIT-OUTPUT finding 8).
    */
   private headingOfAnchor = new Map<string, string>();
+  /** Pages whose tables moved to a `<page>.tables.md` sibling; their table anchors live there. */
+  private tablesSplit = new Set<string>();
+  /** `page#anchor` keys whose only rendered content is a table. */
+  private tableOnly = new Set<string>();
   private baseUrl: string;
-  constructor(pages: PageIR[], baseUrl: string) {
+  constructor(pages: PageIR[], baseUrl: string, splitTablesOver = Infinity) {
     this.baseUrl = baseUrl;
     const pathOf = (u: string) => u.replace(/^https?:\/\/[^/]+/, "").replace(/#.*$/, "").replace(/\/+$/, "");
     for (const p of pages) {
+      if (p.tables.reduce((n, t) => n + t.markdown.length, 0) > splitTablesOver) this.tablesSplit.add(p.page);
       this.byPath.set(pathOf(p.url), { category: p.category, page: p.page });
       const frag = /#(.+)$/.exec(p.url)?.[1];
       if (frag) this.byAnchor.set(frag, { category: p.category, page: p.page });
-      const remember = (anchor: string | undefined, section: string) => {
+      const remember = (anchor: string | undefined, section: string, isTable: boolean) => {
         if (!anchor) return;
         this.byAnchor.set(anchor, { category: p.category, page: p.page });
+        const key = `${p.page}#${anchor}`;
         // First writer wins: the earliest block under an anchor sits under the shallowest heading.
-        if (!this.headingOfAnchor.has(`${p.page}#${anchor}`)) this.headingOfAnchor.set(`${p.page}#${anchor}`, section);
+        if (!this.headingOfAnchor.has(key)) {
+          this.headingOfAnchor.set(key, section);
+          if (isTable) this.tableOnly.add(key);
+        }
+        if (!isTable) this.tableOnly.delete(key);
       };
       const blocks = [...p.sections, ...p.rules, ...p.tables].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      for (const b of blocks) remember("provenance" in b ? b.provenance.anchor : b.anchor, b.section);
+      for (const b of blocks) remember("provenance" in b ? b.provenance.anchor : b.anchor, b.section, "markdown" in b);
     }
   }
   localize(text: string, fromCategory: string): string {
@@ -52,11 +62,16 @@ class Linker {
       const path = base.replace(/^https?:\/\/[^/]+/, "").replace(/\/+$/, "");
       const hit = path ? this.byPath.get(path) : frag ? this.byAnchor.get(frag) : undefined;
       if (!hit) return url.startsWith("/") ? `[${label}](${this.baseUrl}${url})` : m; // other root-relative links → absolute
-      const rel = hit.category === fromCategory ? `${hit.page}.md` : `../${hit.category}/${hit.page}.md`;
       // Point at the heading the target file renders. When the anchor names a section that produced
       // no output (a skipped section, or one that is pure navigation) the fragment is dropped rather
       // than shipped dead: the file link still lands the reader on the right page.
-      const heading = this.headingOfAnchor.get(`${hit.page}#${frag}`);
+      const key = `${hit.page}#${frag}`;
+      const heading = this.headingOfAnchor.get(key);
+      // A section that holds nothing but a table renders in the `.tables.md` sibling when that page
+      // split its specs out; the heading exists, just not in the file the rules are in.
+      const inTables = this.tableOnly.has(key) && this.tablesSplit.has(hit.page);
+      const file = `${hit.page}${inTables ? ".tables" : ""}.md`;
+      const rel = hit.category === fromCategory ? file : `../${hit.category}/${file}`;
       return `[${label}](${rel}${heading ? `#${anchorOf(heading)}` : ""})`;
     });
   }
@@ -108,7 +123,10 @@ function tableBlock(t: Table, linker?: Linker, category?: string): string {
 
 function sectionIntro(s: Section | undefined, linker: Linker, category: string): string[] {
   if (!s?.intro.length) return [];
-  return [s.intro.map((t) => linker.localize(t, category)).join("\n\n"), ``];
+  // A blank line before as well as after: prose that follows a definition list would otherwise be
+  // read as a continuation of the last list item, which is the same misattribution in the renderer
+  // that finding 2 fixed in the extractor.
+  return [``, s.intro.map((t) => linker.localize(t, category)).join("\n\n"), ``];
 }
 
 function termLine(t: Rule, linker: Linker, category: string): string {
@@ -209,7 +227,8 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
          (s) => `\n### ${s}\n` + page.tables.filter((t) => t.section === s).map((t) => tableBlock(t, linker, page.category)).join("\n"),
        ), ``].join("\n")
     : undefined;
-  const body = main.join("\n") + "\n";
+  // Blank lines are load-bearing in Markdown but three in a row are just noise; collapse runs.
+  const body = main.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
   return { main: withContents(body, headings, page.rules), tables };
 }
 
@@ -417,7 +436,7 @@ export async function composeSource(source: Source): Promise<{ pages: number; ru
     source_version: "unknown",
     rule_count: pages.reduce((n, p) => n + p.rules.length, 0),
   };
-  const linker = new Linker(pages, source.canonical_url ?? source.base_url);
+  const linker = new Linker(pages, source.canonical_url ?? source.base_url, source.skill.split_tables_over);
 
   const dir = paths.skill(source.skill.name);
   await rm(join(dir, "references"), { recursive: true, force: true });

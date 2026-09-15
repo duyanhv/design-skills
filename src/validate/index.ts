@@ -151,5 +151,42 @@ export async function validateSource(source: Source): Promise<Finding[]> {
       if (!expected.has(f) && !f.endsWith(".tables.md")) err("skill", `references/${cat}/${f} has no IR page`);
     }
   }
+
+  // 5. Cross-references between reference files must land. A dead file link was already caught for
+  // SKILL.md, but a link into a *heading* was not checked anywhere, and 109 of them pointed at
+  // nothing: the fragment was the source's section id, the heading is the rendered path
+  // (AUDIT-OUTPUT finding 8). A link an agent follows to nowhere is worse than no link.
+  const headingsOf = new Map<string, Set<string>>();
+  const headings = async (file: string): Promise<Set<string> | null> => {
+    if (headingsOf.has(file)) return headingsOf.get(file)!;
+    if (!(await exists(file))) return null;
+    const set = new Set([...(await readFile(file, "utf8")).matchAll(/^#{2,6} (.+)$/gm)].map((m) => headingAnchor(m[1]!)));
+    headingsOf.set(file, set);
+    return set;
+  };
+  let dead = 0;
+  for (const cat of await listDirs(join(skillDir, "references"))) {
+    for (const f of await listFiles(join(skillDir, "references", cat), ".md")) {
+      const doc = await readFile(join(skillDir, "references", cat, f), "utf8");
+      for (const m of doc.matchAll(/\]\((?!https?:)([^)\s#]+\.md)(?:#([^)\s]+))?\)/g)) {
+        const target = join(skillDir, "references", cat, m[1]!);
+        const set = await headings(target);
+        if (!set) {
+          err("skill", `references/${cat}/${f}: link to missing file ${m[1]}`);
+          continue;
+        }
+        if (m[2] && !set.has(m[2].toLowerCase())) {
+          dead++;
+          if (dead <= 3) err("skill", `references/${cat}/${f}: link to missing heading ${m[1]}#${m[2]}`);
+        }
+      }
+    }
+  }
+  if (dead > 3) err("skill", `…and ${dead - 3} more links to headings that do not exist`);
   return findings;
+}
+
+/** GitHub-style heading anchor, matching what compose generates for a "### section" line. */
+function headingAnchor(heading: string): string {
+  return heading.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
 }

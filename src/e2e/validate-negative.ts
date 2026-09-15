@@ -114,6 +114,16 @@ const CASES: Case[] = [
     expect: "has no IR page",
   },
   {
+    // A cross-reference that looks fine and lands nowhere. Nothing checked reference-to-reference
+    // heading links before, and 109 of them were dead (AUDIT-OUTPUT finding 8).
+    name: "cross-reference to a heading that does not exist",
+    break: async (d) => {
+      const p = join(d, "skills", SKILL, "references", "components", "buttons.md");
+      await writeFile(p, (await readFile(p, "utf8")) + "\nSee [color](../foundations/color.md#no-such-heading).\n");
+    },
+    expect: "link to missing heading",
+  },
+  {
     name: "provenance.json missing",
     break: async (d) => rm(join(d, "skills", SKILL, "provenance.json")),
     expect: "provenance.json missing",
