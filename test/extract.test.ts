@@ -1,6 +1,8 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { extractRules, platformsIn, latestDate, classify, pagePlatformsOf, mergeBoldLead } from "../src/extract/rules.ts";
+import { assignIds } from "../src/extract/index.ts";
+import type { PageIR } from "../src/schema/ir.ts";
 import { ruleValue, severityOf, valueOf } from "../src/extract/severity.ts";
 
 const md = readFileSync(new URL("./fixtures/page.md", import.meta.url), "utf8");
@@ -303,4 +305,31 @@ test("severity reads the main clause, not the rule's stated goal", () => {
   expect(severityOf("Show people whether a destination can accept dragged content.")).toBe("should");
   expect(severityOf("You can use a custom control when the system one does not fit.")).toBe("may");
   expect(severityOf("Consider pairing a toggle with a description.")).toBe("may");
+});
+
+test("a rule id survives a rebuild, even when a page states the same sentence twice", () => {
+  // Apple's Machine learning page says "Always secure people's information." under two sections.
+  // The old lookup kept one id per statement, so the first occurrence took the second's id and the
+  // first's id was orphaned — re-extracting identical input renumbered both, every time. Ids are
+  // what an agent quotes and a human checks, so they have to be a fixed point.
+  const statements = ["Be brief.", "Always secure it.", "Use symbols.", "Always secure it."];
+  const first = assignIds("s", "p", null, statements);
+  expect(first).toEqual(["s/p/001", "s/p/002", "s/p/003", "s/p/004"]);
+
+  const asIR = (ids: string[]): PageIR =>
+    ({ rules: ids.map((id, i) => ({ id, statement: statements[i]! })) }) as unknown as PageIR;
+
+  // Re-extracting the same page must return the same ids, and keep doing so.
+  const second = assignIds("s", "p", asIR(first), statements);
+  expect(second).toEqual(first);
+  expect(assignIds("s", "p", asIR(second), statements)).toEqual(first);
+
+  // The nth occurrence keeps the nth id rather than swapping with its twin.
+  expect(second[1]).toBe("s/p/002");
+  expect(second[3]).toBe("s/p/004");
+
+  // A new statement is numbered after the previous max; the survivors keep their ids.
+  const grown = assignIds("s", "p", asIR(first), [...statements, "Keep it short."]);
+  expect(grown.slice(0, 4)).toEqual(first);
+  expect(grown[4]).toBe("s/p/005");
 });

@@ -76,26 +76,34 @@ export interface ExtractOptions {
   partial?: boolean;
 }
 
-/** Reuse ids for statements that survived; number new ones after the previous max. */
-function assignIds(source: string, slug: string, previous: PageIR | null, statements: string[]): string[] {
+/**
+ * Reuse ids for statements that survived; number new ones after the previous max.
+ *
+ * A page can state the same sentence twice — Apple's Machine learning page says "Always secure
+ * people's information." under two sections. Keying the lookup on the statement alone kept only the
+ * *last* id for such a sentence, so its first occurrence took the second's id, the first's id was
+ * orphaned, and re-extracting identical input renumbered both. Ids are the thing an agent quotes
+ * and a human checks, so they have to survive a rebuild: each repeat of a statement now claims the
+ * matching occurrence, in order.
+ */
+export function assignIds(source: string, slug: string, previous: PageIR | null, statements: string[]): string[] {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-  const prevByStatement = new Map((previous?.rules ?? []).map((r) => [norm(r.statement), r.id]));
+  const prevByStatement = new Map<string, string[]>();
+  for (const r of previous?.rules ?? []) {
+    const key = norm(r.statement);
+    prevByStatement.set(key, [...(prevByStatement.get(key) ?? []), r.id]);
+  }
   let max = 0;
   for (const r of previous?.rules ?? []) {
     const n = Number(r.id.split("/").pop());
     if (n > max) max = n;
   }
-  const used = new Set<string>();
   return statements.map((s) => {
-    const existing = prevByStatement.get(norm(s));
-    if (existing && !used.has(existing)) {
-      used.add(existing);
-      return existing;
-    }
+    // Shift rather than peek: the nth occurrence of a repeated statement keeps the nth id.
+    const existing = prevByStatement.get(norm(s))?.shift();
+    if (existing) return existing;
     max += 1;
-    const id = `${source}/${slug}/${String(max).padStart(3, "0")}`;
-    used.add(id);
-    return id;
+    return `${source}/${slug}/${String(max).padStart(3, "0")}`;
   });
 }
 
