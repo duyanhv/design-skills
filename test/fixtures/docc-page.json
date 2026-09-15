@@ -173,6 +173,22 @@
           ]
         },
         {
+          "type": "video",
+          "identifier": "refresh-demo.mp4"
+        },
+        {
+          "type": "image",
+          "identifier": "crossout.png",
+          "metadata": {
+            "abstract": [
+              {
+                "type": "text",
+                "text": "Don’t place a widget’s title outside its background."
+              }
+            ]
+          }
+        },
+        {
           "type": "tabNavigator",
           "tabs": [
             {
@@ -243,6 +259,57 @@
             {
               "title": "Empty",
               "content": []
+            }
+          ]
+        },
+        {
+          "type": "tabNavigator",
+          "tabs": [
+            {
+              "title": "Correct",
+              "content": [
+                {
+                  "type": "image",
+                  "identifier": "grid-ok.png",
+                  "metadata": {
+                    "abstract": [
+                      {
+                        "type": "text",
+                        "text": "Align widget content to the grid."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "heading",
+                  "level": 4,
+                  "text": "Aligned grid",
+                  "anchor": "Aligned-grid"
+                }
+              ]
+            },
+            {
+              "title": "Incorrect",
+              "content": [
+                {
+                  "type": "image",
+                  "identifier": "crossout.png",
+                  "metadata": {
+                    "abstract": [
+                      {
+                        "type": "text",
+                        "text": "Don’t let content bleed past the grid margins."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "heading",
+                  "level": 4,
+                  "text": "Bleeding grid",
+                  "anchor": "Bleeding-grid"
+                }
+              ]
             }
           ]
         },
@@ -374,6 +441,22 @@
     "doc://com.apple.HIG/design/Human-Interface-Guidelines/motion": {
       "title": "Motion",
       "url": "/design/human-interface-guidelines/motion"
+    },
+    "refresh-demo.mp4": {
+      "type": "video",
+      "identifier": "refresh-demo.mp4",
+      "alt": "A video showing a widget updating its statistic once an hour.",
+      "poster": "refresh-demo.png"
+    },
+    "crossout.png": {
+      "type": "image",
+      "identifier": "crossout.png",
+      "alt": "An X in a circle to indicate an incorrect example."
+    },
+    "grid-ok.png": {
+      "type": "image",
+      "identifier": "grid-ok.png",
+      "alt": "A checkmark in a circle to indicate a correct example."
     }
   }
 }

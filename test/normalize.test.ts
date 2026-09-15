@@ -35,6 +35,47 @@ test("images become visible placeholders instead of disappearing", () => {
   expect(body).toContain("| Circular | ✓ |");
 });
 
+test("a standalone block video leaves a marker naming the asset, not nothing at all", () => {
+  // Regression (finding A1): block `image`/`video` nodes emitted an empty string, so 61 videos —
+  // every one of which carries a source alternative description, and several of which are the only
+  // demonstration of a behaviour on their page — vanished with no trace at all. A reader could not
+  // tell a missing demonstration from a page that never had one.
+  const { body } = doccToMarkdown(doc);
+  expect(body).toContain(
+    "_[figure: video — A video showing a widget updating its statistic once an hour. — source: refresh-demo.mp4]_",
+  );
+  // "video" distinguishes a demonstration over time from a still; the locator names the figure on
+  // the original page so the marker can be checked against it.
+  expect(body).not.toContain("_[figure: A video showing a widget");
+});
+
+test("an occurrence's caption stays beside its own media and separate from the alt text", () => {
+  // The alternative description describes the picture ("An X in a circle"); the caption states the
+  // rule ("Don't place a widget's title outside its background"). They are different claims, so
+  // they are labelled separately rather than merged into one sentence in Apple's voice.
+  const { body } = doccToMarkdown(doc);
+  expect(body).toContain(
+    "_[figure: An X in a circle to indicate an incorrect example. — caption: Don’t place a widget’s title outside its background. — source: crossout.png]_",
+  );
+});
+
+test("the same asset reused in two tabs keeps each tab's own caption under its own heading", () => {
+  // crossout.png appears in both tabs of the example pair. A caption read from the *asset* would
+  // give both occurrences the same text; it belongs to the occurrence. And a tab's illustration
+  // must sit under that tab's heading, not the previous one's.
+  const { body } = doccToMarkdown(doc);
+  expect(body).toContain(
+    "#### Aligned grid {#Aligned-grid}\n\n_[figure: A checkmark in a circle to indicate a correct example. — caption: Align widget content to the grid. — source: grid-ok.png]_",
+  );
+  expect(body).toContain(
+    "#### Bleeding grid {#Bleeding-grid}\n\n_[figure: An X in a circle to indicate an incorrect example. — caption: Don’t let content bleed past the grid margins. — source: crossout.png]_",
+  );
+});
+
+test("rendering is deterministic: the same document normalizes byte-identically", () => {
+  expect(doccToMarkdown(doc).body).toBe(doccToMarkdown(JSON.parse(JSON.stringify(doc))).body);
+});
+
 test("a link's overriding title is used, not the target page's title", () => {
   // "motion" pointing at motion#visionOS used to render as "visionOS", inverting the sentence.
   const { body } = doccToMarkdown(doc);
