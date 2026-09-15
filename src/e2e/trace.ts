@@ -24,9 +24,11 @@ import { exists, listDirs, listFiles, paths, readJson } from "../util/fs.ts";
 import { composeFingerprint } from "../compose/fingerprint.ts";
 import { assignIds } from "../extract/index.ts";
 import { fidelityOf } from "./fidelity.ts";
+import { probeChecks } from "./probes/index.ts";
+import type { Check } from "./probes/types.ts";
 import { log } from "../util/log.ts";
 
-interface Check {
+interface LegacyCheck {
   finding: string;
   requirement: string;
   /** Returns the observation. Throw to fail; return a string describing what was seen. */
@@ -42,7 +44,7 @@ async function loadPages(id: string): Promise<PageIR[]> {
 
 const ref = (skill: string, cat: string, page: string) => readFile(join(paths.skill(skill), "references", cat, `${page}.md`), "utf8");
 
-const CHECKS: Check[] = [
+const CHECKS: LegacyCheck[] = [
   {
     finding: "1",
     requirement: "WCAG criteria keep the list and definition text that makes them satisfiable",
@@ -489,9 +491,13 @@ const CHECKS: Check[] = [
   },
 ];
 
+// Findings A1–A7 live in their own module under `probes/`, one file per finding, each shipping its
+// checks together with the defects that must trip them. Appending here keeps one report.
+const ALL: Check[] = [...CHECKS, ...(await probeChecks())];
+
 let failed = 0;
 let skipped = 0;
-for (const c of CHECKS) {
+for (const c of ALL) {
   // Skip rather than fail when a source has not been built locally; a vacuous pass is worse.
   const needs = [paths.irPages("apple-hig"), paths.irPages("wcag22")];
   if (!(await Promise.all(needs.map(exists))).every(Boolean)) {
@@ -509,7 +515,7 @@ for (const c of CHECKS) {
 }
 
 if (failed) {
-  log.warn(`${failed}/${CHECKS.length} requirements are not satisfied by the shipped artifacts`);
+  log.warn(`${failed}/${ALL.length} requirements are not satisfied by the shipped artifacts`);
   process.exit(1);
 }
-log.info(`${CHECKS.length - skipped}/${CHECKS.length} requirements verified against the shipped artifacts${skipped ? `, ${skipped} skipped` : ""}`);
+log.info(`${ALL.length - skipped}/${ALL.length} requirements verified against the shipped artifacts${skipped ? `, ${skipped} skipped` : ""}`);

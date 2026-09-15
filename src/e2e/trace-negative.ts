@@ -17,11 +17,13 @@ import { join } from "node:path";
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { exists, paths } from "../util/fs.ts";
+import { probeCases } from "./probes/index.ts";
+import type { Case } from "./probes/types.ts";
 import { log } from "../util/log.ts";
 
 const REPO = process.cwd();
 
-interface Case {
+interface LegacyCase {
   /** The `finding` string of the trace check this defect must trip. */
   finding: string;
   name: string;
@@ -43,7 +45,7 @@ const editIR = async (dir: string, id: string, page: string, fn: (ir: any) => vo
   await writeFile(p, JSON.stringify(ir, null, 2) + "\n");
 };
 
-const CASES: Case[] = [
+const CASES: LegacyCase[] = [
   {
     finding: "O-1",
     name: "a reference rendered by an older compose",
@@ -270,8 +272,11 @@ if (baseFailures.size) {
 }
 log.info("baseline clean (0 trace failures)");
 
+// Defects for findings A1–A7 ship beside the checks they trip, in `probes/`.
+const ALL: Case[] = [...CASES, ...(await probeCases())];
+
 let failed = 0;
-for (const c of CASES) {
+for (const c of ALL) {
   const dir = await scratch();
   try {
     await c.break(dir);
@@ -291,7 +296,7 @@ for (const c of CASES) {
 }
 
 if (failed) {
-  log.warn(`${failed}/${CASES.length} defects go unnoticed by trace`);
+  log.warn(`${failed}/${ALL.length} defects go unnoticed by trace`);
   process.exit(1);
 }
-log.info(`all ${CASES.length} defects are caught by the trace check that claims to guard them`);
+log.info(`all ${ALL.length} defects are caught by the trace check that claims to guard them`);
