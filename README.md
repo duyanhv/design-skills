@@ -175,6 +175,7 @@ bun run check              # Typecheck, tests, synthetic e2e, validator probes, 
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references
+bun run budget             # Retrieval cost: entry, index, pages, routing rows, cost to first decision
 bun run trace              # Selected audit assertions; needs Apple HIG and WCAG builds
 bun run trace:negative     # Reintroduces each defect and asserts the matching trace check fails
 ```
@@ -184,25 +185,35 @@ validation. They do not guarantee correct agent decisions:
 
 - **Authored guides depend on upstream reading.** Build checks verify packaging and selected content,
   not whether remote pages are reachable, current, or correctly applied by an agent.
-- **Fidelity is checked per sentence, but only against the normalized cache.** `bun run fidelity`
-  asserts that every source sentence of six or more words appears verbatim in the shipped
-  references — currently 0 missing across 10,883 Apple and 625 WCAG sentences. It compares against
+- **Fidelity is per sentence, page-wide, and against the normalized cache.** `bun run fidelity`
+  asserts that every source sentence of six or more words appears verbatim *somewhere* in the
+  corresponding shipped reference — currently 0 missing across 10,883 Apple and 760 WCAG sentences.
+  It cannot tell you which rule a sentence landed under: a note moved to the rule above leaves it
+  reporting everything present. Ownership and order are separate metrics (`structure` S-1 and S-2),
+  and required pages, tables and link dependencies are a third (S-3). It compares against
   `.cache/<id>/md`, so a loss introduced during *normalization* is invisible to it, and a source
-  that is not built locally is skipped rather than passing. `bun run coverage` remains the
-  vocabulary-level complement.
-- **Requirement strength is inferred.** MUST/SHOULD/MAY labels are compiler interpretations of
-  wording. Follow the source citation when a decision depends on that distinction.
-- **Visual guidance needs inspection.** Figure placeholders identify some visual dependencies;
-  they do not reproduce the information in the original images.
+  that is not built locally is skipped rather than passing.
+- **Counting the output only finds what someone looked for.** The Apple media probe counts every
+  occurrence in the raw corpus instead — 1,322 of 1,536 rendered, the remaining 214 enumerated by
+  reason — which is how two figure-deleting extractor bugs were found while every other check
+  passed.
+- **Requirement strength is inferred, per source.** For a source that does not declare normative
+  status, MUST/SHOULD/MAY rank how firmly the source worded something and are the compiler's
+  reading, not a claim the source made; the generated entry says so and asks for the source's own
+  prohibition before a requirement violation is alleged. A source that declares status (WCAG's
+  levels) keeps enforceable badges.
+- **Visual guidance needs inspection.** Figure placeholders name the medium, carry the source's
+  alternative description and any occurrence caption, and locate the original; they do not
+  reproduce the information in the image.
 - **Agent evaluation is preliminary.** The optional `bun run agenteval --runs 3` harness uses the
   Claude CLI and makes model calls. Its scorer measures seeded cues and citation mentions, not
   whether every finding is supported. The skill arm also receives an explicit citation instruction.
 
-The [original audit](AUDIT.md), [implementation responses](AUDIT-RESOLUTION.md), and
-[follow-up verification](AUDIT-VERIFICATION.md) cover the compiler. The
-[output audit](AUDIT-OUTPUT.md) and its [resolution](AUDIT-OUTPUT-RESOLUTION.md) cover what the
-compiler produces, compared against the raw sources and against established hand-written design
-skills. Together they document the findings, the fixes, and what was deliberately not done.
+The [output audit](docs/audits/generated-output-2026-09-15.md) compares what the compiler produces
+against the raw sources and against established hand-written design skills; its
+[resolution](docs/audits/resolution-2026-09-15.md) records the fixes, the evidence for each, the two
+extractor bugs the audit's own findings led to, and what was deliberately left as a judgement call.
+Earlier audit documents were removed from the repository in `fa7dca9`.
 
 ## Contributing
 

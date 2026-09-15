@@ -82,6 +82,27 @@ prove that an agent reads or correctly applies external guidance.
 
 5. **Build and open a PR.** `bun run build <id>`, then `bun run check`.
 
+## Adding a check
+
+Checks over the *shipped artifacts* live in one file per subject under `src/e2e/probes/`, exporting
+`CHECKS` (the requirement, asserted against `ir/` and `skills/` as they stand) and `CASES` (the
+defects that must trip them), both typed by `probes/types.ts`:
+
+```ts
+import type { Case, Check } from "./types.ts";
+export const CHECKS: Check[] = [{ finding: "A1", requirement: "…", observe: async () => "what was seen" }];
+export const CASES: Case[] = [{ finding: "A1", name: "…", break: async (dir) => {/* corrupt a scratch copy */} }];
+```
+
+`trace` and `trace-negative` discover the directory, so nothing has to be registered. Discovery is
+deliberate: a hand-written list is the thing that let a requirement table name checks that did not
+exist. A `CASES` entry whose `finding` no check asserts is an error rather than a permanent silent
+pass, so a check and its defect ship together or not at all.
+
+Return an *observation*, not a boolean. `observed: 1322/1536 rendered, 214 excused` survives a
+refactor that quietly stops matching; `true` does not. Say where a check is partial in its own
+output, so a passing report cannot be read as more than it measured.
+
 ## Changing the compiler
 
 Anything that changes generated output has to show its work:
@@ -110,16 +131,24 @@ fixture text moved, or that never covered the case at all looks exactly like a c
 not hypothetical — it is how most of this project's real defects were found:
 
 - `src/e2e/validate-negative.ts` corrupts a real build, one defect at a time, and asserts `validate`
-  reports each. 20 guards.
-- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 22 defects the project has
+  reports each. 21 guards.
+- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 57 defects the project has
   actually shipped and asserting the named requirement fails. Two of those probes caught a *guard*
   that was too weak rather than a regression: one searched the whole of `SKILL.md` when it should
   have searched the index, and one accepted a state the bug it guarded actually produces.
 
+A check that counts what the *output* contains can only find what someone thought to look for. The
+strongest checks here start from the raw source and require every occurrence to be accounted for:
+that is what `src/e2e/probes/apple-media.ts` does, and balancing its count is what exposed two
+figure-deleting bugs in `flushTable` that fidelity, evals, validate and every trace check passed
+straight over. When you can count the input, count the input.
+
 So: when you add a check, add the defect alongside it. And when you claim a fix is guarded, test the
 claim the only way that settles it — revert the fix, run the check, watch it fail, restore. A
-requirement-to-check table is itself a claim; two rows of the one in `AUDIT-OUTPUT-RESOLUTION.md`
-named guards that did not exist, and reverting the fix was what exposed them.
+requirement-to-check table is itself a claim; two rows of one such table once named guards that did
+not exist, and reverting the fix was what exposed them. A fix whose check still passes when you
+revert it is not guarded, however correct it is — `docs/audits/resolution-2026-09-15.md` records one
+that is kept on those terms.
 
 ## Running the agent evaluation
 
