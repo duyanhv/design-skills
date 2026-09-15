@@ -144,7 +144,18 @@ function termLine(t: Rule, linker: Linker, category: string): string {
   // Notes are indented rather than joined onto the head line, so a reader can see where the
   // definition ends. Joining them ran WCAG's "changes of context" list into one sentence with its
   // list markers inline (AUDIT-OUTPUT finding 8).
-  const notes = t.notes.map((n) => `  ${/^(?:[-*]\s|\d+\.\s)/.test(n) ? local(n) : `- ${local(n)}`}`);
+  // A note that already carries its own sub-list keeps that structure: the items are indented one
+  // level further than their lead-in, so "include changes of:" reads as introducing four things.
+  // When the note is nothing but a list, every item sits at the same level instead of the first
+  // becoming a parent of the rest.
+  const notes = t.notes.map((n) => {
+    const lines = local(n).split("\n").map((l) => l.trim()).filter(Boolean);
+    const isItem = (l: string) => /^(?:[-*]\s|\d+\.\s)/.test(l);
+    const allItems = lines.every(isItem);
+    return lines
+      .map((line, i) => (i === 0 || allItems ? `  ${isItem(line) ? line : `- ${line}`}` : `    ${line}`))
+      .join("\n");
+  });
   return [head, ...notes].join("\n");
 }
 

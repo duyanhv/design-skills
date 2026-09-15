@@ -50,7 +50,7 @@ test("exceptions and notes stay as separate blocks attached to their criterion",
   expect(min.rationale).toBeUndefined();
 });
 
-test("glossary page: dt/dfn → term with anchor, definition + notes as rationale", () => {
+test("glossary page: dt/dfn → term with anchor; the definition and its notes stay separate", () => {
   const html = readFileSync(new URL("./fixtures/wcag-glossary.html", import.meta.url), "utf8");
   const md = wcagToMarkdown(html);
   expect(md.title).toBe("Glossary");
@@ -60,7 +60,33 @@ test("glossary page: dt/dfn → term with anchor, definition + notes as rational
     ["term", "large scale (text)", "dfn-large-scale"],
     ["term", "logo", "dfn-logo"],
   ]);
-  expect(page.rules[0]!.rationale).toBe("with at least 18 point or 14 point bold Note: Font size is the size when the content is delivered.");
+  // The definition is what the term *means*; a Note qualifies it. Joining the two ran every
+  // glossary entry into one line, list markers and all (AUDIT-OUTPUT finding 8).
+  expect(page.rules[0]!.rationale).toBe("with at least 18 point or 14 point bold");
+  expect(page.rules[0]!.notes).toEqual(["> **Note:** Font size is the size when the content is delivered."]);
+});
+
+test("a glossary definition that ends in an enumeration keeps the list as a list", () => {
+  const body = [
+    "## changes of context {#dfn-change-of-context}",
+    "",
+    "major changes that can disorient users who cannot view the entire page simultaneously",
+    "",
+    "Changes in context include changes of:",
+    "",
+    "- user agent;",
+    "- viewport;",
+    "- focus",
+    "",
+    "> **Note:** A change of content is not always a change of context.",
+  ].join("\n");
+  const term = extractGlossary(`# Glossary\n\n${body}`).rules[0]!;
+  expect(term.rationale).toBe("major changes that can disorient users who cannot view the entire page simultaneously");
+  // The lead-in keeps its own items, and the Note stays a separate block.
+  expect(term.notes).toEqual([
+    "Changes in context include changes of:\n  - user agent;\n  - viewport;\n  - focus",
+    "> **Note:** A change of content is not always a change of context.",
+  ]);
 });
 
 test("new-in-2.2 marker lands in the SC heading", () => {

@@ -15,6 +15,7 @@
  * An SC with no level (e.g. 4.1.1 Parsing, obsolete) is kept as a term.
  */
 import type { ExtractedPage, ExtractedRule } from "./rules.ts";
+import { MAX_BLOCK } from "../schema/ir.ts";
 import { ruleValue } from "./severity.ts";
 
 export const WCAG_EXTRACTOR = "wcag-sc@5";
@@ -45,7 +46,7 @@ export function extractWcag(markdown: string): ExtractedPage {
       statement = cur.title;
     }
     // Exceptions and notes stay as separate blocks: an SC without its exceptions is a different rule.
-    const notes = rest.map((t) => t.slice(0, 1000));
+    const notes = rest.map((t) => t.slice(0, MAX_BLOCK));
     rules.push({
       kind: isRule ? "rule" : "term",
       section: cur.title,
@@ -91,12 +92,27 @@ export function extractWcag(markdown: string): ExtractedPage {
   return { summary: summary.slice(0, 1000), source_version: undefined, overview: [], platforms: [], sections: [], rules, tables: [] };
 }
 
-/** Glossary page: every `## term {#id}` becomes a term (kind: term) with the definition as rationale. */
+/**
+ * Glossary page: every `## term {#id}` becomes a term. The first paragraph is the definition; the
+ * lists and notes that qualify it stay as separate blocks.
+ *
+ * Flattening all of it into one line ran "changes of context" together as
+ * `…include changes of: - user agent; - viewport; - focus…`, list markers and all — a definition an
+ * agent cannot read (AUDIT-OUTPUT finding 8). The structure is the meaning here: the enumeration is
+ * what the term *is*.
+ */
 export function extractGlossary(markdown: string): ExtractedPage {
   const rules: ExtractedRule[] = [];
   let cur: { title: string; anchor?: string; text: string[] } | null = null;
   const flush = () => {
     if (!cur) return;
+    // A list item belongs to the block above it, so a run of items stays one note instead of
+    // becoming a note each and losing the fact that they are alternatives in one enumeration.
+    const blocks: string[] = [];
+    for (const p of cur.text.map((t) => t.trim()).filter(Boolean)) {
+      if (/^(?:[-*]\s|\d+\.\s)/.test(p) && blocks.length) blocks[blocks.length - 1] += `\n  ${p}`;
+      else blocks.push(p);
+    }
     rules.push({
       kind: "term",
       section: "Glossary",
@@ -106,8 +122,14 @@ export function extractGlossary(markdown: string): ExtractedPage {
       scope: "general",
       severity: "may",
       statement: cur.title,
-      rationale: strip(cur.text.join(" ")).slice(0, 4000) || undefined,
-      notes: [],
+      // The definition proper; everything after it qualifies rather than defines.
+      // When the definition ends in an enumeration ("…include changes of: - user agent; …") the
+      // list is split off rather than run into the sentence, so it renders as a list again.
+      rationale: blocks.length ? strip(blocks[0]!.split("\n")[0]!).slice(0, 4000) : undefined,
+      notes: [
+        ...(blocks[0] && blocks[0].includes("\n") ? [blocks[0].slice(blocks[0].indexOf("\n") + 1)] : []),
+        ...blocks.slice(1),
+      ].map((b) => b.slice(0, MAX_BLOCK)),
       value: undefined,
     });
     cur = null;
@@ -120,6 +142,7 @@ export function extractGlossary(markdown: string): ExtractedPage {
       cur = { title: h[1]!, anchor: h[2], text: [] };
       continue;
     }
+    if (/^_(New|Changed|Updated)_$/.test(line)) continue; // a change marker, not part of the definition
     if (cur && line) cur.text.push(line);
   }
   flush();

@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+/**
+ * Cap on one verbatim block of context. It exists so a pathological page cannot produce an
+ * unbounded record, not to summarise: at 1,000 characters it cut WCAG's "accessibility supported"
+ * definition mid-clause, dropping two of the four conditions that make a technology qualify
+ * (AUDIT-OUTPUT finding 8). A truncated requirement reads as a complete one, which is the worst
+ * possible failure for a rulebook, so the cap sits well above the longest real block instead.
+ */
+export const MAX_BLOCK = 4000;
+
 /** Where a rule came from. Every rule must be traceable to a page + section. */
 export const ProvenanceSchema = z.object({
   url: z.string().url(),
@@ -54,7 +63,7 @@ export const RuleSchema = z.object({
    * Blocks that qualify the rule and follow it in the source: exceptions, platform caveats,
    * supporting bullets, notes. Verbatim and in document order — a rule is often wrong without them.
    */
-  notes: z.array(z.string().max(1000)).default([]),
+  notes: z.array(z.string().max(MAX_BLOCK)).default([]),
   /** First concrete figure with a unit found in the rule, e.g. "at least 44x44 pt". */
   value: z.string().max(80).optional(),
   provenance: ProvenanceSchema,
@@ -77,7 +86,7 @@ export const SectionSchema = z.object({
   anchor: z.string().optional(),
   order: z.number().int().nonnegative().optional(),
   platforms: z.array(z.string()).default([]),
-  intro: z.array(z.string().max(1000)).default([]),
+  intro: z.array(z.string().max(MAX_BLOCK)).default([]),
 });
 export type Section = z.infer<typeof SectionSchema>;
 
@@ -103,7 +112,7 @@ export const PageIRSchema = z.object({
   /** The page abstract. */
   summary: z.string().max(1000),
   /** Paragraphs after the abstract and before the first heading: what this topic is, when to use it. */
-  overview: z.array(z.string().max(1000)).default([]),
+  overview: z.array(z.string().max(MAX_BLOCK)).default([]),
   /** Platforms the page as a whole is about, when it is platform-specific. */
   platforms: z.array(z.string()).default([]),
   sections: z.array(SectionSchema).default([]),

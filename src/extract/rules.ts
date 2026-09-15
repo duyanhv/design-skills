@@ -10,6 +10,7 @@
  * section's intro, and prose/bullets/asides that follow a rule become that rule's notes. A rule is
  * frequently unusable without them (exceptions, platform caveats, which material to pick).
  */
+import { MAX_BLOCK } from "../schema/ir.ts";
 import { ruleValue, severityOf } from "./severity.ts";
 
 export const EXTRACTOR = "bold-lead@8";
@@ -278,7 +279,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
   const dropped = new Map<string[], number>();
   /** Append to a capped list; past the cap, keep a marker that says what is missing. */
   const push = (list: string[], text: string) => {
-    const block = text.slice(0, 1000);
+    const block = text.slice(0, MAX_BLOCK);
     if (list.length < MAX_NOTES) {
       list.push(block);
       lastContext = { list, text: block };
