@@ -22,6 +22,7 @@ import { readFile } from "node:fs/promises";
 import type { PageIR } from "../schema/ir.ts";
 import { exists, listDirs, listFiles, paths, readJson } from "../util/fs.ts";
 import { composeFingerprint } from "../compose/fingerprint.ts";
+import { assignIds } from "../extract/index.ts";
 import { fidelityOf } from "./fidelity.ts";
 import { log } from "../util/log.ts";
 
@@ -393,6 +394,42 @@ const CHECKS: Check[] = [
       }
       if (missing.length) throw new Error(`${missing.length} long references have no table of contents, e.g. ${missing[0]}`);
       return `all ${pages.length} topics linked from a ~${tokens}-token entry file with ${routing} routing rows; ${withToc} long references carry a table of contents`;
+    },
+  },
+  {
+    finding: "O-11",
+    requirement: "A rule id identifies one rule and survives a rebuild",
+    observe: async () => {
+      // Ids are what an agent quotes and a human checks against the source, so an id that moves
+      // when nothing changed makes a cited finding unverifiable. Found by rebuilding from scratch:
+      // a page repeating a sentence renumbered that pair on every extract.
+      const out: string[] = [];
+      for (const id of ["apple-hig", "wcag22"]) {
+        const pages = await loadPages(id);
+        const seen = new Set<string>();
+        let n = 0;
+        for (const p of pages) {
+          for (const r of p.rules) {
+            n++;
+            if (seen.has(r.id)) throw new Error(`${id}: duplicate rule id ${r.id}`);
+            seen.add(r.id);
+            if (!new RegExp(`^${id}/${p.page}/\\d{3}$`).test(r.id)) throw new Error(`${id}: malformed id ${r.id} on page ${p.page}`);
+          }
+          // Reuse maps each surviving statement to the id it already had. Re-running it over this
+          // page's own rules must therefore be a no-op; if it is not, a rebuild would renumber.
+          const reassigned = assignIds(id, p.page, p, p.rules.map((r) => r.statement));
+          const moved = reassigned.filter((x, i) => x !== p.rules[i]!.id);
+          if (moved.length) throw new Error(`${id}/${p.page}: ${moved.length} id(s) move on re-extract, e.g. ${p.rules[reassigned.findIndex((x, i) => x !== p.rules[i]!.id)]!.id}`);
+          // Stability alone is not enough: a page whose repeated statements hold each other's ids
+          // is *also* a fixed point, and still wrong — the pair drifted at some point and stuck.
+          // On a page never touched by that bug, ids ascend with document order.
+          const nums = p.rules.map((r) => Number(r.id.split("/").pop()));
+          const out = nums.findIndex((n, i) => i > 0 && n < nums[i - 1]!);
+          if (out > 0) throw new Error(`${id}/${p.page}: id ${p.rules[out]!.id} sorts before ${p.rules[out - 1]!.id} but follows it in the page`);
+        }
+        out.push(`${id} ${n} ids`);
+      }
+      return `${out.join(", ")}: unique, well-formed, and unchanged by re-extraction`;
     },
   },
 ];

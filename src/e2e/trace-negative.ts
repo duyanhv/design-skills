@@ -167,6 +167,31 @@ const CASES: Case[] = [
     break: async (d) =>
       editRef(d, "apple-hig/references/components/widgets.md", (s) => s.replace(/## Contents\n\n(?:- \[[^\n]*\n)+\n/, "")),
   },
+  {
+    finding: "O-11",
+    name: "two rules sharing one id",
+    break: async (d) => editIR(d, "apple-hig", "buttons", (ir) => {
+      ir.rules[1].id = ir.rules[0].id;
+    }),
+  },
+  {
+    finding: "O-11",
+    name: "an id that does not name its own page",
+    break: async (d) => editIR(d, "apple-hig", "buttons", (ir) => {
+      ir.rules[0].id = "apple-hig/alerts/001";
+    }),
+  },
+  {
+    // The defect itself: a page stating one sentence twice, with the pair's ids swapped so that
+    // re-extraction moves them. This is what shipped before the fix, and nothing noticed.
+    finding: "O-11",
+    name: "a repeated statement whose ids drift on re-extract",
+    break: async (d) => editIR(d, "apple-hig", "buttons", (ir) => {
+      const a = ir.rules[0], b = ir.rules[1];
+      b.statement = a.statement; // now a duplicate…
+      const t = a.id; a.id = b.id; b.id = t; // …whose ids are in the wrong order
+    }),
+  },
 ];
 
 /** A scratch tree holding the built skills and IR, so trace reads the corrupted copy. */

@@ -5,13 +5,13 @@ than the compiler itself. Every finding is addressed, with the check that now fa
 Verification below is from this working tree at the time of writing.
 
 ```
-bun run check      typecheck · 50 tests, 317 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 15 trace probes · 5 manifests valid
+bun run check      typecheck · 51 tests, 324 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 18 trace probes · 5 manifests valid
 bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
 bun run coverage   0 unexplained content losses across 158 Apple pages and 14 WCAG guidelines
 bun run fidelity   0 of 10,883 Apple and 0 of 625 WCAG source sentences missing from the shipped references
-bun run trace      16/16 requirements verified against the shipped ir/ and skills/
-bun run trace:negative  15 reintroduced defects, each caught by the trace check that claims to guard it
+bun run trace      17/17 requirements verified against the shipped ir/ and skills/
+bun run trace:negative  18 reintroduced defects, each caught by the trace check that claims to guard it
 ```
 
 Every check above reads files. The audit's actual subject was whether an agent can *use* what the
@@ -73,23 +73,52 @@ were invisible to `coverage`, `trace` and `validate` alike, because all three re
 disk and believe it.
 
 Seven findings could still silently regress, so each has an assertion in `bun run trace` over the
-shipped artifacts (`O-1` … `O-10`).
+shipped artifacts (`O-1` … `O-11`).
 
 A trace check that has never been seen to fail is a guess, in exactly the way the project already
 says about `validate`: it reads the shipped artifacts, and a passing report is indistinguishable
 from a check whose regex stopped matching. Several of these assertions are strings in a Markdown
-file, which is the kind that rots quietly. `bun run trace:negative` reintroduces fifteen of the
+file, which is the kind that rots quietly. `bun run trace:negative` reintroduces eighteen of the
 original defects into a scratch copy of the built skills — a stale render, a dropped sentence, a
 definition swallowing the paragraph after it, a term named "Consider", a rule with no source
 position, the visionOS table moved after its rules, a badge quoting a figure the rule never states,
 the two badges the audit named, a dead heading link, an HTML entity, a flattened glossary entry, a
 topic dropped from the index, a gutted routing table, a missing table of contents — and asserts the
-named check fails on each. All fifteen are caught.
+named check fails on each. All eighteen are caught.
 
 Writing those probes was not a formality. The first version of the navigability check searched the
 whole of `SKILL.md`, so dropping Watch faces from the index still passed, because a routing row also
 mentions it: reachable for the one task that row names and invisible for every other, which is the
 gap finding 6 was about. The probe caught it; the check now reads the index section.
+
+## Verified against a rebuild, not against the files I edited
+
+Every check here was written while the work was in progress, so each one first ran over whatever
+existed at the time. That is not the same as running over the finished result. The last step was
+therefore to snapshot `ir/` and `skills/`, delete both, and rebuild from the raw cache.
+
+**36 files differed.** Every difference was a rule id; strip the ids and the rebuild is byte-identical
+to what had been shipped — same sentences, same order, same platform tags, same citations, same
+links. Most of the id churn was benign (a fresh build has no previous IR to reuse ids from, and
+finding 4 changed the order terms are emitted in), but six ids changed on a *forced re-extract over
+byte-identical input*, which is not benign at all. See finding 11.
+
+With that fixed, the full set was re-run over the clean rebuild rather than over incrementally
+updated artifacts. Each requirement below is what the check actually reported:
+
+| Requirement | Check | Observed on the rebuild |
+| --- | --- | --- |
+| 1 · nothing stale, nothing lost | `trace O-1`, `fidelity` | compose fingerprint current; 0 of 10,883 + 625 sentences lost |
+| 2, 3 · definitions own their own text | `trace O-2 / O-3` | 60 terms, none carrying following prose; split bold lead merged |
+| 4 · source order | `trace O-4` | every rule carries a position; visionOS table precedes its rules |
+| 5 · value badges | `trace O-5` | 31 badges, all traceable to their own rule |
+| 6, 10 · navigability | `trace O-6 / O-10` | 158 topics linked from a ~4,541-token entry, 26 routing rows, 20 tables of contents |
+| 7 · rationale label | `eval apple-hig` | 13/13, including the exception-in-`Details` case |
+| 8 · links and markup | `trace O-8` | 746 cross-references, 0 dead; no entities; glossary structured |
+| 9 · severity | `trace finding 4 (completeness)` | 2,407 rules, 0 unjustified MUSTs, 0 downgraded prohibitions |
+| 11 · id stability | `trace O-11` | 2,407 + 188 ids: unique, well-formed, unchanged by re-extraction |
+| every guard is real | `trace:negative` | 18 reintroduced defects, 18 caught |
+| public outputs | `check`, `build:public` | committed example and authored skills rebuild byte-identical; 0 proprietary files tracked |
 
 ## Findings
 
@@ -255,6 +284,26 @@ Two patterns where the strong word was not the directive:
 
 453 MUSTs became 440, and 278 MAYs became 243. `finding 4 (completeness)` in trace still reports 0
 unjustified MUSTs and 0 downgraded prohibitions, so the authority guarantee is unchanged.
+
+### 11 · P1 — A rule id drifted when a page repeated a sentence → fixed
+
+Not in the audit. Found by the rebuild above, and the most serious defect in this whole pass: a rule
+id is what an agent quotes and a human checks against the source, so an id that changes when nothing
+changed makes a cited finding unverifiable.
+
+`assignIds` keyed reuse on a `Map` from normalized statement to id. A page that states the same
+sentence twice — Apple's Machine learning page says "Always secure people's information." under two
+sections — kept only the *last* id for it. The first occurrence then claimed the second's id, the
+first's id was orphaned, and the pair renumbered on every extract. Six ids across three pages were
+doing this indefinitely.
+
+The nth occurrence of a repeated statement now claims the nth id. Two forced re-extracts produce
+identical ids, and a from-scratch build reproduces itself.
+
+Guard: `trace O-11` asserts ids are unique, name their own page, are unchanged by re-running the
+reuse logic, and ascend with document order. That last clause exists because the probe caught the
+check being too weak: a page whose repeated statements hold each other's ids is *also* a fixed
+point, so stability alone would have passed the very state the bug produced.
 
 ### 10 · P3 — Reference files are large and have no table of contents → partly done
 
