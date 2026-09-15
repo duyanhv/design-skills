@@ -169,6 +169,13 @@ ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
 
 ## Adding a source
 
+To rebuild eligible sources and publish their generated Markdown into this repository's
+[skills/ folder](skills/README.md), run `bun run publish:skills` from a clean working tree.
+It validates the output, commits `skills/<name>/` and the matching IR, and pushes to `origin`
+on the current branch. Use `bun run publish:skills lumen-ds --no-push` to commit locally for
+review. Only sources marked `license.redistributable: true` are published; Apple HIG and WCAG
+remain local builds under the current source settings.
+
 1. Add `sources/<id>.yaml` (copy `apple-hig.yaml`). Set `license.redistributable` honestly; if false, add
    `ir/<id>/` and `skills/<name>/` to `.gitignore` (validate enforces this against git's actual
    behaviour, not the file's text).

@@ -14,6 +14,7 @@
     "validate": "bun run src/cli.ts validate",
     "eval": "bun run src/cli.ts eval",
     "build": "bun run src/cli.ts build",
+    "publish:skills": "bun run src/publish/run.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "example": "bun run src/e2e/run.ts",
