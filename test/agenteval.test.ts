@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { splitFindings, score, findingBlocks } from "../src/agenteval/score.ts";
+import { comparability, findingBlocks, score, splitFindings } from "../src/agenteval/score.ts";
 import { TASKS } from "../src/agenteval/tasks.ts";
 import type { Task } from "../src/agenteval/tasks.ts";
 
@@ -141,4 +141,35 @@ test("every task's decoy and scope-trap cues are distinct from its violation cue
     const ids = [...t.violations, ...t.decoys, ...t.scopeTraps].map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   }
+});
+
+test("a comparison between arms with unequal samples is reported as not comparable", () => {
+  const rows = (spec: Record<string, number>) =>
+    Object.entries(spec).flatMap(([key, n]) => {
+      const [task, arm] = key.split("/");
+      return Array.from({ length: n }, () => ({ task: task!, arm: arm! }));
+    });
+
+  // The shape that produced a reported result in this repo: the skill arm run once on top of an
+  // existing three-sample baseline. Both lines print identically, so nothing flagged it.
+  const lopsided = comparability(rows({ "t/none": 3, "t/skill": 1 }));
+  expect(lopsided.lopsided.map((x) => x.task)).toEqual(["t"]);
+  expect(lopsided.lopsided[0]!.counts).toEqual({ none: 3, skill: 1 });
+  expect(lopsided.singleSample).toEqual([]);
+
+  // Matched samples are comparable, however many.
+  expect(comparability(rows({ "t/none": 3, "t/skill": 3 })).lopsided).toEqual([]);
+  expect(comparability(rows({ "t/none": 3, "t/skill": 3 })).singleSample).toEqual([]);
+
+  // One sample each is symmetric but still supports no range.
+  const thin = comparability(rows({ "t/none": 1, "t/skill": 1 }));
+  expect(thin.lopsided).toEqual([]);
+  expect(thin.singleSample.map((x) => x.task)).toEqual(["t"]);
+
+  // A task where only one arm has run is an incomplete run, not a bad comparison.
+  expect(comparability(rows({ "t/skill": 1 }))).toEqual({ lopsided: [], singleSample: [] });
+
+  // Tasks are judged independently.
+  const mixed = comparability(rows({ "a/none": 3, "a/skill": 3, "b/none": 3, "b/skill": 1 }));
+  expect(mixed.lopsided.map((x) => x.task)).toEqual(["b"]);
 });

@@ -18,15 +18,10 @@ Every check above reads files. The audit's actual subject was whether an agent c
 compiler produces, so the reorganised Apple skill was also run through `bun run agenteval`, which
 mounts it as a real skill directory and gives an agent three review tasks:
 
-```
-ios-buttons     4/4 found · 0 false positives · 2/2 decoys dismissed · 0 scope errors · 37 citations
-wcag-form       6/6 found · 0 false positives · 3/3 decoys dismissed · 0 scope errors ·  9 citations
-watchos-scope   4/4 found · 0 false positives · 2/2 decoys dismissed · 0 scope errors · 38 citations
-```
-
-The no-skill arm finds 3-4 of 4, 5-6 of 6 and 3-4 of 4 across three samples with **zero** citations,
-so the compiled skill is what makes a finding checkable. Scoring is keyword-based and measures
-seeded cues, not whether every finding is sound; it is evidence about a direction, not a benchmark.
+> **Figures pending re-measurement.** The numbers first recorded here were a single sample of the
+> skill arm against three of the no-skill arm. `0ef7374` made three samples and ranges this
+> project's standard precisely because one sample had overstated an earlier result, and reporting
+> n=1 against an n=3 baseline is the same mistake. Being re-run at `--runs 3`.
 
 That run also found a scorer bug rather than a skill bug. It reported a scope error on
 `watchos-scope` because the agent had cited the visionOS 60 pt spacing rule — but the transcript

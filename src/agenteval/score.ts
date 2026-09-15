@@ -111,3 +111,38 @@ export function score(task: Task, transcript: string): Score {
   const findings = bodyBlocks.filter((b) => /^\s*(?:[-*]|\d+\.)\s+\S/.test(b) || /^\s*\*\*/.test(b)).length;
   return { found, missed, falsePositives, dismissedCorrectly, cited, findings, scopeErrors };
 }
+
+/**
+ * Whether two arms can be compared at all.
+ *
+ * An arm with one sample and an arm with three print in exactly the same shape, so a lopsided
+ * comparison reads as sound. That is not hypothetical: a result in this repo was reported from a
+ * single skill-arm sample against a three-sample baseline, and the project had already learned this
+ * lesson once (`0ef7374`, "three samples per arm; report ranges, not anecdotes") when three samples
+ * came out lower than the one. The count is a property of the data, so the check lives here with
+ * the rest of the scoring rather than in the runner's output code.
+ */
+export interface ArmCounts { task: string; counts: Record<string, number> }
+
+export function comparability(rows: { task: string; arm: string }[]): {
+  lopsided: ArmCounts[];
+  singleSample: ArmCounts[];
+} {
+  const byTask = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    const c = byTask.get(r.task) ?? {};
+    c[r.arm] = (c[r.arm] ?? 0) + 1;
+    byTask.set(r.task, c);
+  }
+  const lopsided: ArmCounts[] = [];
+  const singleSample: ArmCounts[] = [];
+  for (const [task, counts] of byTask) {
+    const ns = Object.values(counts);
+    // Only meaningful once both arms have run; one arm alone is an incomplete run, not a bad
+    // comparison, and the runner already reports that as "—".
+    if (ns.length < 2) continue;
+    if (new Set(ns).size > 1) lopsided.push({ task, counts });
+    else if (ns.every((n) => n === 1)) singleSample.push({ task, counts });
+  }
+  return { lopsided, singleSample };
+}

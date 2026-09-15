@@ -31,7 +31,7 @@ import { tmpdir } from "node:os";
 import { paths, ROOT, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 import { TASKS, type Task } from "./tasks.ts";
-import { score, type Score } from "./score.ts";
+import { comparability, score, type Score } from "./score.ts";
 
 const ARMS = ["none", "skill"] as const;
 type Arm = (typeof ARMS)[number];
@@ -139,8 +139,25 @@ for (const task of TASKS) {
       `${range(rs.map((r) => r.dismissedCorrectly.length))}/${task.decoys.length} decoys dismissed · ` +
       `${range(rs.map((r) => r.scopeErrors.length))} scope errors · ` +
       `${range(rs.map((r) => r.cited))} citations` +
-      (rs.length > 1 ? `  (n=${rs.length})` : "")
+      // Always shown, not only when it is greater than one: the reader needs to see n=1 next to
+      // n=3 to know the two lines are not the same kind of measurement.
+      `  (n=${rs.length})`
     );
   };
   console.log(`\n${task.id}\n  no skill: ${fmt("none")}\n  skill:    ${fmt("skill")}`);
+}
+
+// Arms with different sample counts print in exactly the same shape, so a lopsided comparison reads
+// as sound. Say so rather than leaving it to be noticed.
+const { lopsided, singleSample } = comparability(merged);
+const describe = (x: { task: string; counts: Record<string, number> }) =>
+  `${x.task} (${Object.entries(x.counts).map(([a, n]) => `${a}=${n}`).join(", ")})`;
+if (lopsided.length) {
+  log.warn(
+    `unequal samples per arm: ${lopsided.map(describe).join("; ")} — these arms are not comparable as they stand. ` +
+      `Re-run the short arm with --runs to match before quoting the difference.`,
+  );
+}
+if (singleSample.length) {
+  log.warn(`single sample per arm: ${singleSample.map((x) => x.task).join(", ")} — a range needs at least two runs`);
 }
