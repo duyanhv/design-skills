@@ -40,7 +40,14 @@ const STANDALONE_DISMISSAL = String.raw`dismissed|out[- ]of[- ]scope|false posit
  * A heading (`## …` or a bold lead) that either
  *   - pairs a negation with a reporting verb ("did not apply", "not flagged", "non-issues"), or
  *   - asserts correctness ("Correct as annotated", "Verified as conforming", "Passes at AA").
+ *
+ * A bold "heading" has to be the whole line (`**Not an issue**`), not a bold label introducing
+ * prose (`**Scope:** WCAG 2.2 Level AA only; Level AAA criteria are not applied.`). Allowing the
+ * latter meant a one-line scope preamble at the top of a review moved the *entire* report into the
+ * dismissed section and scored it 0/6 — a real result in this repo, and indistinguishable in the
+ * summary from a review that found nothing.
  */
+const HEADING_LINE = String.raw`^(?:#{1,6}\s+[^\n]*|\s*\*\*[^*\n]*\*\*\s*)$`;
 const NOT_FLAGGED = new RegExp(
   String.raw`^(?:#{1,6}\s+|\s*\*\*)\s*(?:` +
     String.raw`[^\n]{0,60}?(?:${NEGATIVE})[^\n]{0,40}?(?:${REPORTING})` +
@@ -48,13 +55,41 @@ const NOT_FLAGGED = new RegExp(
     String.raw`|[^\n]{0,40}?(?:${CORRECT})[^\n]{0,40}` +
     String.raw`|(?:${STANDALONE_DISMISSAL})[^\n]{0,20}` +
     String.raw`)`,
-  "im",
+  "img",
 );
 
-export function splitFindings(transcript: string): { findings: string; dismissed: string } {
-  const m = NOT_FLAGGED.exec(transcript);
-  return m ? { findings: transcript.slice(0, m.index), dismissed: transcript.slice(m.index) } : { findings: transcript, dismissed: "" };
+/**
+ * Where the heading a match landed on actually begins, and whether it is a heading at all.
+ *
+ * The pattern's `\s*` swallows the preceding newline, so `m.index` can point at the end of the line
+ * *before* the heading. Both the "is this a heading" test and the split point have to be computed
+ * from the real line start, or the findings section keeps a stray blank line and the test reads the
+ * wrong text entirely.
+ */
+function headingAt(transcript: string, index: number): number | null {
+  const from = /\s/.test(transcript[index] ?? "") ? index + 1 : index;
+  const start = transcript.lastIndexOf("\n", from) + 1;
+  const end = transcript.indexOf("\n", start);
+  const line = transcript.slice(start, end < 0 ? undefined : end);
+  return new RegExp(HEADING_LINE, "i").test(line) ? start : null;
 }
+
+export function splitFindings(transcript: string): { findings: string; dismissed: string } {
+  const re = new RegExp(NOT_FLAGGED.source, NOT_FLAGGED.flags);
+  for (let m = re.exec(transcript); m; m = re.exec(transcript)) {
+    const at = headingAt(transcript, m.index);
+    if (at === null) continue;
+    const findings = transcript.slice(0, at);
+    // A dismissal section that swallows every finding is a mis-split, not a review that found
+    // nothing: the agent would have had to report its non-issues before its issues.
+    if (!findingBlocks(findings).some(isFinding) && findingBlocks(transcript.slice(at)).some(isFinding)) continue;
+    return { findings, dismissed: transcript.slice(at) };
+  }
+  return { findings: transcript, dismissed: "" };
+}
+
+/** A bullet, numbered item, or bold lead — the shapes a review states a finding in. */
+const isFinding = (b: string) => /^\s*(?:[-*]|\d+\.)\s+\S/.test(b) || /^\s*\*\*/.test(b);
 
 /**
  * Split a review into the individual findings it makes: a bullet, a numbered item, or a bold lead

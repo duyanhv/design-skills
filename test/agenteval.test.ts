@@ -193,3 +193,33 @@ test("a run that produced no transcript is excluded from the figures, not scored
   // complaint about the same data.
   expect(comparability(rows).lopsided.map((x) => x.task)).toEqual(["t"]);
 });
+
+test("a bold label introducing prose is not a dismissal heading", () => {
+  // The defect: a one-line scope preamble at the top of a review moved the entire report into the
+  // dismissed section, scoring a complete audit 0/6. In the summary that is indistinguishable from
+  // a review that found nothing, which is how it went unnoticed for a full run.
+  for (const preamble of [
+    "**Scope:** WCAG 2.2 Level AA only; Level AAA criteria are not applied.",
+    "**Platform:** watchOS only. visionOS rules are not applied.",
+    "**Target:** Level AA. Nothing below AA is reported.",
+    "**Method:** I did not trust the inline comments and recomputed each ratio.",
+  ]) {
+    const { findings } = splitFindings(`${preamble}\n\n## Findings\n- **1.4.3** contrast fails at 2.85:1\n`);
+    expect(findings).toContain("contrast fails");
+  }
+
+  // A bold heading that *is* the whole line still splits.
+  const { findings, dismissed } = splitFindings("## Issues\n- a real problem\n\n**Not an issue**\n- a decoy");
+  expect(findings).toContain("a real problem");
+  expect(findings).not.toContain("a decoy");
+  expect(dismissed).toContain("a decoy");
+});
+
+test("a split that would leave no findings at all is rejected as a mis-split", () => {
+  // Belt and braces for the same failure: if the only candidate heading sits before every finding,
+  // the split is wrong no matter how the heading is phrased. A review states its findings first.
+  const t = "## Nothing here conforms\n\n- **1.4.3** contrast fails\n- **2.4.7** focus not visible\n";
+  const { findings } = splitFindings(t);
+  expect(findings).toContain("contrast fails");
+  expect(findings).toContain("focus not visible");
+});
