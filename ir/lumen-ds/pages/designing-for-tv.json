@@ -7,9 +7,9 @@
   "source_hash": "39212c1bcddec64e",
   "fetched_at": "2026-03-04T00:00:00.000Z",
   "source_version": "2026-03-04",
-  "extracted_at": "2026-09-15T02:54:08.186Z",
-  "extractor": "bold-lead@8",
-  "input_hash": "03f572de1e7a4c04",
+  "extracted_at": "2026-09-15T09:24:08.624Z",
+  "extractor": "bold-lead@10",
+  "input_hash": "dde3897225b958f0",
   "summary": "People use a remote from across the room.",
   "overview": [
     "A television is a shared, ten-foot display driven by a directional remote. There is no pointer, no hover, and often no keyboard, so every affordance has to be reachable by moving focus and confirming."
@@ -58,6 +58,7 @@
       "statement": "Keep the focused element obvious at three metres.",
       "rationale": "Focus is the only cursor a remote has.",
       "notes": [],
+      "note_authority": [],
       "provenance": {
         "url": "https://example.invalid/design/lumen/designing-for-tv",
         "anchor": "Best-practices",
@@ -81,6 +82,7 @@
       "statement": "Support remote-only navigation for every task.",
       "rationale": "A person may never touch a keyboard.",
       "notes": [],
+      "note_authority": [],
       "provenance": {
         "url": "https://example.invalid/design/lumen/designing-for-tv",
         "anchor": "Best-practices",
@@ -103,6 +105,7 @@
       "severity": "should",
       "statement": "Lay out controls on a grid so that arrow presses move focus predictably between neighbours.",
       "notes": [],
+      "note_authority": [],
       "provenance": {
         "url": "https://example.invalid/design/lumen/designing-for-tv",
         "anchor": "Best-practices",
@@ -126,6 +129,7 @@
       "statement": "Always show exactly one focused element.",
       "rationale": "If nothing is focused, the remote appears broken; if two elements look focused, the person cannot predict what select will do.",
       "notes": [],
+      "note_authority": [],
       "provenance": {
         "url": "https://example.invalid/design/lumen/designing-for-tv",
         "anchor": "Focus",
