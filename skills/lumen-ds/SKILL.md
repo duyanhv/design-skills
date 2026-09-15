@@ -18,7 +18,7 @@ Compiled rulebook: 10 rules across 3 pages, each cited back to the source. State
 
 1. **Establish the target** — which of web, desktop, mobile, tv the work is for. A rule tagged for another platform does not apply.
 2. **Find the topic** in **Where to look** or the **Index**, and read that file under `references/`. It holds every rule for the topic with its reasoning, exceptions and a citation. Large spec tables live in a sibling `<topic>.tables.md`.
-3. **Read the whole rule** — the statement, its `Why`, and the indented notes under it. The notes hold the exceptions; a statement applied without them is frequently wrong.
+3. **Read the whole rule** — the statement, its `Why` line, and the indented notes under it. Exceptions and caveats appear in either; a statement applied without them is frequently wrong.
 4. **Apply** **MUST** rules as hard constraints, **SHOULD** as defaults you deviate from only with a reason, **MAY** as options.
 5. **Report evidence** — quote the rule, its id, and its link, so any finding can be checked against the source.
 

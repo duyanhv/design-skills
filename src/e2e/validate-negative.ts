@@ -120,6 +120,18 @@ const CASES: Case[] = [
     level: "warn",
   },
   {
+    // The defect that started AUDIT-OUTPUT: correct-looking Markdown that a newer renderer would
+    // have written differently. Nothing else in validate can see it, because every other guard
+    // reads the files and believes them.
+    name: "references rendered by an older compose",
+    break: async (d) => {
+      const p = join(d, "skills", SKILL, "provenance.json");
+      const prov = JSON.parse(await readFile(p, "utf8"));
+      await writeFile(p, JSON.stringify({ ...prov, compose_fingerprint: "0000000000000000" }, null, 2));
+    },
+    expect: "rendered by a different compose",
+  },
+  {
     name: "an IR page unreachable from SKILL.md or index.md",
     break: async (d) => patchSkill(d, (s) => s.replace(/\[[^\]]*\]\(references\/foundations\/color\.md\)/g, "(removed)")),
     expect: "not reachable",

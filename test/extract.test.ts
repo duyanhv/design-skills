@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
-import { extractRules, platformsIn, latestDate, classify, pagePlatformsOf } from "../src/extract/rules.ts";
-import { severityOf, valueOf } from "../src/extract/severity.ts";
+import { extractRules, platformsIn, latestDate, classify, pagePlatformsOf, mergeBoldLead } from "../src/extract/rules.ts";
+import { ruleValue, severityOf, valueOf } from "../src/extract/severity.ts";
 
 const md = readFileSync(new URL("./fixtures/page.md", import.meta.url), "utf8");
 const PLATFORMS = ["iOS", "iPadOS", "macOS", "watchOS", "visionOS", "tvOS"];
@@ -43,6 +43,8 @@ test("section path, anchor, platforms, severity and value", () => {
   expect(avoid!.severity).toBe("must");
   expect(consider!.severity).toBe("may");
   expect(label!.section).toBe("Content");
+  // The padding figure is in the rationale's second sentence, which states it plainly rather than
+  // illustrating it, so it is still this rule's value.
   expect(label!.value).toBe("about 10 pixels");
 
   expect(ios!.platforms).toEqual(["iOS", "iPadOS"]);
@@ -197,8 +199,108 @@ test("context past the cap is marked, never silently dropped", () => {
 
   // A page that fits keeps everything and gains no marker.
   const small = extractRules(
-    ["# T", "", "Abstract.", "", "## Best practices {#bp}", "", "**A rule.** Why.", "- one", "- two"].join("\n"),
+    ["# T", "", "Abstract.", "", "## Best practices {#bp}", "", "**Keep the label short.** Why.", "- one", "- two"].join("\n"),
     { platforms: PLATFORMS, skipSections: SKIP },
   );
   expect(small.rules[0]!.notes).toEqual(["- one", "- two"]);
+});
+
+test("a definition ends with its own line; the prose after it is not part of the definition", () => {
+  // Apple's Buttons page: a role definition followed by a sentence about roles in general, then a
+  // figure. Attaching those to the term made an agent quoting "the Destructive role" cite a sentence
+  // about primary buttons (AUDIT-OUTPUT finding 2).
+  const md = [
+    "# Buttons",
+    "",
+    "A button initiates an action.",
+    "",
+    "## Anatomy {#Anatomy}",
+    "",
+    "**Destructive.** The button performs an action that can result in data destruction.",
+    "",
+    "A button's role can have additional effects on its appearance.",
+    "",
+    "_[figure: An example alert with three system buttons.]_",
+  ].join("\n");
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });
+  const term = page.rules.find((r) => r.statement === "Destructive.")!;
+  expect(term.kind).toBe("term");
+  expect(term.rationale).toBe("The button performs an action that can result in data destruction.");
+  expect(term.notes).toEqual([]);
+
+  // The prose is not lost — it moves to the section, after the definition.
+  const intro = page.sections.filter((s) => s.section === "Anatomy").flatMap((s) => s.intro);
+  expect(intro).toContain("A button's role can have additional effects on its appearance.");
+  expect(intro.join(" ")).toContain("_[figure:");
+  // …and it sorts after the term, so the reference renders it in source order.
+  expect(page.sections.find((s) => s.intro.includes("A button's role can have additional effects on its appearance."))!.order)
+    .toBeGreaterThan(term.order);
+});
+
+test("a bold lead the source split across two spans is one statement", () => {
+  expect(mergeBoldLead("**Consider** **presenting a Now Playing view.** The system also…"))
+    .toBe("**Consider presenting a Now Playing view.** The system also…");
+  // A bullet keeps its marker.
+  expect(mergeBoldLead("- **Use** **the thin material.** Why.")).toBe("- **Use the thin material.** Why.");
+  // Emphasis later in a paragraph is not a split lead.
+  expect(mergeBoldLead("Read **Note** and **Tip** first.")).toBe("Read **Note** and **Tip** first.");
+
+  const md = ["# Playing audio", "", "Audio.", "", "## Best practices {#bp}", "",
+    "**Consider** **presenting a Now Playing view so people can control audio.** The system shows the source."].join("\n");
+  const rule = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP }).rules[0]!;
+  expect(rule.kind).toBe("rule");
+  expect(rule.statement).toBe("Consider presenting a Now Playing view so people can control audio.");
+  expect(rule.severity).toBe("may");
+});
+
+test("every block records its source position, so a reference can render in source order", () => {
+  const page = extractRules(md, { platforms: PLATFORMS, skipSections: SKIP });
+  const orders = [
+    ...page.rules.map((r) => r.order),
+    ...page.sections.map((s) => s.order),
+    ...page.tables.map((t) => t.order),
+  ];
+  expect(new Set(orders).size).toBe(orders.length); // one counter, no collisions
+  // "Use the sizes below." precedes the table it refers to.
+  const sizes = page.rules.find((r) => r.statement === "Use the sizes below.")!;
+  expect(page.tables[0]!.order).toBeGreaterThan(sizes.order);
+  // The "Platform considerations" intro ("No additional considerations for tvOS") comes before the
+  // platform rules under it, as it does in the source.
+  const intro = page.sections.find((s) => s.section === "Platform considerations")!;
+  const iosRule = page.rules.find((r) => r.statement.startsWith("Prefer the switch style"))!;
+  expect(intro.order).toBeLessThan(iosRule.order);
+});
+
+test("a value badge is the rule's own figure, not the first number anywhere in its body", () => {
+  // In the statement: kept.
+  expect(ruleValue("Give a toggle a hit region of at least 44x44 pt.")).toBe("at least 44x44 pt");
+  // A bounded figure is the rule's constraint and outranks a bare figure beside it.
+  expect(ruleValue("Make buttons easy to use.", "A button needs a hit region of at least 44x44 pt \u2014 in visionOS, 60x60 pt \u2014 so people can select it."))
+    .toBe("at least 44x44 pt");
+  // A range is one value and is kept whole; matching only its upper bound would state a floor the
+  // source never set.
+  expect(ruleValue("Keep frame rates smooth.", "Maintain a consistent frame rate of 30 to 60 fps for a smooth experience.")).toBe("30 to 60 fps");
+  // Two figures with equal claim: one badge cannot stand for both (AUDIT-OUTPUT finding 5).
+  expect(ruleValue("Adhere to the screen's safe area.", "Inset primary content 60 points from the top and bottom, and 80 points from the sides."))
+    .toBeUndefined();
+  // An illustration is one app's choice, not the guideline's requirement.
+  expect(ruleValue("Keep double tap in mind.", "Order matters. For example, a parking app could offer 5 minutes.")).toBeUndefined();
+  expect(ruleValue("Aid comprehension by adding descriptive text.", "Text helps. For example, Weather summarizes the next 24 hours.")).toBeUndefined();
+  expect(ruleValue("Nothing numeric here.", "Nor here.")).toBeUndefined();
+});
+
+test("severity reads the main clause, not the rule's stated goal", () => {
+  // "avoid"/"ensure" inside a purpose clause is the goal; the directive is "choose", "keep", "define".
+  expect(severityOf("Choose items deliberately to avoid overcrowding.")).toBe("should");
+  expect(severityOf("Keep primary content centered to avoid truncation.")).toBe("should");
+  expect(severityOf("Define rules to help ensure your tips reach the intended audience.")).toBe("should");
+  // A prohibition in the main clause is still a MUST.
+  expect(severityOf("Avoid overcrowding the screen.")).toBe("must");
+  expect(severityOf("Never block the main thread to keep scrolling smooth.")).toBe("must");
+
+  // A modal is permission only when it governs the reader.
+  expect(severityOf("Recognize that people can have more than one home.")).toBe("should");
+  expect(severityOf("Show people whether a destination can accept dragged content.")).toBe("should");
+  expect(severityOf("You can use a custom control when the system one does not fit.")).toBe("may");
+  expect(severityOf("Consider pairing a toggle with a description.")).toBe("may");
 });

@@ -15,9 +15,9 @@
  * An SC with no level (e.g. 4.1.1 Parsing, obsolete) is kept as a term.
  */
 import type { ExtractedPage, ExtractedRule } from "./rules.ts";
-import { valueOf } from "./severity.ts";
+import { ruleValue } from "./severity.ts";
 
-export const WCAG_EXTRACTOR = "wcag-sc@4";
+export const WCAG_EXTRACTOR = "wcag-sc@5";
 
 const HEADING = /^##\s+(.*?)(?:\s+\{#([^}]+)\})?\s*$/;
 const LEVEL = /^\*\*Level (A{1,3})\*\*$/;
@@ -50,6 +50,7 @@ export function extractWcag(markdown: string): ExtractedPage {
       kind: isRule ? "rule" : "term",
       section: cur.title,
       anchor: cur.anchor,
+      order: rules.length,
       platforms: [],
       scope: "general",
       // Normative text; whether it applies to you is decided by the conformance target, not by us.
@@ -58,7 +59,9 @@ export function extractWcag(markdown: string): ExtractedPage {
       statement,
       rationale: undefined,
       notes,
-      value: valueOf(`${statement} ${notes.join(" ")}`),
+      // A criterion with several sub-requirements (1.4.8 Visual Presentation lists five) has no one
+      // value; a badge showing the last of them misrepresents the other four.
+      value: ruleValue(statement),
     });
     cur = null;
   };
@@ -98,6 +101,7 @@ export function extractGlossary(markdown: string): ExtractedPage {
       kind: "term",
       section: "Glossary",
       anchor: cur.anchor,
+      order: rules.length,
       platforms: [],
       scope: "general",
       severity: "may",

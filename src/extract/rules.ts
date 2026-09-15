@@ -10,9 +10,9 @@
  * section's intro, and prose/bullets/asides that follow a rule become that rule's notes. A rule is
  * frequently unusable without them (exceptions, platform caveats, which material to pick).
  */
-import { severityOf, valueOf } from "./severity.ts";
+import { ruleValue, severityOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@7";
+export const EXTRACTOR = "bold-lead@8";
 
 /**
  * Where a rule's platform scope came from.
@@ -28,6 +28,8 @@ export interface ExtractedRule {
   kind: "rule" | "term";
   section: string;
   anchor?: string;
+  /** Position in the source document. Everything extracted from a page shares one counter. */
+  order: number;
   platforms: string[];
   scope: Scope;
   severity: "must" | "should" | "may";
@@ -43,14 +45,20 @@ export interface ExtractedRule {
 export interface ExtractedTable {
   section: string;
   anchor?: string;
+  order: number;
   caption?: string;
   markdown: string;
 }
 
-/** A section's own prose — definitions and framing that its rules depend on. */
+/**
+ * A run of prose inside a section — definitions and framing that its rules depend on. A section can
+ * hold several of these: the source interleaves prose, definitions and rules, and `order` is what
+ * puts them back in that sequence.
+ */
 export interface ExtractedSection {
   section: string;
   anchor?: string;
+  order: number;
   platforms: string[];
   intro: string[];
 }
@@ -179,6 +187,23 @@ export function pagePlatformsOf(title: string | undefined, known: string[]): str
 }
 
 /**
+ * `**Consider** **presenting a Now Playing view…**` — one bold lead the source split into two spans.
+ * Taken literally the statement is "Consider", which classifies as a term and ships as a rule with
+ * no id, no severity and no platform tag (AUDIT-OUTPUT finding 3). Adjacent spans with nothing
+ * between them are one span.
+ */
+export function mergeBoldLead(line: string): string {
+  // Anchored at the lead: a pair of bold spans later in a paragraph ("see **Note** and **Tip**") is
+  // ordinary emphasis, not a split statement.
+  const SPLIT_LEAD = /^((?:[-*]\s+|\d+\.\s+)?)\*\*(.+?)\*\*(\s*)\*\*(.+?)\*\*/;
+  let out = line;
+  for (let i = 0; i < 4 && SPLIT_LEAD.test(out); i++) {
+    out = out.replace(SPLIT_LEAD, (_m, bullet: string, a: string, gap: string, b: string) => `${bullet}**${a}${gap || " "}${b}**`);
+  }
+  return out;
+}
+
+/**
  * Cap on context blocks attached to one rule or section.
  *
  * A cap is needed — a pathological page should not produce an unbounded rule — but silently
@@ -199,6 +224,13 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
   const path: { level: number; text: string; anchor?: string }[] = [];
   let tableBuf: string[] = [];
   let lastProse = "";
+  /**
+   * One counter for every block the page emits, in the order the source presents them. Compose
+   * renders by it, so a reference reads in the same sequence as the page it came from: previously
+   * rules were grouped first and prose-only sections were appended at the end, which put Anatomy
+   * after Platform considerations and separated "use the sizes below" from its table.
+   */
+  let order = 0;
   /** Where `lastProse` was stored as context, so a line promoted to a table caption is not duplicated. */
   let lastContext: { list: string[]; text: string } | null = null;
   const flushTable = () => {
@@ -210,6 +242,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       tables.push({
         section: path.map((p) => p.text).join(" › "),
         anchor: nearest?.anchor,
+        order: order++,
         // caption = a short lead-in ("Two-column", "Sizes vary by platform.") — never a rule paragraph
         caption,
         markdown: tableBuf.join("\n"),
@@ -270,6 +303,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       openSection = {
         section: path.map((p) => p.text).join(" › "),
         anchor: nearest?.anchor,
+        order: order++,
         platforms: currentScope().platforms,
         intro: [],
       };
@@ -318,7 +352,7 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
     let rationale: string | undefined;
     let kind: "rule" | "term" = "rule";
     const isIndented = /^\s/.test(raw) && !!openRule; // a continuation line of the rule above
-    const m = isIndented ? null : BOLD_LEAD.exec(line.trim());
+    const m = isIndented ? null : BOLD_LEAD.exec(mergeBoldLead(line.trim()));
     if (m) {
       statement = stripMd(m[1]!);
       rationale = stripMdKeepLinks(m[2] ?? "") || undefined;
@@ -328,6 +362,9 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
         statement += punct[1];
         rationale = punct[2] || undefined;
       }
+      // "**Monochrome** — Applies one color…": the dash separates the label from its definition and
+      // is not part of either. Left in place it reached the page as "**Monochrome** — — Applies…".
+      rationale = rationale?.replace(/^[\u2014\u2013:-]\s*/, "") || undefined;
       kind = classify(statement);
       if (kind === "term" && !rationale) {
         addContext(contextText(line)); // a bare "**Sizes**" label is a caption for what follows
@@ -359,16 +396,22 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       kind,
       section: path.map((p) => p.text).join(" › "),
       anchor: nearest?.anchor,
+      order: order++,
       platforms,
       scope,
       severity: severityOf(statement),
       statement: statement.slice(0, 400),
       rationale: rationale?.slice(0, 2000),
       notes: [],
-      value: valueOf(`${statement} ${rationale ?? ""}`),
+      value: ruleValue(statement, rationale),
     };
     rules.push(rule);
-    openRule = rule;
+    // A definition ends with its own line. Keeping a term open made every following paragraph,
+    // aside and figure part of that definition, so "A button's role can have additional effects on
+    // its appearance" was attributed to the Destructive role (AUDIT-OUTPUT finding 2). Prose after a
+    // term belongs to the section, in its source position.
+    openRule = kind === "term" ? null : rule;
+    openSection = null;
   }
 
   flushTable();

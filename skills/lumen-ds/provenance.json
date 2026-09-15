@@ -10,7 +10,8 @@
   "source_version": "2026-03-04",
   "source_revision": null,
   "fetched_at": "2026-03-04T00:00:00.000Z",
-  "extractor": "bold-lead@7",
+  "extractor": "bold-lead@8",
+  "compose_fingerprint": "e6e23c70c7c27389",
   "partial": false,
   "rule_count": 10,
   "pages": [

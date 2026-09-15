@@ -36,6 +36,11 @@ skill:
     React Native, Flutter). Use when designing screens, choosing components, checking
     layout/typography/color/accessibility, or reviewing UI against Apple's guidance.
   max_skill_lines: 320
+  # "Why" mislabelled half of what it held: 512 of 2,288 rationales begin "For example", "Use",
+  # "If you" — procedures, examples and conditions, not reasons. Worse, an exception stated after
+  # the lead sentence ("The exception is if Tap to Pay is your only payment method") was presented
+  # as the rule's justification. "Details" is what the field actually is (AUDIT-OUTPUT finding 7).
+  rationale_label: Details
   routing:
     - when: "any iOS/iPadOS screen review"
       read: [accessibility, layout, typography, color, dark-mode]
@@ -53,5 +58,39 @@ skill:
       read: [onboarding, privacy, sign-in-with-apple, managing-accounts]
     - when: "icons, images, symbols, app icon"
       read: [icons, images, sf-symbols, app-icons]
+    - when: "notifications, badges, Live Activities, widgets"
+      read: [notifications, managing-notifications, live-activities, widgets]
+    - when: "menus, context menus, pull-down and pop-up buttons"
+      read: [menus, context-menus, pull-down-buttons, pop-up-buttons]
+    - when: "lists, tables, collections, scrolling content"
+      read: [lists-and-tables, collections, scroll-views, disclosure-controls]
+    - when: "charts, data visualization, progress and status"
+      read: [charting-data, charts, progress-indicators, gauges]
+    - when: "materials, Liquid Glass, blur, translucency, layering"
+      read: [materials, color, dark-mode]
+    - when: "sheets, popovers, panels, windows, multitasking"
+      read: [sheets, popovers, modality, windows, multitasking]
+    - when: "motion, animation, transitions, haptics, sound"
+      read: [motion, playing-haptics, playing-audio, feedback]
+    - when: "loading, empty and error states, launching"
+      read: [loading, launching, feedback, offering-help]
+    - when: "a macOS app: windows, menu bar, toolbars, sidebars"
+      read: [designing-for-macos, windows, the-menu-bar, toolbars, sidebars]
+    - when: "a watchOS app: complications, Always On, the Digital Crown"
+      read: [designing-for-watchos, complications, always-on, digital-crown, watch-faces]
+    - when: "a tvOS app: focus, remotes, the top shelf"
+      read: [designing-for-tvos, focus-and-selection, remotes, top-shelf]
+    - when: "an iPadOS app: multitasking, pointer, Apple Pencil"
+      read: [designing-for-ipados, multitasking, pointing-devices, apple-pencil-and-scribble]
     - when: "visionOS spatial UI"
       read: [designing-for-visionos, immersive-experiences, spatial-layout, eyes, ornaments]
+    - when: "a game: controls, challenges, performance"
+      read: [designing-for-games, game-controls, game-center]
+    - when: "payments, purchases, Wallet, Apple Pay"
+      read: [apple-pay, in-app-purchase, wallet, tap-to-pay-on-iphone]
+    - when: "Siri, App Shortcuts, generative AI, machine learning"
+      read: [siri, app-shortcuts, generative-ai, machine-learning]
+    - when: "right-to-left languages, localization, inclusive language"
+      read: [right-to-left, inclusion, writing]
+    - when: "VoiceOver, Dynamic Type, reduced motion, accessibility audit"
+      read: [accessibility, voiceover, typography, motion]

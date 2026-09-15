@@ -7,9 +7,9 @@
   "source_hash": "6a08c842144e63ba",
   "fetched_at": "2026-03-04T00:00:00.000Z",
   "source_version": "2026-03-04",
-  "extracted_at": "2026-09-14T09:43:07.803Z",
-  "extractor": "bold-lead@7",
-  "input_hash": "aab93c2491b5499b",
+  "extracted_at": "2026-09-15T02:47:49.406Z",
+  "extractor": "bold-lead@8",
+  "input_hash": "a6ebacd7a0f9f6ae",
   "summary": "A button performs a single, immediate action.",
   "overview": [
     "A button combines a label, an optional icon, and a role. Use a button for actions, and a link for navigation."
@@ -19,6 +19,7 @@
     {
       "section": "Best practices",
       "anchor": "Best-practices",
+      "order": 0,
       "platforms": [],
       "intro": [
         "A button is recognisable when its target is large enough and its label names the action."
@@ -27,6 +28,7 @@
     {
       "section": "Roles",
       "anchor": "Roles",
+      "order": 4,
       "platforms": [],
       "intro": [
         "A role changes both appearance and behaviour:"
@@ -40,6 +42,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Best practices",
+      "order": 1,
       "platforms": [],
       "scope": "general",
       "kind": "rule",
@@ -63,6 +66,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Best practices",
+      "order": 2,
       "platforms": [],
       "scope": "general",
       "kind": "rule",
@@ -83,6 +87,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Best practices",
+      "order": 3,
       "platforms": [],
       "scope": "general",
       "kind": "rule",
@@ -103,6 +108,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Roles",
+      "order": 5,
       "platforms": [],
       "scope": "general",
       "kind": "term",
@@ -123,6 +129,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Roles",
+      "order": 6,
       "platforms": [],
       "scope": "general",
       "kind": "term",
@@ -143,6 +150,7 @@
       "category": "components",
       "topic": "Buttons",
       "section": "Roles",
+      "order": 7,
       "platforms": [],
       "scope": "general",
       "kind": "rule",
@@ -162,6 +170,7 @@
     {
       "section": "Sizes",
       "anchor": "Sizes",
+      "order": 9,
       "caption": "Buttons come in three sizes.",
       "markdown": "| Size | Height | Label |\n| --- | --- | --- |\n| Small | 28 pt | 13 pt |\n| Medium | 36 pt | 15 pt |\n| Large | 44 pt | 17 pt |"
     }

@@ -7,6 +7,7 @@ import { PageIRSchema } from "../schema/ir.ts";
 import { exists, listDirs, listFiles, paths, readJson } from "../util/fs.ts";
 import { gitIgnores, gitTracked } from "../util/git.ts";
 import { validateAuthoredSource } from "../authored/index.ts";
+import { composeFingerprint } from "../compose/fingerprint.ts";
 
 export interface Finding { level: "error" | "warn"; where: string; message: string }
 
@@ -114,7 +115,21 @@ export async function validateSource(source: Source): Promise<Finding[]> {
   const tokens = estimateTokens(skill);
   if (tokens > TOKEN_BUDGET) warn("skill", `SKILL.md is ~${tokens} tokens (spec suggests < ${TOKEN_BUDGET} for always-loaded instructions)`);
 
-  if (!(await exists(join(skillDir, "provenance.json")))) warn("skill", "provenance.json missing (run compose)");
+  const provenance = await readJson<{ compose_fingerprint?: string }>(join(skillDir, "provenance.json"));
+  if (!provenance) {
+    warn("skill", "provenance.json missing (run compose)");
+  } else {
+    // Stale Markdown is indistinguishable from correct Markdown by reading it: every other check
+    // here reads the files on disk and passes whatever they contain. The fingerprint is the one
+    // thing that can tell that the renderer moved on without them (AUDIT-OUTPUT finding 1).
+    const current = await composeFingerprint();
+    if (provenance.compose_fingerprint !== current) {
+      err(
+        "skill",
+        `shipped files were rendered by a different compose (${provenance.compose_fingerprint ?? "none recorded"} != ${current}); run \`bun run compose ${source.id}\``,
+      );
+    }
+  }
 
   // A large index moves to index.md; both files are part of the skill's navigation surface, so link
   // checking and index coverage must consider them together.

@@ -16,6 +16,13 @@ export const RuleSchema = z.object({
   topic: z.string(),
   /** Heading path the rule sits under, e.g. "Platform considerations › macOS › Push buttons". */
   section: z.string(),
+  /**
+   * Position in the source document, shared by rules, terms, section prose and tables on one page.
+   * References render by it so the reader sees the source's own sequence — a definition list before
+   * the rules that use it, a table before the rule that says "use the sizes below".
+   * Optional so IR written by an earlier extractor still parses; compose falls back to array order.
+   */
+  order: z.number().int().nonnegative().optional(),
   /** Platforms the rule applies to. Read together with `scope` — never on its own. */
   platforms: z.array(z.string()).default([]),
   /**
@@ -57,6 +64,7 @@ export const RuleSchema = z.object({
 export const TableSchema = z.object({
   section: z.string(),
   anchor: z.string().optional(),
+  order: z.number().int().nonnegative().optional(),
   /** Text immediately preceding the table (a tab label or intro sentence), if any. */
   caption: z.string().max(200).optional(),
   markdown: z.string(),
@@ -67,6 +75,7 @@ export type Table = z.infer<typeof TableSchema>;
 export const SectionSchema = z.object({
   section: z.string(),
   anchor: z.string().optional(),
+  order: z.number().int().nonnegative().optional(),
   platforms: z.array(z.string()).default([]),
   intro: z.array(z.string().max(1000)).default([]),
 });

@@ -8,6 +8,7 @@ import type { Source } from "../schema/source.ts";
 import { PageIRSchema, type PageIR, type Rule, type Section, type Table } from "../schema/ir.ts";
 import { listFiles, paths, readJson, writeJson, writeText, ensureDir } from "../util/fs.ts";
 import { log } from "../util/log.ts";
+import { composeFingerprint } from "./fingerprint.ts";
 
 export async function loadIR(source: Source): Promise<PageIR[]> {
   const files = await listFiles(paths.irPages(source.id), ".json");
@@ -20,6 +21,13 @@ export async function loadIR(source: Source): Promise<PageIR[]> {
 class Linker {
   private byPath = new Map<string, { category: string; page: string }>();
   private byAnchor = new Map<string, { category: string; page: string }>();
+  /**
+   * DocC anchor → the heading a reference file actually renders for it. A source anchor is a bare
+   * section id ("Help-buttons") but the rendered heading is the whole path
+   * ("### Platform considerations › macOS › Help buttons"), so lowercasing the fragment produced 109
+   * links pointing at nothing (AUDIT-OUTPUT finding 8).
+   */
+  private headingOfAnchor = new Map<string, string>();
   private baseUrl: string;
   constructor(pages: PageIR[], baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -28,7 +36,14 @@ class Linker {
       this.byPath.set(pathOf(p.url), { category: p.category, page: p.page });
       const frag = /#(.+)$/.exec(p.url)?.[1];
       if (frag) this.byAnchor.set(frag, { category: p.category, page: p.page });
-      for (const r of p.rules) if (r.provenance.anchor) this.byAnchor.set(r.provenance.anchor, { category: p.category, page: p.page });
+      const remember = (anchor: string | undefined, section: string) => {
+        if (!anchor) return;
+        this.byAnchor.set(anchor, { category: p.category, page: p.page });
+        // First writer wins: the earliest block under an anchor sits under the shallowest heading.
+        if (!this.headingOfAnchor.has(`${p.page}#${anchor}`)) this.headingOfAnchor.set(`${p.page}#${anchor}`, section);
+      };
+      const blocks = [...p.sections, ...p.rules, ...p.tables].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      for (const b of blocks) remember("provenance" in b ? b.provenance.anchor : b.anchor, b.section);
     }
   }
   localize(text: string, fromCategory: string): string {
@@ -38,7 +53,11 @@ class Linker {
       const hit = path ? this.byPath.get(path) : frag ? this.byAnchor.get(frag) : undefined;
       if (!hit) return url.startsWith("/") ? `[${label}](${this.baseUrl}${url})` : m; // other root-relative links → absolute
       const rel = hit.category === fromCategory ? `${hit.page}.md` : `../${hit.category}/${hit.page}.md`;
-      return `[${label}](${rel}${frag ? `#${frag.toLowerCase()}` : ""})`;
+      // Point at the heading the target file renders. When the anchor names a section that produced
+      // no output (a skipped section, or one that is pure navigation) the fragment is dropped rather
+      // than shipped dead: the file link still lands the reader on the right page.
+      const heading = this.headingOfAnchor.get(`${hit.page}#${frag}`);
+      return `[${label}](${rel}${heading ? `#${anchorOf(heading)}` : ""})`;
     });
   }
 }
@@ -78,8 +97,13 @@ function ruleLine(r: Rule, opts: { withTopic?: boolean; label?: string; linker?:
   return out.join("\n");
 }
 
-function tableBlock(t: Table): string {
-  return t.caption && !/^\|/.test(t.caption) ? `\n${t.caption}\n\n${t.markdown}` : `\n${t.markdown}`;
+function tableBlock(t: Table, linker?: Linker, category?: string): string {
+  // Table cells carry cross-references too. Passing the markdown through untouched left 110
+  // root-relative links like `[Tasks](/design/human-interface-guidelines/carekit#Tasks)` in the
+  // shipped files, where they resolve to nothing (AUDIT-OUTPUT finding 8).
+  const md = linker && category ? linker.localize(t.markdown, category) : t.markdown;
+  const caption = linker && category && t.caption ? linker.localize(t.caption, category) : t.caption;
+  return caption && !/^\|/.test(caption) ? `\n${caption}\n\n${md}` : `\n${md}`;
 }
 
 function sectionIntro(s: Section | undefined, linker: Linker, category: string): string[] {
@@ -91,12 +115,35 @@ function termLine(t: Rule, linker: Linker, category: string): string {
   // A term's description can arrive as `rationale` (glossary entries) or as `notes` (an obsolete
   // WCAG criterion, whose whole explanation is a note). Rendering only the first dropped the text
   // explaining *why* 4.1.1 Parsing was removed, leaving a definition with nothing after the dash.
-  const body = [t.rationale, ...t.notes].filter(Boolean).join(" ");
-  const rendered = linker.localize(body, category);
-  return `- **${t.statement}**${rendered ? ` — ${rendered}` : ""} ${cite(t)}`.replace(/\s+/g, " ");
+  const local = (s: string) => linker.localize(s, category);
+  // "**Captions** give people the textual equivalent…" is a sentence whose subject happens to be
+  // bold, not a label followed by a definition. A dash inserted there reads as a break the source
+  // never wrote ("**Captions** — give people…"), so the separator is only used when the label
+  // genuinely ends and something new begins.
+  const continues = t.rationale ? /^[a-z\u2018\u2019'"(]/.test(t.rationale) : false;
+  const body = t.rationale ? `${continues ? " " : " — "}${local(t.rationale)}` : "";
+  const head = `- **${t.statement}**${body} ${cite(t)}`.replace(/\s+/g, " ");
+  // Notes are indented rather than joined onto the head line, so a reader can see where the
+  // definition ends. Joining them ran WCAG's "changes of context" list into one sentence with its
+  // list markers inline (AUDIT-OUTPUT finding 8).
+  const notes = t.notes.map((n) => `  ${/^(?:[-*]\s|\d+\.\s)/.test(n) ? local(n) : `- ${local(n)}`}`);
+  return [head, ...notes].join("\n");
 }
 
 interface Rendered { main: string; tables?: string }
+
+/**
+ * Source order. Every block a page emits carries one `order` counter, so a reference reads in the
+ * sequence of the page it came from. Blocks written by an older extractor have no counter; they
+ * fall back to their array position, which is still document order within their own kind.
+ */
+type Block =
+  | { order: number; kind: "intro"; section: Section }
+  | { order: number; kind: "rule"; rule: Rule }
+  | { order: number; kind: "table"; table: Table };
+
+/** Reference files are long; past this many lines they open with a table of contents. */
+const TOC_OVER_LINES = 200;
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }, linker: Linker): Rendered {
   const label = source.skill.rationale_label;
@@ -121,28 +168,36 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
   // Large spec tables go to a sibling file so the rulebook itself stays cheap to load.
   const tableChars = page.tables.reduce((n, t) => n + t.markdown.length, 0);
   const split = tableChars > source.skill.split_tables_over;
-  const tablesBySection = new Map<string, Table[]>();
-  if (!split) for (const t of page.tables) tablesBySection.set(t.section, [...(tablesBySection.get(t.section) ?? []), t]);
-
-  const bySection = new Map<string, Rule[]>();
-  for (const r of rules) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
   // A glossary page is nothing but definitions; everywhere else a definition belongs beside the
   // rules that use it ("Destructive." next to "Never give the destructive role to the primary
   // button"), not in a bucket at the end of the file.
   const isGlossary = terms.length > 0 && terms.length === page.rules.length;
-  const termsBySection = new Map<string, Rule[]>();
-  if (!isGlossary) for (const t of terms) termsBySection.set(t.section, [...(termsBySection.get(t.section) ?? []), t]);
-  const introBySection = new Map(page.sections.map((s) => [s.section, s]));
-  const order = [...new Set([...bySection.keys(), ...termsBySection.keys(), ...tablesBySection.keys(), ...introBySection.keys()])];
-  const sections = order.map((section) => {
-    const body = [
-      ...sectionIntro(introBySection.get(section), linker, page.category),
-      ...(termsBySection.get(section) ?? []).map((t) => termLine(t, linker, page.category)),
-      ...(bySection.get(section) ?? []).map((r) => ruleLine(r, { label, linker, category: page.category, withId: true })),
-      ...(tablesBySection.get(section) ?? []).map(tableBlock),
-    ];
-    return `\n### ${section}\n` + body.join("\n");
-  });
+
+  const blocks: Block[] = [
+    ...page.sections.map((s, i) => ({ order: s.order ?? i, kind: "intro" as const, section: s })),
+    ...page.rules.map((r, i) => ({ order: r.order ?? i, kind: "rule" as const, rule: r })),
+    ...(split ? [] : page.tables.map((t, i) => ({ order: t.order ?? i, kind: "table" as const, table: t }))),
+  ].sort((a, b) => a.order - b.order);
+
+  // Group into headings without reordering: a section is a run of consecutive blocks, and a heading
+  // the source revisits later gets its own run rather than pulling the later text backwards.
+  const runs: { section: string; body: string[] }[] = [];
+  const headings: string[] = [];
+  for (const b of blocks) {
+    const section = b.kind === "intro" ? b.section.section : b.kind === "rule" ? b.rule.section : b.table.section;
+    let run = runs[runs.length - 1];
+    if (!run || run.section !== section) {
+      run = { section, body: [] };
+      runs.push(run);
+      if (!headings.includes(section)) headings.push(section);
+    }
+    if (b.kind === "intro") run.body.push(...sectionIntro(b.section, linker, page.category));
+    else if (b.kind === "table") run.body.push(tableBlock(b.table, linker, page.category));
+    else if (isGlossary && b.rule.kind === "term") continue; // rendered under "Definitions" below
+    else if (b.rule.kind === "term") run.body.push(termLine(b.rule, linker, page.category));
+    else run.body.push(ruleLine(b.rule, { label, linker, category: page.category, withId: true }));
+  }
+  const sections = runs.filter((r) => r.body.length).map((r) => `\n### ${r.section}\n` + r.body.join("\n"));
   if (isGlossary) sections.push(`\n## Definitions\n` + terms.map((t) => termLine(t, linker, page.category)).join("\n"));
   const main = [...header, ...(rules.length ? ["## Rules"] : []), ...sections];
   if (split) {
@@ -150,9 +205,35 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
   }
   const tables = split
     ? [`# ${page.title} — specifications`, ``, `> Source: [${source.name}](${page.url}) · version ${page.source_version ?? meta.source_version}`, `> ${source.license.attribution}`, ``,
-       ...[...new Set(page.tables.map((t) => t.section))].map((s) => `\n### ${s}\n` + page.tables.filter((t) => t.section === s).map(tableBlock).join("\n")), ``].join("\n")
+       ...[...new Set(page.tables.map((t) => t.section))].map(
+         (s) => `\n### ${s}\n` + page.tables.filter((t) => t.section === s).map((t) => tableBlock(t, linker, page.category)).join("\n"),
+       ), ``].join("\n")
     : undefined;
-  return { main: main.join("\n") + "\n", tables };
+  const body = main.join("\n") + "\n";
+  return { main: withContents(body, headings, page.rules), tables };
+}
+
+/**
+ * A table of contents for long references. Six Apple pages are over 400 lines with 25+ sections;
+ * scanning one to find "Platform considerations › macOS" costs the whole file. Short pages do not
+ * need one and would only pay tokens for it.
+ */
+function withContents(doc: string, headings: string[], rules: Rule[]): string {
+  if (doc.split("\n").length <= TOC_OVER_LINES || headings.length < 3) return doc;
+  const counts = new Map<string, number>();
+  for (const r of rules) if (r.kind === "rule") counts.set(r.section, (counts.get(r.section) ?? 0) + 1);
+  const toc = [
+    `## Contents`,
+    ``,
+    ...headings.map((h) => {
+      const n = counts.get(h) ?? 0;
+      return `- [${h}](#${anchorOf(h)})${n ? ` — ${n} rule${n === 1 ? "" : "s"}` : ""}`;
+    }),
+    ``,
+  ].join("\n");
+  // After the header block (summary + overview), before "## Rules".
+  const at = doc.indexOf("## Rules");
+  return at < 0 ? `${doc}\n${toc}` : `${doc.slice(0, at)}${toc}\n${doc.slice(at)}`;
 }
 
 function severitiesPresent(pages: PageIR[]): string[] {
@@ -219,7 +300,11 @@ function skillDoc(
       ? [`1. **Establish the target** — which of ${source.platforms.join(", ")} the work is for. A rule tagged for another platform does not apply.`]
       : [`1. **Establish the target** — what is being built or audited, and to which conformance level.`]),
     `2. **Find the topic** in **Where to look** or the **Index**, and read that file under \`references/\`. It holds every rule for the topic with its reasoning, exceptions and a citation. Large spec tables live in a sibling \`<topic>.tables.md\`.`,
-    `3. **Read the whole rule** — the statement, its \`Why\`, and the indented notes under it. The notes hold the exceptions; a statement applied without them is frequently wrong.`,
+    // Exceptions are not reliably in one place: Apple states some in the sentence after the lead
+    // ("The exception is if Tap to Pay on iPhone is the only payment-acceptance method you support")
+    // and some in a following note. Telling the agent to look in the notes sent it to the wrong
+    // half of the rule (AUDIT-OUTPUT finding 7).
+    `3. **Read the whole rule** — the statement, its \`${skill.rationale_label}\` line, and the indented notes under it. Exceptions and caveats appear in either; a statement applied without them is frequently wrong.`,
     `4. **Apply** ${severitiesPresent(pages).map((s) => sevText[s]).join(", ")}.`,
     `5. **Report evidence** — quote the rule, its id, and its link, so any finding can be checked against the source.`,
     ``,
@@ -281,14 +366,14 @@ function skillDoc(
   // categories — enough to know whether the full index is worth opening.
   const split = index.join("\n").length > skill.split_index_over;
   if (split) {
-    lines.push(`## Index`, ``, `${pages.length} topics, ${meta.rule_count} rules. The full table is in [index.md](index.md).`, ``);
-    lines.push(`| Category | Topics | Rules |`, `| --- | --- | --- |`);
+    // Every topic, by name, with a link. A count-per-category table told the agent how much material
+    // existed without telling it what any of it was about, so any task outside a routing row cost an
+    // extra file read (AUDIT-OUTPUT finding 6). The rule counts stay in index.md, where they answer
+    // "how deep is this topic" rather than "which topic do I want".
+    lines.push(`## Index`, ``, `${pages.length} topics, ${meta.rule_count} rules. Rule counts per topic are in [index.md](index.md).`, ``);
     for (const cat of categories) {
-      const ps = byCategory.get(cat)!;
-      const n = ps.reduce((acc, p) => acc + p.rules.filter((r) => r.kind === "rule").length, 0);
-      lines.push(`| ${titleCase(cat)} | ${ps.length} | ${n} |`);
+      lines.push(`**${titleCase(cat)}** — ` + byCategory.get(cat)!.map((p) => `[${p.title}](${pageFile(p)})`).join(" · "), ``);
     }
-    lines.push(``);
   } else {
     lines.push(`## Index`, ``, ...index, ``);
   }
@@ -377,6 +462,9 @@ export async function composeSource(source: Source): Promise<{ pages: number; ru
     source_revision: metaFile.revision ?? null,
     fetched_at: metaFile.fetched_at ?? null,
     extractor: metaFile.extractor ?? null,
+    // Which renderer produced these files. `validate` compares it against the current code, so a
+    // reference that predates a compose change is reported instead of shipping stale.
+    compose_fingerprint: await composeFingerprint(),
     partial: metaFile.partial ?? false,
     rule_count: metaFile.rule_count,
     pages: pages.map((p) => ({

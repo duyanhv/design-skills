@@ -9,8 +9,33 @@
  */
 import { parse, type HTMLElement, type Node } from "node-html-parser";
 
+/**
+ * `node-html-parser` hands back the source text with its character references intact, so the
+ * relative-luminance formula reached the shipped glossary as `if RsRGB &lt;= 0.04045` — markup in
+ * prose an agent is meant to read (AUDIT-OUTPUT finding 8). Decoded once, at the only place raw
+ * text enters the pipeline.
+ */
+const NAMED: Record<string, string> = {
+  lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", nbsp: "\u00a0",
+  ndash: "–", mdash: "—", hellip: "…", times: "×", le: "≤", ge: "≥", minus: "−", deg: "°",
+  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201c", rdquo: "\u201d",
+};
+export function decodeEntities(s: string): string {
+  return s.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (m, body: string) => {
+    if (body[0] === "#") {
+      const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : Number(body.slice(1));
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    }
+    // `&amp;` must decode last in a chain, so resolve only one level: the source never double-encodes.
+    return NAMED[body.toLowerCase()] ?? m;
+  });
+}
+
+/** Element text with entities resolved. `el.text` alone leaks `&lt;` into the markdown. */
+const text = (el: HTMLElement) => decodeEntities(el.text);
+
 function inline(node: Node): string {
-  if (node.nodeType === 3) return node.rawText.replace(/\s+/g, " ");
+  if (node.nodeType === 3) return decodeEntities(node.rawText).replace(/\s+/g, " ");
   const el = node as HTMLElement;
   const inner = el.childNodes.map(inline).join("");
   switch (el.tagName) {
@@ -35,9 +60,9 @@ function block(el: HTMLElement): string {
   const cls = el.getAttribute("class") ?? "";
   switch (el.tagName) {
     case "P":
-      if (/\bconformance-level\b/.test(cls)) return `**Level ${el.text.trim()}**`;
+      if (/\bconformance-level\b/.test(cls)) return `**Level ${text(el).trim()}**`;
       if (/\bnote\b/.test(cls)) return `> **Note:** ${inline(el).trim()}`;
-      if (/\bchange\b/.test(cls)) return `_${el.text.trim()}_`;
+      if (/\bchange\b/.test(cls)) return `_${text(el).trim()}_`;
       return inline(el).trim();
     case "DL": {
       const items: string[] = [];
@@ -94,7 +119,8 @@ export function wcagToMarkdown(html: string): { title: string; abstract: string;
   const number = /<!-- number:([\d.]+) -->/.exec(html)?.[1] ?? "";
   const root = parse(html);
   const guideline = root.querySelector("section.guideline") ?? root;
-  const title = `${number} ${guideline.querySelector("h3")?.text.trim() ?? ""}`.trim();
+  const h3 = guideline.querySelector("h3");
+  const title = `${number} ${h3 ? text(h3).trim() : ""}`.trim();
   const abstract = inline(guideline.querySelector(":scope > p") ?? parse("")).trim();
 
   const out: string[] = [];
@@ -102,7 +128,8 @@ export function wcagToMarkdown(html: string): { title: string; abstract: string;
   for (const sc of guideline.querySelectorAll("section.sc")) {
     scNo++;
     const id = sc.getAttribute("id") ?? `sc-${scNo}`;
-    const heading = sc.querySelector("h4")?.text.trim() ?? id;
+    const h4 = sc.querySelector("h4");
+    const heading = h4 ? text(h4).trim() : id;
     const isNew = /\bnew\b/.test(sc.getAttribute("class") ?? "");
     out.push(`## ${number}.${scNo} ${heading}${isNew ? " (new in 2.2)" : ""} {#${id}}`);
     for (const child of sc.childNodes) {
@@ -127,8 +154,8 @@ export function glossaryToMarkdown(html: string): { title: string; abstract: str
   const dts = root.querySelectorAll("dt");
   for (const dt of dts) {
     const dfn = dt.querySelector("dfn");
-    const id = dfn?.getAttribute("id") ?? dt.text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    const term = dt.text.replace(/\s+/g, " ").trim();
+    const id = dfn?.getAttribute("id") ?? text(dt).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const term = text(dt).replace(/\s+/g, " ").trim();
     let dd = dt.nextElementSibling;
     while (dd && dd.tagName !== "DD") dd = dd.nextElementSibling;
     if (!dd) continue;

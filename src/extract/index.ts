@@ -8,6 +8,7 @@ import { extractWcag, WCAG_EXTRACTOR } from "./wcag.ts";
 import { shortHash } from "../util/hash.ts";
 import { listFiles, paths, readJson, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
+import { extractFingerprint } from "./fingerprint.ts";
 
 export interface PageMeta {
   slug: string;
@@ -43,6 +44,10 @@ export function extractorFor(source: Source): { id: string; run: (md: string, me
 /**
  * Everything that can change what extraction produces. Reuse is keyed on this rather than on the
  * page body alone, so editing `skip_sections` or a page's platform scope invalidates stale IR.
+ *
+ * `extractor` is the fingerprint of the extraction code, not its id string: the id is a constant
+ * someone has to remember to bump, and a heuristic change that nobody bumped it for silently
+ * reused IR the new code would not have produced.
  */
 export function inputHash(source: Source, extractorId: string, body: string, meta: PageMeta): string {
   return shortHash(
@@ -106,6 +111,8 @@ export async function extractSource(
   let rulesTotal = 0;
   const todo = opts.limit ? files.slice(0, opts.limit) : files;
   const extractor = extractorFor(source);
+  // Identity for reuse = the extractor's id *and* a hash of its code.
+  const extractorKey = `${extractor.id}+${await extractFingerprint()}`;
   const partial = opts.partial ?? Boolean(opts.limit);
   const live = new Set<string>();
 
@@ -121,7 +128,7 @@ export async function extractSource(
       url: meta.url,
       platforms: meta.platforms ? meta.platforms.split(",").filter(Boolean) : undefined,
     };
-    const input_hash = inputHash(source, extractor.id, body, pageMeta);
+    const input_hash = inputHash(source, extractorKey, body, pageMeta);
     if (!opts.force && previous && previous.input_hash === input_hash) {
       skipped++;
       rulesTotal += previous.rules.filter((r) => r.kind === "rule").length;
@@ -137,6 +144,7 @@ export async function extractSource(
       topic: meta.title ?? slug,
       kind: r.kind,
       section: r.section,
+      order: r.order,
       platforms: r.platforms,
       scope: r.scope,
       severity: r.severity,
