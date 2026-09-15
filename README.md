@@ -176,6 +176,7 @@ bun run eval apple-hig     # Assertions about selected rules and their rendered 
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references
 bun run trace              # Selected audit assertions; needs Apple HIG and WCAG builds
+bun run trace:negative     # Reintroduces each defect and asserts the matching trace check fails
 ```
 
 The checks exercise extraction, scope, context retention, source fidelity, publishing, and

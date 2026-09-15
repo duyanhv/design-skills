@@ -5,12 +5,13 @@ than the compiler itself. Every finding is addressed, with the check that now fa
 Verification below is from this working tree at the time of writing.
 
 ```
-bun run check      typecheck · 45 tests, 276 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 5 manifests valid
+bun run check      typecheck · 45 tests, 276 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 12 trace probes · 5 manifests valid
 bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
 bun run coverage   0 unexplained content losses across 158 Apple pages and 14 WCAG guidelines
 bun run fidelity   0 of 10,883 Apple and 0 of 625 WCAG source sentences missing from the shipped references
 bun run trace      15/15 requirements verified against the shipped ir/ and skills/
+bun run trace:negative  12 reintroduced defects, each caught by the trace check that claims to guard it
 ```
 
 The headline number is `fidelity`. At the time of the audit, 25 Apple sentences and 3 WCAG text
@@ -20,8 +21,17 @@ were invisible to `coverage`, `trace` and `validate` alike, because all three re
 disk and believe it.
 
 Five findings could still silently regress, so each has an assertion in `bun run trace` over the
-shipped artifacts (`O-1` … `O-8`). Every one was confirmed to fail when the defect it guards is
-reintroduced, not merely to pass on a good build.
+shipped artifacts (`O-1` … `O-8`).
+
+A trace check that has never been seen to fail is a guess, in exactly the way the project already
+says about `validate`: it reads the shipped artifacts, and a passing report is indistinguishable
+from a check whose regex stopped matching. Several of these assertions are strings in a Markdown
+file, which is the kind that rots quietly. `bun run trace:negative` reintroduces twelve of the
+original defects into a scratch copy of the built skills — a stale render, a dropped sentence, a
+definition swallowing the paragraph after it, a term named "Consider", a rule with no source
+position, the visionOS table moved after its rules, a badge quoting a figure the rule never states,
+the two badges the audit named, a dead heading link, an HTML entity, a flattened glossary entry —
+and asserts the named check fails on each. All twelve are caught.
 
 ## Findings
 
