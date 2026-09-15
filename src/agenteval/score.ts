@@ -141,7 +141,13 @@ export function score(task: Task, transcript: string): Score {
   const dismissedCorrectly = task.decoys.filter((d) => hit(dismissedBlocks, d.dismissCues)).map((d) => d.id);
 
   // A finding is checkable when it carries a rule id or a source link.
-  const cited = [...transcript.matchAll(/\b[a-z0-9-]+\/[a-z0-9-]+\/\d{3}\b|https?:\/\/\S*(?:developer\.apple\.com|w3\.org)\S*/gi)].length;
+  // A WCAG success criterion number is a citation too: "Fails 1.4.3 Contrast (Minimum)" is exactly
+  // as checkable as the rule id or the URL, and which form an agent picks varies run to run. Three
+  // samples of the same task cited ~29 criteria each and scored 1, 13 and 13, which measured
+  // formatting rather than whether a human could verify the finding.
+  const cited = [...transcript.matchAll(
+    /\b[a-z0-9-]+\/[a-z0-9-]+\/\d{3}\b|https?:\/\/\S*(?:developer\.apple\.com|w3\.org)\S*|\b\d\.\d\.\d+\b/gi,
+  )].length;
   // Bulleted/numbered lines are the agent's findings; a rough denominator for citation rate.
   const findings = bodyBlocks.filter((b) => /^\s*(?:[-*]|\d+\.)\s+\S/.test(b) || /^\s*\*\*/.test(b)).length;
   return { found, missed, falsePositives, dismissedCorrectly, cited, findings, scopeErrors };

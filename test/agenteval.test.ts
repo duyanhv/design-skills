@@ -223,3 +223,19 @@ test("a split that would leave no findings at all is rejected as a mis-split", (
   expect(findings).toContain("contrast fails");
   expect(findings).toContain("focus not visible");
 });
+
+test("a success criterion number counts as a citation, whatever form the agent chose", () => {
+  const t = (s: string) => score(
+    { ...task, violations: [], decoys: [], scopeTraps: [] } as unknown as Task,
+    s,
+  ).cited;
+  // Three samples of one task cited ~29 criteria each and scored 1, 13 and 13 under the old regex,
+  // which measured which *format* the agent happened to pick rather than whether a reader could
+  // check the finding. All three forms are checkable.
+  expect(t("Fails 1.4.3 Contrast (Minimum) at Level AA.")).toBe(1);
+  expect(t("See `wcag22/distinguishable/003`.")).toBe(1);
+  expect(t("https://www.w3.org/TR/WCAG22/#contrast-minimum")).toBe(1);
+  // Counting it made the no-skill arm's citations visible too, which is the point: an agent citing
+  // 1.4.3 from memory is doing something the old metric scored as zero.
+  expect(t("Fails 1.4.3 and 2.4.7.")).toBe(2);
+});

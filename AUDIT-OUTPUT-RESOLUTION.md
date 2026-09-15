@@ -5,7 +5,7 @@ than the compiler itself. Every finding is addressed, with the check that now fa
 Verification below is from this working tree at the time of writing.
 
 ```
-bun run check      typecheck · 45 tests, 291 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 15 trace probes · 5 manifests valid
+bun run check      typecheck · 50 tests, 317 assertions · e2e build · 20 validate guards fire · coverage · fidelity · 15 trace probes · 5 manifests valid
 bun run validate   apple-hig 0 errors 0 warnings · wcag22 0/0 · lumen-ds 0/0
 bun run eval       apple-hig 13/13 · wcag22 10/10 · lumen-ds 9/9
 bun run coverage   0 unexplained content losses across 158 Apple pages and 14 WCAG guidelines
@@ -18,17 +18,53 @@ Every check above reads files. The audit's actual subject was whether an agent c
 compiler produces, so the reorganised Apple skill was also run through `bun run agenteval`, which
 mounts it as a real skill directory and gives an agent three review tasks:
 
-> **Figures pending re-measurement.** The numbers first recorded here were a single sample of the
-> skill arm against three of the no-skill arm. `0ef7374` made three samples and ranges this
-> project's standard precisely because one sample had overstated an earlier result, and reporting
-> n=1 against an n=3 baseline is the same mistake. Being re-run at `--runs 3`.
+Three samples per arm, reported as ranges. The first figures recorded here were a single skill-arm
+sample against a three-sample baseline; `0ef7374` made three-and-ranges this project's standard
+precisely because one sample had overstated an earlier result, and it did so again here.
 
-That run also found a scorer bug rather than a skill bug. It reported a scope error on
-`watchos-scope` because the agent had cited the visionOS 60 pt spacing rule — but the transcript
-listed it under "Rules I considered and excluded as out-of-platform" with the note "visionOS-only;
-not applied", which is the behaviour the trap exists to reward. The non-findings vocabulary had no
-word for "excluded" or "out-of", so the dismissal section was scored as findings. Fixed, with
-eleven adversarial findings headings added so the looser vocabulary cannot swallow a real report.
+```
+                 recall     false pos.   decoys dismissed   scope errors   citations
+ios-buttons      4/4        0            1-2/2              0              35-40
+  (no skill)     3-4/4      0-1          0-1/2              0              0
+wcag-form        5-6/6      0            2-3/3              0              30-42
+  (no skill)     5-6/6      0            3/3                0              24-31
+watchos-scope    4/4        0            1-2/2              0              33-42
+  (no skill)     3-4/4      0            1-2/2              0              0
+```
+
+What the single sample had claimed — 4/4, 6/6, 4/4 with every decoy dismissed and a clean sweep on
+scope — is the *best* of the three runs, not the result. Honestly stated: the skill arm never misses
+a violation on the two Apple tasks and the no-skill arm sometimes does; the skill arm cites Apple
+rules where the no-skill arm cites nothing at all; and decoy dismissal is genuinely unreliable in
+both arms, varying run to run. On `wcag-form` the two arms are indistinguishable on recall, and the
+citation gap is much smaller than it first appeared, because an agent reviewing HTML cites WCAG
+criteria from memory whether or not it has the skill.
+
+Scoring is keyword-based and measures seeded cues, not whether every finding is sound. It is
+evidence about a direction, not a benchmark.
+
+Running this found four bugs, none of them in the skill. They are worth listing because every one
+produced a number that looked plausible:
+
+- **A correct dismissal scored as a scope error.** The agent listed the visionOS 60 pt spacing rule
+  under "Rules I considered and excluded as out-of-platform" — the behaviour the trap exists to
+  reward — and was penalised, because the non-findings vocabulary had no word for "excluded" or
+  "out-of".
+- **A scope preamble scored a complete audit as finding nothing.** Widening that vocabulary let a
+  bold *label* act as a heading, so a review opening `**Scope:** WCAG 2.2 Level AA only…` had its
+  entire report moved into the dismissed section and scored 0/6. In the summary that is
+  indistinguishable from an agent that found nothing. A bold heading must now be the whole line, a
+  split that leaves no findings is rejected, and the split point is taken from the line start.
+- **One failed run discarded eight completed ones.** Results were written once at the end, so a
+  flaky CLI invocation on the ninth run threw away forty minutes of model calls and the failing
+  transcript with them. Runs are now checkpointed individually, a failure is recorded as a sample
+  with no transcript, and failed samples are excluded from the figures rather than averaged in as
+  zero-recall reviews.
+- **The citation metric measured formatting.** Three samples of `wcag-form` cited ~29 success
+  criteria each and scored 1, 13 and 13, because only rule ids and URLs counted. "Fails 1.4.3
+  Contrast (Minimum)" is exactly as checkable, and counting it revealed that the no-skill arm cites
+  WCAG criteria from memory — which is why the citation gap on that task is small, and why the gap
+  on the two Apple tasks (35-42 against 0) is the real result.
 
 The headline number is `fidelity`. At the time of the audit, 25 Apple sentences and 3 WCAG text
 blocks did not appear verbatim in the shipped references; both are now zero. That check did not
