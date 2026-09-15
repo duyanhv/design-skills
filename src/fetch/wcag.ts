@@ -2,6 +2,15 @@
  * Fetcher for the w3c/wcag guidelines source tree. `guidelines/index.html` nests
  * principle > guideline > <section data-include="sc/…"> ; we inline each include so that one
  * "page" = one guideline (13 of them), which becomes one reference file with its success criteria.
+ *
+ * Two sections outside that tree are fetched as well, because criteria are unusable without them:
+ *   - `input-purposes.html` — the defined set 1.3.5 refers to. Without it the criterion's own
+ *     condition ("serves a purpose identified in the Input Purposes … section") is unresolvable.
+ *   - the Conformance chapter of `index.html` (Interpreting Normative Requirements + Conformance
+ *     Requirements cc1–cc5) — what conformance *means*, which selecting a level does not cover.
+ * They are normative, they are what the guideline links to, and bundling them locally is the same
+ * posture as the criteria themselves: `license.redistributable` is false, so nothing here is
+ * committed; the reader builds it on their own machine.
  */
 import { join } from "node:path";
 import { parse } from "node-html-parser";
@@ -46,9 +55,14 @@ export async function fetchWcag(source: Source, opts: { limit?: number } = {}): 
   }
 
   const index = parse(await fetchText(`${baseUrl}${source.entry}`));
+  /**
+   * Failures found while *planning* the crawl. A dependency that the index no longer offers is a
+   * missing page, not an absent one, so it is recorded the same way a failed download would be.
+   */
+  const failedEarly: { url: string; error: string }[] = [];
   const principles = index.querySelectorAll("section.principle");
   let gNo = 0;
-  const jobs: { slug: string; title: string; category: string; number: string; html: string; includes: string[] }[] = [];
+  const jobs: { slug: string; title: string; category: string; number: string; html: string; includes: string[]; append?: boolean }[] = [];
 
   principles.forEach((principle, pi) => {
     const category = principle.getAttribute("id") ?? `principle-${pi + 1}`;
@@ -66,11 +80,47 @@ export async function fetchWcag(source: Source, opts: { limit?: number } = {}): 
   // Glossary: every terms/* include, as one extra page
   const termIncludes = index.querySelectorAll("[data-include]").map((s) => s.getAttribute("data-include")!).filter((p) => p.startsWith("terms/"));
   if (termIncludes.length) {
-    jobs.push({ slug: "glossary", title: "Glossary", category: "glossary", number: "", html: "<!-- glossary -->\n", includes: termIncludes });
+    jobs.push({ slug: "glossary", title: "Glossary", category: "glossary", number: "", html: "<!-- glossary -->\n", includes: termIncludes, append: true });
+  }
+
+  // Input Purposes: an appendix include, fetched like a page of its own.
+  const purposeInclude = index.querySelectorAll("[data-include]").map((s) => s.getAttribute("data-include")!).find((p) => /input-purposes\.html$/.test(p));
+  if (purposeInclude) {
+    jobs.push({
+      slug: "input-purposes",
+      title: "Input Purposes for User Interface Components",
+      category: "reference",
+      number: "",
+      html: "<!-- appendix:reference -->\n",
+      includes: [purposeInclude],
+      append: true,
+    });
+  } else {
+    failedEarly.push({ url: `${baseUrl}/input-purposes.html`, error: "index.html no longer includes input-purposes.html; 1.3.5's defined purpose set would ship as a dangling reference" });
+  }
+
+  // Conformance: already inline in index.html, so the whole chapter is sliced out rather than
+  // fetched. The whole chapter and not just cc1–cc5, because its parts cross-reference each other
+  // (cc2 sends the reader to the Statement of Partial Conformance); shipping half of it would
+  // recreate the dangling-reference problem one level down.
+  const conformance = index
+    .querySelectorAll("section")
+    .find((s) => s.querySelector(":scope > h1")?.text.trim() === "Conformance");
+  if (conformance) {
+    jobs.push({
+      slug: "conformance-reqs",
+      title: "Conformance Requirements",
+      category: "conformance",
+      number: "",
+      html: `<!-- appendix:normative -->\n${conformance.outerHTML}`,
+      includes: [],
+    });
+  } else {
+    failedEarly.push({ url: `${baseUrl}${source.entry}#conformance-reqs`, error: "the Conformance chapter was not found in index.html; a conformance conclusion would have nothing to check against" });
   }
 
   const todo = opts.limit ? jobs.slice(0, opts.limit) : jobs;
-  const failed: { url: string; error: string }[] = [];
+  const failed: { url: string; error: string }[] = [...failedEarly];
   await mapLimit(todo, 4, async (job) => {
     let html = job.html;
     for (const inc of job.includes) {
@@ -81,7 +131,7 @@ export async function fetchWcag(source: Source, opts: { limit?: number } = {}): 
         failed.push({ url: `${baseUrl}/${inc}`, error: (err as Error).message });
         continue;
       }
-      if (job.slug === "glossary") html += sc + "\n";
+      if (job.append) html += sc + "\n";
       else html = html.replace(new RegExp(`<section[^>]*data-include="${inc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*></section>`), sc);
     }
     const stamped = job.number ? `<!-- number:${job.number} -->\n${html}` : html;
