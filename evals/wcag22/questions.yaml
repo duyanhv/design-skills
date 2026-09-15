@@ -95,3 +95,83 @@
 - q: Where are terms like "large scale (text)" defined?
   source: glossary
   expect: ["large scale (text)", "18 point"]
+
+# --- A2: normative conditions vs. informative notes ---
+
+- q: Does 2.5.3 Label in Name require the visible label at the *start* of the accessible name?
+  source: input-modalities
+  # It does not: the criterion requires containment, and the ordering advice is a Note, which W3C
+  # classifies as informative. Rendering it unlabelled beside the exceptions made an agent fail a
+  # conforming component on ordering alone (audit A2). The label is what stops that.
+  rule:
+    statement_contains: the name contains the text that is presented visually
+    conformance_level: A
+    anchor: label-in-name
+    context_contains:
+      - "_[informative]_ Note: A best practice is to have the text of the label at the start of the name."
+    rendered_contains:
+      - "_[informative]_ Note: A best practice is to have the text of the label at the start of the name."
+
+- q: Are 2.5.8's exceptions advisory, or conditions of the criterion?
+  source: input-modalities
+  # Conditions. An exception must *not* pick up the informative label, or the split would be
+  # decoration: it would tell a reader to disregard the Spacing exception that makes a 20px target
+  # conforming. The two assertions below are the same guard from both sides.
+  rule:
+    statement_contains: at least 24 by 24 CSS pixels
+    conformance_level: AA
+    anchor: target-size-minimum
+    context_contains:
+      - "Spacing — Undersized targets"
+      - "Essential — A particular presentation of the target is essential"
+      - "_[informative]_ Note: Targets that allow for values to be selected spatially"
+    rendered_contains:
+      - "- Spacing — Undersized targets"
+      - "- Essential — A particular presentation of the target is essential"
+
+- q: What does the skill say the `_[informative]_` marker means?
+  source: input-modalities
+  # The marker is useless if the entry file never explains it. This is a page-level smoke check;
+  # the entry-file wording itself is asserted by the wcag-authority probe.
+  expect: ["_[informative]_"]
+
+# --- A3: dependencies are reachable, and conformance is its own question ---
+
+- q: Which input purposes does 1.3.5 mean, and can I reach the list from the criterion?
+  source: adaptable
+  # The criterion's own condition names a section. Extraction used to flatten the link to its
+  # label, so the shipped reference named a section with no way to reach it (audit A3).
+  rule:
+    statement_contains: The purpose of each input field collecting information about the user
+    conformance_level: AA
+    anchor: identify-input-purpose
+    context_contains:
+      - "[Input Purposes for user interface components section](#input-purposes)"
+    rendered_contains:
+      - "](../reference/input-purposes.md#"
+
+- q: Is the defined set of input purposes in the bundle?
+  source: input-purposes
+  expect:
+    - "`cc-exp-month`"
+    - "`street-address`"
+    - "`bday`"
+    - "Input Purposes for User Interface Components"
+
+- q: What does a page have to satisfy to conform, beyond the criteria at its level?
+  source: conformance-reqs
+  # Selecting A/AA/AAA is cc1 alone. A review that checks criteria and concludes "conforms" has
+  # skipped four more requirements; they have to be in the bundle to be checkable at all.
+  expect:
+    - "Full pages"
+    - "Complete processes"
+    - "Only Accessibility-Supported Ways of Using Technologies"
+    - "Non-Interference"
+    - "all web pages in the process conform at the specified level or better"
+
+- q: Which of WCAG's own words create requirements?
+  source: conformance-reqs
+  # The source's own statement of the rule this skill now follows.
+  expect:
+    - "diagrams, examples, and notes are informative (non-normative)"
+    - "does not create requirements that impact a conformance claim"

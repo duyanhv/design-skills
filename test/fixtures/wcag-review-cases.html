@@ -1,0 +1,87 @@
+<!--
+  Review fixtures for AUDIT finding A2 — the components the fix has to judge correctly.
+
+  Each case states, in `data-verdict`, what WCAG actually says about it, and `data-why` names the
+  block of the criterion that decides it. `src/e2e/probes/wcag-authority.ts` reads this file, builds
+  a reviewer from the *shipped* reference (using only the blocks that are not marked
+  `_[informative]_`), and asserts the verdicts come out right.
+
+  The point of the pair is that a fix can fail in two opposite directions. Treating notes as
+  requirements produces false findings on `pass` cases; deleting notes, or demoting exceptions to
+  advice, loses the conditions that decide the `fail` and `pass-by-exception` cases.
+-->
+<section id="label-in-name">
+
+  <!-- 2.5.3 requires the name to CONTAIN the visible text. Ordering is a Note: informative. -->
+  <div class="case"
+       data-sc="2.5.3"
+       data-verdict="pass"
+       data-visible-label="Search"
+       data-accessible-name="Submit your Search query"
+       data-why="the name contains the text that is presented visually">
+    The audit's example: the visible label appears late in the accessible name. This satisfies
+    2.5.3. Failing it cites the note recommending the label at the start, which W3C classifies as
+    informative, so the finding would be false.
+  </div>
+
+  <div class="case"
+       data-sc="2.5.3"
+       data-verdict="pass"
+       data-visible-label="Search"
+       data-accessible-name="Search"
+       data-why="the name contains the text that is presented visually">
+    The uncontroversial case: name and label are identical.
+  </div>
+
+  <div class="case"
+       data-sc="2.5.3"
+       data-verdict="fail"
+       data-visible-label="Search"
+       data-accessible-name="Submit query"
+       data-why="the name contains the text that is presented visually">
+    A real 2.5.3 failure: the accessible name does not contain the visible text at all, so speech
+    input cannot address the control by the words shown on it.
+  </div>
+</section>
+
+<section id="target-size-minimum">
+
+  <!-- 2.5.8's exceptions are conditions of the criterion, not advice. -->
+  <div class="case"
+       data-sc="2.5.8"
+       data-verdict="fail"
+       data-width="20" data-height="20" data-spacing="20"
+       data-inline="false" data-user-agent-control="false" data-essential="false" data-equivalent="false"
+       data-why="at least 24 by 24 CSS pixels">
+    Undersized, and packed close enough that the 24px circles intersect. No exception applies.
+  </div>
+
+  <div class="case"
+       data-sc="2.5.8"
+       data-verdict="pass"
+       data-width="20" data-height="20" data-spacing="28"
+       data-inline="false" data-user-agent-control="false" data-essential="false" data-equivalent="false"
+       data-why="Spacing">
+    The same undersized target, spaced so the 24px circles do not intersect. The Spacing exception
+    makes it conforming. A reviewer that treats the exceptions as advisory reports this as a defect
+    — the inverse of the A2 failure, and just as wrong.
+  </div>
+
+  <div class="case"
+       data-sc="2.5.8"
+       data-verdict="pass"
+       data-width="16" data-height="16" data-spacing="16"
+       data-inline="true" data-user-agent-control="false" data-essential="false" data-equivalent="false"
+       data-why="Inline">
+    A link inside a sentence, sized by the line-height around it. The Inline exception applies.
+  </div>
+
+  <div class="case"
+       data-sc="2.5.8"
+       data-verdict="pass"
+       data-width="44" data-height="44" data-spacing="44"
+       data-inline="false" data-user-agent-control="false" data-essential="false" data-equivalent="false"
+       data-why="at least 24 by 24 CSS pixels">
+    Comfortably over the minimum; nothing to report.
+  </div>
+</section>
