@@ -7,6 +7,12 @@ A button performs a single, immediate action.
 
 A button combines a label, an optional icon, and a role. Use a button for actions, and a link for navigation.
 
+## Contents
+
+- [Best practices](#best-practices) — 3 rules
+- [Roles](#roles) — 1 rule
+- [Sizes](#sizes)
+
 ## Rules
 
 ### Best practices

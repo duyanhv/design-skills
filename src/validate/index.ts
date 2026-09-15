@@ -53,7 +53,11 @@ export async function validateSource(source: Source): Promise<Finding[]> {
     }
     const ir = parsed.data;
     irPages.push(ir.page);
-    if (!ir.rules.length) warn(where, "page has zero rules and zero terms");
+    // A page that extracted nothing at all. Rules are not the only legitimate yield: a bundled
+    // normative appendix (WCAG's Input Purposes, its Conformance chapter) is prose with citable
+    // anchors, and forcing it into the rule shape would restate the source in a shape the source
+    // never used. Empty of *everything* is still the extraction failure this was written to catch.
+    if (!ir.rules.length && !ir.sections.length) warn(where, "page has no rules, terms or sections");
     for (const r of ir.rules) {
       if (ids.has(r.id)) err(where, `duplicate rule id ${r.id}`);
       ids.add(r.id);

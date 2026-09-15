@@ -62,6 +62,20 @@ const CASES: Case[] = [
     expect: "note_authority entries for 2 notes",
   },
   {
+    // The guard allows a page with sections but no rules, because a bundled normative appendix is
+    // prose. A page with neither is still an extraction that silently yielded nothing.
+    name: "a page that extracted nothing at all",
+    break: async (d) => {
+      const p = join(d, "ir", SOURCE_ID, "pages", "buttons.json");
+      const ir = JSON.parse(await readFile(p, "utf8"));
+      ir.rules = [];
+      ir.sections = [];
+      await writeFile(p, JSON.stringify(ir, null, 2));
+    },
+    expect: "no rules, terms or sections",
+    level: "warn",
+  },
+  {
     name: "provenance url outside the source",
     break: async (d) =>
       mutateRule(d, "buttons", (r) => ({ ...r, provenance: { ...r.provenance, url: "https://evil.example/x" } })),

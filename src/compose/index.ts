@@ -172,12 +172,17 @@ type Block =
   | { order: number; kind: "table"; table: Table };
 
 /**
- * When a reference opens with a table of contents. Length alone was not the right test: Design
- * principles is 115 lines across 16 sections and The menu bar is 175 across 15, both of which cost a
- * full read to find one section, while a 210-line page with four sections does not.
+ * When a reference opens with a table of contents.
+ *
+ * The test used to be length (200 lines or 10 sections), which put a list on 22 of Apple's 164
+ * pages and left 70% of its rules reachable only by reading a whole file. `bun run budget` settled
+ * the threshold with the comparison that matters to a reader, who reads one page and not the corpus:
+ * header plus list plus the largest single section, against reading the file whole. Across all 145
+ * pages with three or more sections, in both sources, the list wins every time — median saving 1,869
+ * tokens on Apple, 472 on WCAG, and the worst case still saves 26. Three sections is where a list
+ * starts describing a choice rather than restating a page, so that is the whole test now.
  */
-const TOC_OVER_LINES = 200;
-const TOC_OVER_SECTIONS = 10;
+const TOC_OVER_SECTIONS = 3;
 
 function referenceDoc(page: PageIR, source: Source, meta: { source_version: string }, linker: Linker): Rendered {
   const label = source.skill.rationale_label;
@@ -254,12 +259,11 @@ function referenceDoc(page: PageIR, source: Source, meta: { source_version: stri
 }
 
 /**
- * A table of contents for long references. Six Apple pages are over 400 lines with 25+ sections;
- * scanning one to find "Platform considerations › macOS" costs the whole file. Short pages do not
- * need one and would only pay tokens for it.
+ * A table of contents for references with enough sections to be worth choosing between. Measured
+ * rather than guessed: see `TOC_OVER_SECTIONS`. Two sections or fewer, the list restates the page.
  */
 function withContents(doc: string, headings: string[], rules: Rule[]): string {
-  if ((doc.split("\n").length <= TOC_OVER_LINES && headings.length <= TOC_OVER_SECTIONS) || headings.length < 3) return doc;
+  if (headings.length < TOC_OVER_SECTIONS) return doc;
   const counts = new Map<string, number>();
   for (const r of rules) if (r.kind === "rule") counts.set(r.section, (counts.get(r.section) ?? 0) + 1);
   const toc = [
