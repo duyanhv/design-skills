@@ -13,7 +13,7 @@
 import { MAX_BLOCK } from "../schema/ir.ts";
 import { ruleValue, severityOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@8";
+export const EXTRACTOR = "bold-lead@9";
 
 /**
  * Where a rule's platform scope came from.
@@ -327,6 +327,12 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       inChangeLog = /change log/i.test(h[2]!);
       openRule = null;
       openSection = null;
+      // A caption candidate does not survive a heading. `flushTable` pops `lastContext` out of the
+      // list holding it, on the theory that the line is already on the page as the table's lead-in.
+      // Left uncleared across a heading, it still points into the *previous* section, so a table
+      // several sections later deletes that section's last context block — in airplay.md, the
+      // "Custom color AirPlay icon" figure, removed by a table three sections down.
+      lastContext = null;
       continue;
     }
     if (inChangeLog) changeLog += line + "\n";
