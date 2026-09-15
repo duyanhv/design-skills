@@ -397,6 +397,61 @@ const CHECKS: Check[] = [
     },
   },
   {
+    finding: "O-7",
+    requirement: "The rationale label describes what the field holds, and the workflow does not send the reader to the wrong half of a rule",
+    observe: async () => {
+      // 512 of 2,288 Apple rationales begin "For example", "Use", "If you" — procedures, examples
+      // and conditions, not reasons — and some hold the rule's exception outright. `Why:` asserted
+      // they were justifications. Nothing guarded this: reverting the manifest to `Why` left all
+      // other checks green, which is why it is here.
+      const buttons = await ref("apple-hig", "components", "buttons");
+      const why = [...buttons.matchAll(/^\s+- Why: /gm)].length;
+      if (why) throw new Error(`${why} rule(s) still label their rationale "Why:"`);
+      if (!/^\s+- Details: /m.test(buttons)) throw new Error("no rationale renders under the Details label");
+
+      // The exception the audit named must be present, and reachable as part of the rule body.
+      const tap = await ref("apple-hig", "technologies", "tap-to-pay-on-iphone");
+      if (!/- Details: The exception is if Tap to Pay on iPhone is the only payment-acceptance method/.test(tap)) {
+        throw new Error("the Tap to Pay exception is missing or no longer rendered with its rule");
+      }
+
+      // And the entry file must not tell the agent the exceptions live in the notes: in this source
+      // they appear in either half, which is the whole point of relabelling.
+      const skill = await readFile(join(paths.skill("apple-hig"), "SKILL.md"), "utf8");
+      if (/The notes hold the exceptions/.test(skill)) throw new Error("SKILL.md still claims the notes hold the exceptions");
+      if (!/Exceptions and caveats appear in either/.test(skill)) throw new Error("SKILL.md does not tell the reader exceptions can appear in either half");
+      return `0 "Why:" labels; rationales render as Details; the Tap to Pay exception ships with its rule; the workflow names both halves`;
+    },
+  },
+  {
+    finding: "O-9",
+    requirement: "Severity reads the main clause, not a trailing purpose clause, and a modal only softens the reader's obligation",
+    observe: async () => {
+      // Guarded by unit tests over the function, but nothing asserted it over the *shipped* rules,
+      // so reverting the heuristic left trace green. These are the audit's own examples.
+      const rules = (await loadPages("apple-hig")).flatMap((p) => p.rules);
+      const find = (fragment: string) => rules.find((r) => r.statement.includes(fragment));
+      const expect = (fragment: string, severity: string) => {
+        const r = find(fragment);
+        if (!r) return `missing: ${fragment}`;
+        return r.severity === severity ? "" : `"${fragment}" is ${r.severity.toUpperCase()}, expected ${severity.toUpperCase()}`;
+      };
+      const wrong = [
+        // A purpose clause states the goal; the directive is "choose"/"define".
+        expect("to avoid overcrowding", "should"),
+        expect("to help ensure your tips reach", "should"),
+        // A modal governing a third party is part of the situation, not permission.
+        expect("people can have more than one home", "should"),
+        // A prohibition in the main clause is still a MUST.
+        expect("Avoid using the same color", "must"),
+      ].filter(Boolean);
+      if (wrong.length) throw new Error(wrong.join("; "));
+      const must = rules.filter((r) => r.kind === "rule" && r.severity === "must").length;
+      const may = rules.filter((r) => r.kind === "rule" && r.severity === "may").length;
+      return `purpose clauses and third-party modals read correctly in the shipped rules (${must} MUST, ${may} MAY)`;
+    },
+  },
+  {
     finding: "O-11",
     requirement: "A rule id identifies one rule and survives a rebuild",
     observe: async () => {

@@ -168,6 +168,40 @@ const CASES: Case[] = [
       editRef(d, "apple-hig/references/components/widgets.md", (s) => s.replace(/## Contents\n\n(?:- \[[^\n]*\n)+\n/, "")),
   },
   {
+    // The exact revert that went unnoticed: flipping the manifest back to `Why` left every other
+    // check green, including all 17 trace requirements and 13/13 evals.
+    finding: "O-7",
+    name: "rationales relabelled back to Why",
+    break: async (d) =>
+      editRef(d, "apple-hig/references/components/buttons.md", (s) => s.replace(/^(\s+)- Details: /gm, "$1- Why: ")),
+  },
+  {
+    finding: "O-7",
+    name: "the workflow sending the reader to the notes for exceptions",
+    break: async (d) =>
+      editRef(d, "apple-hig/SKILL.md", (s) =>
+        s.replace(/Exceptions and caveats appear in either[^.]*\./, "The notes hold the exceptions."),
+      ),
+  },
+  {
+    finding: "O-9",
+    name: "a purpose clause promoting a suggestion to MUST",
+    break: async (d) => editIR(d, "apple-hig", "toolbars", (ir) => {
+      const r = ir.rules.find((x: any) => x.statement.includes("to avoid overcrowding"));
+      if (!r) throw new Error("no purpose-clause rule on the Toolbars page; update this fixture");
+      r.severity = "must";
+    }),
+  },
+  {
+    finding: "O-9",
+    name: "a third-party modal making a recommendation optional",
+    break: async (d) => editIR(d, "apple-hig", "homekit", (ir) => {
+      const r = ir.rules.find((x: any) => x.statement.includes("people can have more than one home"));
+      if (!r) throw new Error("the 'more than one home' rule is not on this page; update this fixture");
+      r.severity = "may";
+    }),
+  },
+  {
     finding: "O-11",
     name: "two rules sharing one id",
     break: async (d) => editIR(d, "apple-hig", "buttons", (ir) => {
