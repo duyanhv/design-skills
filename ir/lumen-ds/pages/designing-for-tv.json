@@ -7,9 +7,9 @@
   "source_hash": "39212c1bcddec64e",
   "fetched_at": "2026-03-04T00:00:00.000Z",
   "source_version": "2026-03-04",
-  "extracted_at": "2026-09-15T09:24:08.624Z",
-  "extractor": "bold-lead@10",
-  "input_hash": "dde3897225b958f0",
+  "extracted_at": "2026-09-15T09:42:59.837Z",
+  "extractor": "bold-lead@11",
+  "input_hash": "204497539246b19b",
   "summary": "People use a remote from across the room.",
   "overview": [
     "A television is a shared, ten-foot display driven by a directional remote. There is no pointer, no hover, and often no keyboard, so every affordance has to be reachable by moving focus and confirming."

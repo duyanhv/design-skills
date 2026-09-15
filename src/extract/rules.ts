@@ -13,7 +13,7 @@
 import { MAX_BLOCK } from "../schema/ir.ts";
 import { ruleValue, severityOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@10";
+export const EXTRACTOR = "bold-lead@11";
 
 /**
  * Where a rule's platform scope came from.
@@ -355,7 +355,12 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
       // The abstract is the first paragraph; the rest is the topic's introduction, which defines
       // the component and says when to use it — context a rule alone does not carry.
       if (!line.trim()) continue;
-      if (FIGURE.test(line.trim())) continue; // a decorative page header image carries no guidance
+      // A figure above the first heading is normally the decorative page-header illustration, which
+      // carries no guidance. A *captioned* one is different: the caption is the source explaining
+      // what the picture shows ("The Digital Crown on Apple Vision Pro", "A confirmation snippet
+      // requires additional input to proceed."), and for 12 occurrences it is the only place that
+      // sentence exists. Dropping those loses text; keeping the plain 184 would add nothing.
+      if (FIGURE.test(line.trim()) && !line.includes("— caption:")) continue;
       if (!summary) summary = stripMd(line);
       else push(overview, contextText(line));
       continue;
