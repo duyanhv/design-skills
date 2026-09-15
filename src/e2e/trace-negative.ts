@@ -233,7 +233,10 @@ const CASES: LegacyCase[] = [
 /** A scratch tree holding the built skills and IR, so trace reads the corrupted copy. */
 async function scratch(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "ds-trace-neg-"));
-  for (const sub of [["sources"], ["ir", "apple-hig"], ["ir", "wcag22"], ["skills", "apple-hig"], ["skills", "wcag22"]]) {
+  // lumen-ds comes along because the composer renders every source, so a check on composed text
+  // (the A4/A5 authority and workflow probes) reads the synthetic example too. Omitted, it failed
+  // in the scratch tree while passing in the real one, which reads as a defect in the fix.
+  for (const sub of [["sources"], ["ir", "apple-hig"], ["ir", "wcag22"], ["ir", "lumen-ds"], ["skills", "apple-hig"], ["skills", "wcag22"], ["skills", "lumen-ds"]]) {
     await mkdir(join(dir, ...sub.slice(0, -1)), { recursive: true });
     await cp(join(REPO, ...sub), join(dir, ...sub), { recursive: true });
   }
