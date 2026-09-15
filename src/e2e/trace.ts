@@ -6,6 +6,9 @@
  * code, and not over an intermediate value observed while the work was in progress. Everything here
  * reads `ir/` and `skills/` as they stand now and reports what it actually found.
  *
+ * Findings numbered `O-n` come from AUDIT-OUTPUT.md, which audited what the compiler produces
+ * rather than the compiler itself.
+ *
  * This exists because "I fixed it" and "the output is correct" are different claims, and only the
  * second one matters to someone using the skill. It needs the sources built locally:
  *
@@ -17,7 +20,9 @@
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { PageIR } from "../schema/ir.ts";
-import { exists, listFiles, paths, readJson } from "../util/fs.ts";
+import { exists, listDirs, listFiles, paths, readJson } from "../util/fs.ts";
+import { composeFingerprint } from "../compose/fingerprint.ts";
+import { fidelityOf } from "./fidelity.ts";
 import { log } from "../util/log.ts";
 
 interface Check {
@@ -234,6 +239,123 @@ const CHECKS: Check[] = [
       }
       if (!out.length) throw new Error("no skills built");
       return `${out.join(", ")}; all metadata values quoted`;
+    },
+  },
+  {
+    finding: "O-1",
+    requirement: "Shipped Markdown was rendered by the current compose, and every source sentence survives it",
+    observe: async () => {
+      const out: string[] = [];
+      for (const id of ["apple-hig", "wcag22"]) {
+        const name = id === "apple-hig" ? "apple-hig" : "wcag22";
+        const prov = await readJson<{ compose_fingerprint?: string }>(join(paths.skill(name), "provenance.json"));
+        const current = await composeFingerprint();
+        if (prov?.compose_fingerprint !== current) throw new Error(`${id} was rendered by compose ${prov?.compose_fingerprint ?? "(none)"}, current is ${current}`);
+        // The sentence-level scan is what caught the stale render; vocabulary coverage could not.
+        const { total, lost } = await fidelityOf(id);
+        const missing = [...lost.values()].reduce((n, l) => n + l.length, 0);
+        if (missing) throw new Error(`${id}: ${missing}/${total} source sentences absent from the shipped references`);
+        out.push(`${id} ${total} sentences`);
+      }
+      return `compose fingerprint current for both sources; 0 sentences lost (${out.join(", ")})`;
+    },
+  },
+  {
+    finding: "O-2 / O-3",
+    requirement: "A definition owns only its own text, and no rule is left without an id",
+    observe: async () => {
+      const pages = await loadPages("apple-hig");
+      const terms = pages.flatMap((p) => p.rules.filter((r) => r.kind === "term"));
+      // A term that absorbed the paragraphs after it is the finding-2 defect; on Apple pages a
+      // definition is a single line, so any notes on one mean the swallow is back.
+      const swallowed = terms.filter((t) => t.notes.length);
+      if (swallowed.length) throw new Error(`${swallowed.length} Apple terms carry following prose, e.g. ${swallowed[0]!.id}`);
+      const buttons = await ref("apple-hig", "components", "buttons");
+      // The sentence must be on the page, and not inside the Destructive definition.
+      const roles = /A button’s role can have additional effects on its appearance\./;
+      if (!roles.test(buttons)) throw new Error("the general sentence about roles is missing from Buttons");
+      const destructive = /- \*\*Destructive\.\*\*[^\n]*/.exec(buttons)?.[0] ?? "";
+      if (roles.test(destructive)) throw new Error("the Destructive definition still swallows the sentence about roles");
+      // A split bold lead used to produce a term named "Consider" with no id and no severity.
+      const audio = await ref("apple-hig", "patterns", "playing-audio");
+      if (/^- \*\*Consider\*\* —/m.test(audio)) throw new Error('"**Consider**" still renders as a term');
+      if (!/Consider presenting a Now Playing view/.test(audio)) throw new Error("the merged Now Playing statement is missing");
+      return `${terms.length} terms, none carrying following prose; role sentence present and unattributed; split bold lead merged`;
+    },
+  },
+  {
+    finding: "O-4",
+    requirement: "References render in source order",
+    observe: async () => {
+      const pages = await loadPages("apple-hig");
+      const without = pages.filter((p) => p.rules.some((r) => r.order === undefined));
+      if (without.length) throw new Error(`${without.length} pages have rules with no source position`);
+      const buttons = await ref("apple-hig", "components", "buttons");
+      const at = (s: string) => {
+        const i = buttons.indexOf(s);
+        if (i < 0) throw new Error(`not in the Buttons reference: ${s}`);
+        return i;
+      };
+      // The source places the visionOS size table before the rules that say "the sizes below".
+      if (at("| Shape | Mini (28 pt)") > at("Prefer buttons that have a discernible background shape")) {
+        throw new Error("the visionOS size table still renders after the rules that refer to it");
+      }
+      // "Platform considerations" intro text used to be appended as an orphan heading at the end.
+      if (at("No additional considerations for tvOS") > at("### Platform considerations › watchOS")) {
+        throw new Error("the Platform considerations intro still renders after the platform sections");
+      }
+      return `every rule carries a source position; the visionOS table and the Platform considerations intro render in source order`;
+    },
+  },
+  {
+    finding: "O-5",
+    requirement: "Every value badge is a figure the rule itself states",
+    observe: async () => {
+      const rules = (await loadPages("apple-hig")).flatMap((p) => p.rules).filter((r) => r.value);
+      const orphan = rules.filter((r) => !`${r.statement} ${r.rationale ?? ""}`.includes(r.value!));
+      if (orphan.length) throw new Error(`${orphan.length} badges quote a figure not in the rule, e.g. ${orphan[0]!.id}`);
+      // The badges the audit named: illustrative numbers attached to unrelated rules.
+      for (const [id, wrong] of [["apple-hig/game-center/015", "5 minutes"], ["apple-hig/charting-data/007", "24 hours"]] as const) {
+        const r = rules.find((x) => x.id === id);
+        if (r?.value === wrong) throw new Error(`${id} still carries the illustrative badge "${wrong}"`);
+      }
+      return `${rules.length} value badges, all traceable to their rule's own text`;
+    },
+  },
+  {
+    finding: "O-8",
+    requirement: "Every cross-reference resolves, in both files and headings",
+    observe: async () => {
+      let total = 0;
+      const dead: string[] = [];
+      const anchorOf = (h: string) => h.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
+      for (const name of ["apple-hig", "wcag22"]) {
+        const root = join(paths.skill(name), "references");
+        const headings = new Map<string, Set<string>>();
+        for (const cat of await listDirs(root)) {
+          for (const f of await listFiles(join(root, cat), ".md")) {
+            const doc = await readFile(join(root, cat, f), "utf8");
+            for (const m of doc.matchAll(/\]\((?!https?:)([^)\s#]+\.md)(?:#([^)\s]+))?\)/g)) {
+              total++;
+              const target = join(root, cat, m[1]!);
+              if (!headings.has(target)) {
+                if (!(await exists(target))) {
+                  dead.push(`${f} → ${m[1]} (no such file)`);
+                  continue;
+                }
+                headings.set(target, new Set([...(await readFile(target, "utf8")).matchAll(/^#{2,6} (.+)$/gm)].map((h) => anchorOf(h[1]!))));
+              }
+              if (m[2] && !headings.get(target)!.has(m[2].toLowerCase())) dead.push(`${f} → ${m[1]}#${m[2]}`);
+            }
+          }
+        }
+      }
+      if (dead.length) throw new Error(`${dead.length} dead links, e.g. ${dead[0]}`);
+      // Markup that used to survive into prose an agent reads.
+      const glossary = await ref("wcag22", "glossary", "glossary");
+      if (/&(lt|gt|amp|quot);/.test(glossary)) throw new Error("HTML entities still reach the shipped glossary");
+      if (!/^ {2}- Changes in context include changes of:$/m.test(glossary)) throw new Error("glossary definitions are still flattened into one line");
+      return `${total} cross-references across two skills, 0 dead; glossary keeps its structure and carries no entities`;
     },
   },
 ];
