@@ -1,6 +1,6 @@
 # Generated output audit
 
-Date: 2026-09-15. Baseline: `7578cf2` plus the uncommitted `authored` source work. This audit looks at the artifacts an agent actually reads (`skills/apple-hig/`, `skills/wcag22/`, `skills/lumen-ds/`) and compares them against three things:
+Date: 2026-09-15. Baseline: `7578cf2`; `b638d26` (authored skills) landed concurrently and is not covered. This audit looks at the artifacts an agent actually reads (`skills/apple-hig/`, `skills/wcag22/`, `skills/lumen-ds/`) and compares them against three things:
 
 1. **Established design skills** installed on this machine: Anthropic's `frontend-design`, Vercel's `web-design-guidelines` and `react-best-practices`, Expo's `expo-native-ui`, and the `skill-creator` writing guide.
 2. **The Agent Skills specification** (frontmatter, progressive disclosure, reference layout).
@@ -10,7 +10,7 @@ The earlier audits ([AUDIT.md](AUDIT.md), [AUDIT-VERIFICATION.md](AUDIT-VERIFICA
 
 ## Verification performed
 
-- `bun test`: 39 pass, 242 assertions. `bun run trace`: 10/10. `bun run eval`: Apple 13/13, WCAG 10/10. `bun run coverage`: 0 unexplained losses. `bun run validate`: apple-hig, wcag22, lumen-ds clean (the new `material-3` manifest fails because `guidance/material-3` does not exist yet; that is in-progress work, not an output defect).
+- `bun test`: 39 pass, 242 assertions. `bun run trace`: 10/10. `bun run eval`: Apple 13/13, WCAG 10/10. `bun run coverage`: 0 unexplained losses. `bun run validate`: all five sources clean. The authored `apple-design` and `material-3` skills landed in `b638d26` during this audit and are out of scope here; they are hand-written, not compiled.
 - Sentence-level fidelity scan (`bun run fidelity <source-id>`, added with this audit as `src/e2e/fidelity.ts`): every sentence of six or more words in each normalized Apple page, checked for a verbatim (whitespace and markup normalized) match in the shipped reference plus its `.tables.md` sibling, skipping `skip_sections` and figure lines. Same idea for WCAG but starting from the raw HTML `p`/`li`/`dd`/`dt` nodes rather than the normalized Markdown, so normalization losses are visible.
 - Link scan across all 166 Apple reference files and 16 WCAG files: file targets and heading anchors.
 - Structural scans over `ir/apple-hig/pages/*.json`: severity triggers, scope distribution, rationale shape, section ordering.
