@@ -20,6 +20,13 @@ test("a non-findings heading is recognised across phrasings, and a findings head
     "## Non-issues",
     "**Not an issue**",
     "## Passes at AA",
+    // Observed in a real run and mis-scored: the agent listed the visionOS 60 pt spacing rule under
+    // this heading precisely to say it did not apply, and the scorer counted it as a scope error.
+    "## Rules I considered and excluded as out-of-platform",
+    "## Out-of-scope rules",
+    "## Considered and set aside",
+    "## Rules that do not apply to this platform",
+    "## Dismissed",
   ];
   for (const h of dismissHeadings) {
     const { findings, dismissed } = splitFindings(`## Issues\n- a real problem\n\n${h}\n- a decoy`);
@@ -28,7 +35,22 @@ test("a non-findings heading is recognised across phrasings, and a findings head
   }
 
   // Headings that introduce real findings must never trigger the split.
-  for (const h of ["## Issues", "## Findings", "## HIG findings (iOS)", "## Violations", "## What I found", "## Setup"]) {
+  // The dismissal vocabulary is deliberately loose, so these are the cases that keep it from
+  // swallowing the report: every one contains a reporting word, and some contain a platform or
+  // rule word too.
+  for (const h of [
+    "## Issues",
+    "## Findings",
+    "## HIG findings (iOS)",
+    "## Violations",
+    "## What I found",
+    "## Setup",
+    "## Rules violated",
+    "## Scope",
+    "## Platform-specific findings",
+    "## watchOS rules that this screen breaks",
+    "## Applicable rules",
+  ]) {
     const { dismissed } = splitFindings(`${h}\n- a real problem`);
     expect(dismissed).toBe("");
   }

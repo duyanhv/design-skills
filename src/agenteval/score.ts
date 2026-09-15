@@ -26,9 +26,16 @@ export interface Score {
  * and a marker of *reporting* — rather than from a list of exact headings. Chasing literal phrases
  * was how an earlier version mis-scored a correct dismissal as a false positive.
  */
-const NEGATIVE = String.raw`not|n't|never|non-|no\b|without|deliberate|rather than|instead`;
+const NEGATIVE = String.raw`not|n't|never|non-|no\b|without|deliberate|rather than|instead|exclud|omit|skip|out[- ]of|outside|rule[sd]? out|set aside|dismiss`;
 const CORRECT = String.raw`correct|conform|fine|ok\b|okay|valid|pass(?:es|ing)?|right|allowed|permitted|acceptable|as annotated|as intended|compliant`;
-const REPORTING = String.raw`flag|report|apply|applied|rais(?:e|ed)|list(?:ed)?|find(?:ing)?s?|issue|violat|call(?:ed)? out|consider(?:ed)?`;
+const REPORTING = String.raw`flag|report|apply|applied|applicable|rais(?:e|ed)|list(?:ed)?|find(?:ing)?s?|issue|violat|call(?:ed)? out|consider(?:ed)?|rules?\b|scope|platform`;
+/**
+ * Headings that are a dismissal on their own, with no reporting verb to pair with: "## Dismissed",
+ * "## Out of scope", "## False positives". Kept as an explicit short list rather than folded into
+ * NEGATIVE, because these words only mean "what follows was not flagged" when they *are* the
+ * heading — "## Out-of-scope rules I should have caught" is a different claim.
+ */
+const STANDALONE_DISMISSAL = String.raw`dismissed|out[- ]of[- ]scope|false positives?|no issues?|nothing (?:to )?(?:flag|report)|non-?findings?`;
 /**
  * A heading (`## …` or a bold lead) that either
  *   - pairs a negation with a reporting verb ("did not apply", "not flagged", "non-issues"), or
@@ -39,6 +46,7 @@ const NOT_FLAGGED = new RegExp(
     String.raw`[^\n]{0,60}?(?:${NEGATIVE})[^\n]{0,40}?(?:${REPORTING})` +
     String.raw`|[^\n]{0,60}?(?:${REPORTING})[^\n]{0,40}?(?:${NEGATIVE})` +
     String.raw`|[^\n]{0,40}?(?:${CORRECT})[^\n]{0,40}` +
+    String.raw`|(?:${STANDALONE_DISMISSAL})[^\n]{0,20}` +
     String.raw`)`,
   "im",
 );
