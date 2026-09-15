@@ -45,6 +45,19 @@ export const SourceSchema = z.object({
     /** Label for the text that follows a rule's statement in reference files. */
     rationale_label: z.string().default("Why"),
     /**
+     * Where the severity badge's authority comes from, per source.
+     *
+     * - `wording` — the badge reports how strongly the source *worded* a sentence, classified by
+     *   `src/extract/severity.ts`. It is this compiler's reading, so the entry file must not tell an
+     *   agent to enforce a MUST badge as a declared requirement (AUDIT finding A4).
+     * - `declared` — the source itself declares normative status (WCAG success criteria are
+     *   normative text, and `src/extract/wcag.ts` assigns `must` directly rather than by wording).
+     *
+     * Left unset, it falls back to `declared` when the source's rules carry a declared conformance
+     * level and `wording` otherwise — a property of the source's own data, not a source id.
+     */
+    authority: z.enum(["wording", "declared"]).optional(),
+    /**
      * Removed: a "Highest-leverage rules" section used to pick one rule per topic, ranked partly by
      * how short the sentence was. No guideline states which of its rules matter most, so any such
      * ranking is the compiler's opinion presented in the source's voice — exactly what this project

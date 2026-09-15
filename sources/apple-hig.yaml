@@ -36,6 +36,10 @@ skill:
     React Native, Flutter). Use when designing screens, choosing components, checking
     layout/typography/color/accessibility, or reviewing UI against Apple's guidance.
   max_skill_lines: 320
+  # Apple does not label its sentences MUST/SHOULD/MAY. The badge is this compiler's reading of
+  # Apple's wording, so the entry file ranks wording strength instead of alleging a declared
+  # requirement (AUDIT finding A4).
+  authority: wording
   # "Why" mislabelled half of what it held: 512 of 2,288 rationales begin "For example", "Use",
   # "If you" — procedures, examples and conditions, not reasons. Worse, an exception stated after
   # the lead sentence ("The exception is if Tap to Pay is your only payment method") was presented

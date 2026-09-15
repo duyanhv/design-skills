@@ -284,6 +284,20 @@ function severitiesPresent(pages: PageIR[]): string[] {
   return (["must", "should", "may"] as const).filter((s) => set.has(s));
 }
 
+/**
+ * Where a severity badge's authority comes from (AUDIT finding A4).
+ *
+ * A manifest may state it; otherwise it is read off the source's own data. A source whose rules
+ * carry a conformance level declares its normative status (WCAG criteria are normative text, and
+ * `src/extract/wcag.ts` assigns `must` directly). Everything else is classified from wording by
+ * `src/extract/severity.ts`, which is this compiler's reading and not a claim the source made — so
+ * the entry file must not instruct an agent to enforce those badges as declared requirements.
+ */
+function authorityOf(source: Source, pages: PageIR[]): "wording" | "declared" {
+  if (source.skill.authority) return source.skill.authority;
+  return pages.some((p) => p.rules.some((r) => r.kind === "rule" && r.conformance_level)) ? "declared" : "wording";
+}
+
 function skillDoc(
   source: Source,
   pages: PageIR[],
@@ -300,10 +314,21 @@ function skillDoc(
   const pageFile = (p: PageIR) => `references/${p.category}/${p.page}.md`;
   const pageBySlug = new Map(pages.map((p) => [p.page, p]));
 
-  const sevText: Record<string, string> = {
-    must: "**MUST** rules as hard constraints",
-    should: "**SHOULD** as defaults you deviate from only with a reason",
-    may: "**MAY** as options",
+  const authority = authorityOf(source, pages);
+  // With `declared` authority the badge repeats a status the source states, so it can be enforced.
+  // With `wording` authority it is this compiler's reading of a sentence, so it ranks how firmly the
+  // source spoke and nothing more (AUDIT finding A4).
+  const sevText: Record<string, Record<string, string>> = {
+    declared: {
+      must: "**MUST** rules as hard constraints",
+      should: "**SHOULD** as defaults you deviate from only with a reason",
+      may: "**MAY** as options",
+    },
+    wording: {
+      must: "**MUST** as the source's firmest wording (a prohibition or an absolute)",
+      should: "**SHOULD** as its recommending voice",
+      may: "**MAY** as wording that offers an option",
+    },
   };
   // The Agent Skills specification requires every metadata value to be a string, so numbers are
   // quoted rather than emitted as YAML scalars.
@@ -348,10 +373,28 @@ function skillDoc(
     // and some in a following note. Telling the agent to look in the notes sent it to the wrong
     // half of the rule (AUDIT-OUTPUT finding 7).
     `3. **Read the whole rule** — the statement, its \`${skill.rationale_label}\` line, and the indented notes under it. Exceptions and caveats appear in either; a statement applied without them is frequently wrong.`,
-    `4. **Apply** ${severitiesPresent(pages).map((s) => sevText[s]).join(", ")}.`,
+    `4. **Apply** ${severitiesPresent(pages).map((s) => sevText[authority]![s]).join(", ")}.`,
     `5. **Report evidence** — quote the rule, its id, and its link, so any finding can be checked against the source.`,
     ``,
-    `Rules are ${possessive(source.name)} own sentences. Severity is inferred from that wording, not declared by ${source.name}; when a decision turns on it, follow the citation. Text marked \`_[figure: …]_\` stands for an image that carries information the text does not.`,
+    `Rules are ${possessive(source.name)} own sentences. ` +
+      (authority === "declared"
+        ? `Each rule's badge reports a status ${source.name} declares; read the rule's level and its stated conditions before applying it.`
+        : `The badge is this compiler's reading of ${possessive(source.name)} wording, not a status ${source.name} declared. ` +
+          `Before reporting anything as a requirement violation, check the cited text: quote the prohibition or absolute it rests on. ` +
+          `If the source is advising rather than ruling something out, report it as ${possessive(source.name)} recommendation.`) +
+      ` Text marked \`_[figure: …]_\` stands for an image that carries information the text does not.`,
+    ``,
+    // Authored workflow (AUDIT finding A5). The rulebook answers "what does the source say"; these
+    // four bullets are this project's own method for getting from a task to a change or a finding.
+    // They are marked as ours so they can never be read back as ${source.name}'s text.
+    `## Working method`,
+    ``,
+    `_Written for this skill, not by ${source.name}. The cited rules below are the source's._`,
+    ``,
+    `- **Before deciding** — name the change, the ${source.platforms.length ? "platform and version" : "conformance target"} it is for, the framework in use, and how this codebase already builds this kind of element. A shared component or theme is usually the thing to change; a local override that contradicts it is a new defect.`,
+    `- **Building** — settle the decision against the rule you read, implement it in that existing context, then inspect the states the change can reach: default, pressed/focused, disabled, empty and error, and the smallest and largest text/size the layout allows.`,
+    `- **Reviewing** — for each observed defect name the code or control that produces it, confirm the rule's scope and exceptions cover that case, and check what the framework already supplies: behaviour inherited from a standard component, or a hit region larger than the glyph drawn inside it, is not a defect. Give the fix and the check that would show it worked.`,
+    `- **Evidence** — say how you know. Code and screenshots show structure and appearance; behaviour over time (focus order, assistive-technology output, motion, text scaling) needs a run. Mark what you could not run as unverified instead of asserting it.`,
     ``,
   ];
   if (source.platforms.length) {
