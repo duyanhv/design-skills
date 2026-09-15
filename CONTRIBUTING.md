@@ -89,9 +89,37 @@ Anything that changes generated output has to show its work:
 - Rebuild the committed example (`bun run example`) in the same PR. CI fails if it drifts.
 - Rebuilding unchanged input must stay byte-identical. If your change makes timestamps or ordering
   move, that is a bug in the change, not a fact of life.
-- If you touch extraction, bump the extractor version.
+- Rebuilding from *scratch* must also be byte-identical: delete `ir/<id>`, re-extract, recompose,
+  and nothing may change — including rule ids. Ids are what an agent quotes and a reviewer checks
+  against the source, so an id that moves when nothing moved makes a cited finding unverifiable.
+  `trace O-11` asserts this, and it exists because ids used to drift on every build.
+- If you touch extraction, bump the extractor version. Reuse is keyed on a hash of `src/extract/`
+  as well, so a forgotten bump no longer silently reuses stale IR — but the version is still what
+  tells a reader which heuristic produced a given IR file.
 - If you touch `src/agenteval/score.ts`, add a test. It decides every number the project reports
   about agent behaviour, and three separate bugs in it have already flattered the results.
+
+## Prove it fails
+
+The rule stated for evals above applies to everything in this repo that checks something:
+
+> A check that has never been seen to fail is a guess.
+
+It reads the artifacts and reports what it finds, so a check whose regex stopped matching, whose
+fixture text moved, or that never covered the case at all looks exactly like a clean build. This is
+not hypothetical — it is how most of this project's real defects were found:
+
+- `src/e2e/validate-negative.ts` corrupts a real build, one defect at a time, and asserts `validate`
+  reports each. 20 guards.
+- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 22 defects the project has
+  actually shipped and asserting the named requirement fails. Two of those probes caught a *guard*
+  that was too weak rather than a regression: one searched the whole of `SKILL.md` when it should
+  have searched the index, and one accepted a state the bug it guarded actually produces.
+
+So: when you add a check, add the defect alongside it. And when you claim a fix is guarded, test the
+claim the only way that settles it — revert the fix, run the check, watch it fail, restore. A
+requirement-to-check table is itself a claim; two rows of the one in `AUDIT-OUTPUT-RESOLUTION.md`
+named guards that did not exist, and reverting the fix was what exposed them.
 
 ## Running the agent evaluation
 
