@@ -29,6 +29,8 @@ export type Inline = {
   /** DocC lets a link override the target's title ("motion" pointing at motion#visionOS). */
   overridingTitle?: string;
   overridingTitleInlineContent?: Inline[];
+  /** Per-*occurrence* caption. The same asset is reused with different captions across pages. */
+  metadata?: { abstract?: Inline[] };
 };
 
 export type Block = {
@@ -54,13 +56,45 @@ export type Block = {
 };
 
 /**
- * Figures carry meaning that the prose relies on ("the sizes below"), so an image is never dropped
- * silently: it becomes `_[figure: <alt>]_`, or `_[figure]_` when the source supplies no description.
- * That keeps a reader (and an agent) aware that something visual is missing from the text.
+ * Figures carry meaning that the prose relies on ("the sizes below"), so a media occurrence is never
+ * dropped silently: it becomes a `_[figure: …]_` marker. The marker has labelled parts because the
+ * source distinguishes them and so must we:
+ *
+ *   _[figure: <alt>]_                                        an image and its alternative text
+ *   _[figure: video — <alt>]_                                a video; a still cannot be assumed
+ *   _[figure: <alt> — caption: <caption>]_                   the occurrence's own caption, which
+ *                                                            frequently states a rule the picture's
+ *                                                            alternative description does not
+ *   _[figure: … — source: <asset>]_                          locator for a standalone (block) figure
+ *
+ * The alternative description describes the picture; the caption instructs the reader. Merging them
+ * would claim Apple said something in a voice it did not use, so they stay separately labelled.
+ * Everything after `figure:` is free text, which keeps every existing `_[figure` consumer working.
  */
-export function figureText(ref: DoccRef | undefined, fallbackAlt?: string): string {
+export function figureText(
+  ref: DoccRef | undefined,
+  fallbackAlt?: string,
+  extra: { media?: string; caption?: string; locator?: string } = {},
+): string {
   const alt = (ref?.alt ?? fallbackAlt ?? "").replace(/\s+/g, " ").trim();
-  return alt ? `_[figure: ${alt}]_` : `_[figure]_`;
+  const caption = (extra.caption ?? "").replace(/\s+/g, " ").trim();
+  const head = [extra.media === "video" ? "video" : "", alt].filter(Boolean).join(" — ");
+  const parts = [head, caption && `caption: ${caption}`, extra.locator && `source: ${extra.locator}`].filter(Boolean);
+  return parts.length ? `_[figure: ${parts.join(" — ")}]_` : `_[figure]_`;
+}
+
+/** A media occurrence's own caption (`metadata.abstract`), which is per-occurrence, not per-asset. */
+function captionOf(node: { metadata?: { abstract?: Inline[] } } | undefined, refs: Record<string, DoccRef>): string {
+  return inlineToText(node?.metadata?.abstract, refs).trim();
+}
+
+/**
+ * A locator for a standalone figure: the asset identifier Apple uses on the page
+ * ("text-entry-pointer.mp4"). It is not a download — it is the name under which the reader can find
+ * this figure on the original page, which is the only way to check what the marker stands for.
+ */
+function mediaLocator(node: Block): string | undefined {
+  return node.identifier?.replace(/\s+/g, " ").trim() || undefined;
 }
 
 export function inlineToText(nodes: Inline[] | undefined, refs: Record<string, DoccRef> = {}): string {
@@ -78,7 +112,8 @@ export function inlineToText(nodes: Inline[] | undefined, refs: Record<string, D
           return "_" + inlineToText(n.inlineContent, refs) + "_";
         case "reference": {
           const ref = n.identifier ? refs[n.identifier] : undefined;
-          if (ref?.type === "image" || ref?.type === "video") return figureText(ref);
+          if (ref?.type === "image" || ref?.type === "video")
+            return figureText(ref, undefined, { media: ref.type, caption: captionOf(n, refs) });
           const symbol = ref?.fragments?.filter((f) => f.kind === "identifier").map((f) => f.text).join("") ?? "";
           // An overriding title is the author's own wording for this link and outranks the target's title.
           const label =
@@ -92,7 +127,10 @@ export function inlineToText(nodes: Inline[] | undefined, refs: Record<string, D
         }
         case "image":
         case "video":
-          return figureText(n.identifier ? refs[n.identifier] : undefined);
+          return figureText(n.identifier ? refs[n.identifier] : undefined, undefined, {
+            media: n.type,
+            caption: captionOf(n, refs),
+          });
         default:
           return n.text ?? inlineToText(n.inlineContent, refs);
       }
@@ -220,7 +258,20 @@ export function blocksToMarkdown(blocks: Block[] | undefined, refs: Record<strin
         }
         break;
       case "image":
-      case "video":
+      case "video": {
+        // A block image/video is a standalone figure: the prose around it ("as shown below") relies
+        // on it, and a video's demonstration has no other text anywhere on the page. It used to emit
+        // nothing at all, so a missing demonstration was indistinguishable from an absent one.
+        const ref = b.identifier ? refs[b.identifier] : undefined;
+        out.push(
+          figureText(ref, undefined, {
+            media: b.type,
+            caption: captionOf(b, refs),
+            locator: mediaLocator(b),
+          }),
+        );
+        break;
+      }
       case "links":
         break;
       default: {
