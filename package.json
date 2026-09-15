@@ -1,7 +1,7 @@
 {
   "name": "design-skills",
   "version": "0.1.0",
-  "description": "Deterministically compile platform design guidelines (Apple HIG, Material 3, WCAG, \u2026) into versioned, cited Agent Skills. No LLM in the loop.",
+  "description": "Deterministically compile platform design guidelines (Apple HIG, Material 3, WCAG, …) into versioned, cited Agent Skills. No LLM in the loop.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -26,7 +26,9 @@
     "trace": "bun run src/e2e/trace.ts",
     "coverage": "bun run src/e2e/coverage.ts",
     "fidelity": "bun run src/e2e/fidelity.ts",
-    "trace:negative": "bun run src/e2e/trace-negative.ts"
+    "trace:negative": "bun run src/e2e/trace-negative.ts",
+    "budget": "bun run src/e2e/budget.ts",
+    "probe:structure": "bun run src/e2e/probes/structure.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

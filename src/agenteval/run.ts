@@ -30,7 +30,7 @@ import { mkdtemp, rm, writeFile, symlink, mkdir, readFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { paths, ROOT, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
-import { TASKS, type Task } from "./tasks.ts";
+import { TASKS, knownCitations, type Task } from "./tasks.ts";
 import { comparability, score, type Score } from "./score.ts";
 
 const ARMS = ["none", "skill"] as const;
@@ -147,17 +147,23 @@ for (const task of tasks) {
           task: task.id, arm, run, recall: 0, precision: 0, ms: 0, transcript: "", error,
           found: [], missed: task.violations.map((v) => v.id), falsePositives: [],
           dismissedCorrectly: [], cited: 0, findings: 0, scopeErrors: [],
+          citedResolved: null, citedUnresolvable: null, unclassified: 0,
         });
         await checkpoint();
         continue;
       }
-      const s = score(task, transcript);
+      // The citations the built skill actually contains, so a fabricated-but-well-formed citation
+      // is reported as unresolvable rather than credited as evidence. Undefined when the skill is
+      // not built locally: the summary then says the check was not run.
+      const s = score(task, transcript, await knownCitations(task.skill));
       const recall = s.found.length / task.violations.length;
       const precision = s.found.length / Math.max(1, s.found.length + s.falsePositives.length);
       console.log(
         `  recall ${s.found.length}/${task.violations.length} (${(recall * 100).toFixed(0)}%) · ` +
           `false positives ${s.falsePositives.length} · decoys correctly dismissed ${s.dismissedCorrectly.length}/${task.decoys.length} · ` +
-          `scope errors ${s.scopeErrors.length} · citations ${s.cited} over ~${s.findings} findings · ${(ms / 1000).toFixed(0)}s`,
+          `scope errors ${s.scopeErrors.length} · citations ${s.cited} over ~${s.findings} findings ` +
+          `(${s.citedResolved === null ? "not resolved against the skill" : `${s.citedResolved} resolve, ${s.cited - s.citedResolved} name nothing that exists`}) · ` +
+          `${s.unclassified} finding(s) the fixtures classify as neither violation, decoy nor scope trap · ${(ms / 1000).toFixed(0)}s`,
       );
       if (s.missed.length) console.log(`  missed: ${s.missed.join(", ")}`);
       if (s.falsePositives.length) console.log(`  false positives: ${s.falsePositives.join(", ")}`);
@@ -189,6 +195,12 @@ for (const task of TASKS) {
       `${range(rs.map((r) => r.dismissedCorrectly.length))}/${task.decoys.length} decoys dismissed · ` +
       `${range(rs.map((r) => r.scopeErrors.length))} scope errors · ` +
       `${range(rs.map((r) => r.cited))} citations` +
+      // Shape and substance kept apart: a citation count alone cannot distinguish a real rule id
+      // from an invented one, and the arm without the skill invents more of them.
+      (rs.every((r) => r.citedResolved === null)
+        ? " (not resolved)"
+        : ` (${range(rs.map((r) => r.citedResolved ?? 0))} resolve to something in the skill)`) +
+      ` · ${range(rs.map((r) => r.unclassified))} unclassified findings` +
       // Always shown, not only when it is greater than one: the reader needs to see n=1 next to
       // n=3 to know the two lines are not the same kind of measurement.
       `  (n=${rs.length})`

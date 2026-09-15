@@ -276,3 +276,31 @@ struct WorkoutSummary: View {
     ],
   },
 ];
+
+/**
+ * Every citation the built skill actually contains: rule ids, source URLs (fragment stripped) and
+ * WCAG criterion numbers, keyed the way `score` keys them.
+ *
+ * Handing this to `score` is what separates "the finding is citation-shaped" from "the thing it
+ * cites exists". Without it the scorer awards the same credit to `apple-hig/buttons/999` as to a
+ * real id, which is the false positive the seeded decoys cannot enumerate.
+ *
+ * Returns `undefined` when the skill is not built locally, so the caller can report that it did not
+ * check rather than reporting that nothing resolved.
+ */
+export async function knownCitations(skill: string): Promise<Set<string> | undefined> {
+  const { join } = await import("node:path");
+  const { readFile } = await import("node:fs/promises");
+  const { exists, listDirs, listFiles, paths } = await import("../util/fs.ts");
+  const { CITATION, citationKey } = await import("./score.ts");
+  const root = join(paths.skill(skill), "references");
+  if (!(await exists(root))) return undefined;
+  const out = new Set<string>();
+  for (const cat of await listDirs(root)) {
+    for (const f of await listFiles(join(root, cat), ".md")) {
+      const doc = await readFile(join(root, cat, f), "utf8");
+      for (const m of doc.matchAll(CITATION)) out.add(citationKey(m[0]!));
+    }
+  }
+  return out;
+}

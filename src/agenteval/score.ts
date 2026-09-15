@@ -10,8 +10,26 @@ export interface Score {
   falsePositives: string[];
   /** Decoys the agent named and explicitly set aside — evidence it read the rule's exceptions. */
   dismissedCorrectly: string[];
+  /**
+   * Citation-*shaped* strings in the findings body. A formatting count and nothing more: a
+   * fabricated finding quoting `apple-hig/buttons/999` is shaped exactly like a real one.
+   */
   cited: number;
+  /**
+   * Citations that name something the built skill actually contains, when the caller supplies the
+   * set of real citations. `null` means no resolution was attempted — which is different from
+   * "none resolved", and the summary must not print the two the same way.
+   */
+  citedResolved: number | null;
+  /** Citation-shaped strings naming nothing that exists. A fabrication lands here. */
+  citedUnresolvable: string[] | null;
   findings: number;
+  /**
+   * Findings matching no violation, decoy or scope trap. The fixtures enumerate the mistakes we
+   * thought of; these are the ones we did not. Unscored — an unclassified finding may be perfectly
+   * correct — but reported, so `precision` is not read as a complete account of what was said.
+   */
+  unclassified: number;
   scopeErrors: string[];
 }
 
@@ -127,7 +145,31 @@ function hit(blocks: string[], cues: string[]): boolean {
   });
 }
 
-export function score(task: Task, transcript: string): Score {
+/**
+ * Citation shapes the scorer recognises: a rule id, a source URL, or a WCAG criterion number.
+ * Exported so a resolver and the scorer cannot drift apart on what counts as a citation.
+ */
+export const CITATION = /\b[a-z0-9-]+\/[a-z0-9-]+\/\d{3}\b|https?:\/\/\S*(?:developer\.apple\.com|w3\.org)\S*|\b\d\.\d\.\d+\b/gi;
+
+/**
+ * Normalise a citation for comparison against the real artifacts: lowercased, fragment and trailing
+ * punctuation removed. `…/buttons#Role).` and the shipped `…/buttons` are one citation.
+ */
+export const citationKey = (c: string) => c.toLowerCase().replace(/[).,;:]+$/, "").replace(/#.*$/, "");
+
+/**
+ * `known` is the set of citations the built skill actually contains (rule ids, source URLs,
+ * criterion numbers), keyed by `citationKey`. Supply it and a fabricated citation counts as
+ * unresolvable instead of as evidence. Omit it and `citedResolved` is `null`: the scorer reports
+ * that it did not check rather than implying it did.
+ *
+ * What this still cannot establish: that a resolvable citation *supports* the claim attached to it.
+ * A real rule id quoted beside a wrong assertion resolves. Nor do the seeded decoys enumerate every
+ * false positive an agent could invent — `unclassified` counts the findings the fixtures say
+ * nothing about, so the summary cannot read as a complete account. This is why the README calls
+ * these figures preliminary, and that qualification stands.
+ */
+export function score(task: Task, transcript: string, known?: Set<string>): Score {
   const { findings: body, dismissed } = splitFindings(transcript);
   const bodyBlocks = findingBlocks(body);
   const dismissedBlocks = findingBlocks(dismissed);
@@ -140,17 +182,32 @@ export function score(task: Task, transcript: string): Score {
   const scopeErrors = task.scopeTraps.filter((s) => hit(bodyBlocks, s.cues)).map((s) => s.id);
   const dismissedCorrectly = task.decoys.filter((d) => hit(dismissedBlocks, d.dismissCues)).map((d) => d.id);
 
-  // A finding is checkable when it carries a rule id or a source link.
+  // A finding is *checkable* when it carries a rule id or a source link.
   // A WCAG success criterion number is a citation too: "Fails 1.4.3 Contrast (Minimum)" is exactly
   // as checkable as the rule id or the URL, and which form an agent picks varies run to run. Three
   // samples of the same task cited ~29 criteria each and scored 1, 13 and 13, which measured
   // formatting rather than whether a human could verify the finding.
-  const cited = [...transcript.matchAll(
-    /\b[a-z0-9-]+\/[a-z0-9-]+\/\d{3}\b|https?:\/\/\S*(?:developer\.apple\.com|w3\.org)\S*|\b\d\.\d\.\d+\b/gi,
-  )].length;
+  //
+  // Counted over the findings body rather than the whole transcript: a citation under "rules I
+  // considered and did not apply" is not evidence for a finding, and counting it credited whichever
+  // arm listed more rules it had chosen not to use.
+  const citations = [...body.matchAll(CITATION)].map((m) => m[0]!);
+  const cited = citations.length;
+  const unresolvable = known ? citations.filter((c) => !known.has(citationKey(c))) : null;
   // Bulleted/numbered lines are the agent's findings; a rough denominator for citation rate.
   const findings = bodyBlocks.filter((b) => /^\s*(?:[-*]|\d+\.)\s+\S/.test(b) || /^\s*\*\*/.test(b)).length;
-  return { found, missed, falsePositives, dismissedCorrectly, cited, findings, scopeErrors };
+  // Findings the fixtures classify as nothing at all. Counted, never scored.
+  const classified = [...task.violations, ...task.decoys, ...task.scopeTraps];
+  const unclassified = bodyBlocks.filter(
+    (b) => isFinding(b) && !classified.some((c) => c.cues.every((q) => b.toLowerCase().includes(q.toLowerCase()))),
+  ).length;
+  return {
+    found, missed, falsePositives, dismissedCorrectly,
+    cited,
+    citedResolved: unresolvable ? cited - unresolvable.length : null,
+    citedUnresolvable: unresolvable,
+    findings, unclassified, scopeErrors,
+  };
 }
 
 /**

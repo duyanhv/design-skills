@@ -239,3 +239,45 @@ test("a success criterion number counts as a citation, whatever form the agent c
   // 1.4.3 from memory is doing something the old metric scored as zero.
   expect(t("Fails 1.4.3 and 2.4.7.")).toBe(2);
 });
+
+test("a fabricated finding with a valid-looking citation gets no evidence credit", () => {
+  // The A7 acceptance case. Both transcripts are citation-shaped in exactly the same way, and the
+  // old scorer counted both as one citation apiece — so inventing a plausible rule id scored the
+  // same as quoting a real one.
+  const known = new Set(["apple-hig/buttons/002", "https://developer.apple.com/design/human-interface-guidelines/buttons"]);
+  const real = score(task, "## Issues\n- 44x44 pt target `apple-hig/buttons/002`", known);
+  expect(real.cited).toBe(1);
+  expect(real.citedResolved).toBe(1);
+  expect(real.citedUnresolvable).toEqual([]);
+
+  const fabricated = score(task, "## Issues\n- 44x44 pt target `apple-hig/buttons/999`", known);
+  expect(fabricated.cited).toBe(1); // still citation-*shaped*
+  expect(fabricated.citedResolved).toBe(0); // and resolves to nothing
+  expect(fabricated.citedUnresolvable).toEqual(["apple-hig/buttons/999"]);
+
+  // A URL with a fragment and trailing punctuation is the same citation as the bare one.
+  const url = score(task, "## Issues\n- see (https://developer.apple.com/design/human-interface-guidelines/buttons#Role).", known);
+  expect(url.citedResolved).toBe(1);
+
+  // Without the known set the scorer must say it did not check, not that nothing resolved.
+  const unchecked = score(task, "## Issues\n- 44x44 pt `apple-hig/buttons/999`");
+  expect(unchecked.citedResolved).toBeNull();
+  expect(unchecked.citedUnresolvable).toBeNull();
+});
+
+test("citations under a non-findings heading are not evidence for a finding", () => {
+  // Counting over the whole transcript credited whichever arm listed more rules it had chosen not
+  // to apply, which is the opposite of what a citation count is supposed to measure.
+  const s = score(task, "## Issues\n- a finding with no citation\n\n## Rules I considered and did not apply\n- `apple-hig/buttons/002` is macOS-only");
+  expect(s.cited).toBe(0);
+});
+
+test("findings the fixtures classify as nothing are counted, not silently ignored", () => {
+  // The seeded decoys cannot enumerate every false positive an agent might invent. Reporting the
+  // unclassified count keeps precision from reading as a complete account of the review.
+  const s = score(task, "## Issues\n- 44x44 pt target is too small.\n- The view uses a deprecated gradient API.");
+  expect(s.found).toEqual(["v1"]);
+  expect(s.unclassified).toBe(1);
+  // A finding that matches a fixture item is classified, whichever kind it is.
+  expect(score(task, "## Issues\n- 60x60 pt targets required.").unclassified).toBe(0);
+});
