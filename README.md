@@ -1,209 +1,188 @@
 # design-skills
 
-Deterministically compile platform design guidelines into versioned, cited [Agent Skills](https://agentskills.io).
-No LLM in the loop: the same input always produces the same skill, and every rule links back to the exact
-section it came from.
+**Turn design guidelines into skills your coding agent can read and apply.**
 
-Skills are treated as **build artifacts**. The source of truth is a small manifest per guideline; a
-pipeline turns it into a structured rule set with provenance, and the skill files are generated from
-that. A hand-written `SKILL.md` cannot tell you which version of the guideline it reflects, or show
-you a diff when the guideline changes; a compiled one can.
+[![CI](https://github.com/duyanhv/design-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/duyanhv/design-skills/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 
+design-skills compiles sources such as Apple's Human Interface Guidelines and WCAG into
+[Agent Skills](https://agentskills.io): a short `SKILL.md`, topic references, and source provenance.
+An agent can find guidance for a task, read its platform scope and exceptions, and cite the rule
+behind a design decision or review finding.
+
+The build uses source-specific parsers and versioned extraction rules. It makes no LLM calls and
+requires no model API key.
+
+**Status: experimental.** The skills are usable for assisted design and review. Extraction and
+evaluation still have [known limitations](#verification-and-limitations).
+
+[Browse an example skill](skills/lumen-ds/SKILL.md) · [Generated skills](skills/README.md) · [Contribute](CONTRIBUTING.md)
+
+## Quick start
+
+Requires [Bun](https://bun.sh) 1.2 or later and Git. Building Apple HIG or WCAG also needs internet access.
+
+```sh
+git clone https://github.com/duyanhv/design-skills.git
+cd design-skills
+bun install --frozen-lockfile
+
+# Build either or both guidelines.
+bun run build apple-hig
+bun run build wcag22
 ```
-sources/<id>.yaml        declarative manifest (url, crawl scope, license, cadence)   ← hand-written
-        │  fetch          deterministic crawl → .cache/<id>/raw        (never committed)
-        │  normalize      raw → clean markdown → .cache/<id>/md        (never committed)
-        │  extract        structural rules (bold-lead sentences, headings) → ir/<id>/pages/*.json
-        │  compose        IR → skills/<name>/SKILL.md + references/ + provenance.json
-        │  validate       schema · scope · provenance · license gate · spec conformance · budgets
-        │  eval           evals/<id>/questions.yaml rule-level assertions must hold
-        ▼
-skills/<name>/           drop into ~/.claude/skills, .cursor, Codex, etc.
+
+The generated folders are `skills/apple-hig/` and `skills/wcag22/`. Each build fetches the source,
+extracts its guidance, writes the skill, then runs validation and source-specific assertions.
+
+To try the pipeline without fetching an external guideline:
+
+```sh
+bun run example
 ```
 
-## How extraction works without a model
+This rebuilds [Lumen](skills/lumen-ds/SKILL.md), an invented design system used as a test fixture and
+readable example. It is not guidance for a real platform.
 
-Well-edited guidelines are already structured. Apple's HIG writes every rule as a paragraph whose
-lead sentence is bold — "**Make buttons easy for people to use.** It's essential to include enough
-space…" — grouped under "Best practices" and per-platform "Platform considerations" headings, with a
-dated change log at the bottom. The extractor (`src/extract/rules.ts`) reads exactly that:
+## Available sources
 
-| From the page | Into the rule |
-| --- | --- |
-| bold lead sentence | `statement` (verbatim) |
-| rest of the paragraph | `rationale` |
-| prose, bullets and notes that follow a rule | `notes[]` — the exceptions and caveats, verbatim |
-| prose before a section's first rule | that section's `intro` |
-| paragraphs before the first heading | page `overview` (what the topic is, when to use it) |
-| heading path | `section`, citation `anchor` |
-| platform-named headings, plus the page's declared scope | `platforms` + `scope` |
-| wording (avoid/never → must, consider → may, hedged → should) | `severity` |
-| conformance level, where the source defines one | `conformance_level` (A/AA/AAA) |
-| first figure with a unit (`44x44 pt`, `4.5:1`) | `value` |
-| tables under guidance sections | `tables[]`, rendered verbatim |
-| images | `_[figure: alt]_` — marked, never silently dropped |
-| change-log dates | page `source_version` |
-| bold label without an instruction ("Long delay.") | `kind: term`, rendered beside the rules that use it |
-
-Heuristics are small, tested and versioned (`extractor: bold-lead@6` is stamped into every IR file),
-so a change to them re-extracts every page and shows up as a reviewable diff. On the current HIG this
-yields ~2,350 rules across 158 pages, every one with a section anchor, in about a minute.
-
-### Scope and authority are not guessed away
-
-Two things a compiled rulebook can get dangerously wrong, and what this does about them:
-
-**Platform scope.** A rule carries a `scope` of `section`, `page` or `general`. Apple declares each
-page's platforms in its DocC metadata, so "Designing for tvOS" guidance renders as `_[tvOS only]_`
-rather than as universal advice. Only `general` means "applies to everything this source covers", and
-`validate` rejects any rule whose scope and platform list contradict each other.
-
-**Requirement strength.** Severity reports how the *source* worded a rule; it never invents authority.
-"only" counts when it restricts a clause ("Display only one sheet") and not inside a compound
-adjective ("an icon-only button"), and hedged wording ("In general, avoid…") caps at SHOULD. WCAG keeps
-its conformance level as a separate field instead of collapsing A/AA into MUST and AAA into MAY: which
-criteria bind you depends on the [conformance target](https://www.w3.org/TR/WCAG22/#conformance-reqs)
-you claim, so the skill tells the agent to establish that target first.
-
-**No invented hierarchy.** There used to be a "highest-leverage rules" section that picked one rule
-per topic, ranked partly by how short the sentence was. No guideline states which of its rules matter
-most, so that ranking was the compiler's opinion printed in the source's voice. It is gone; the
-routing table sends a reader to the right rulebook without pretending to know what matters.
-
-## Skill shape
-
-`SKILL.md` is the always-loaded entry point and is kept small (~1.2k tokens for the HIG): a decision
-workflow, a curated **Where to look** table, and a category map. The full topic index moves to
-`index.md` once it would dominate the entry file. Each `references/<category>/<page>.md` holds every
-rule for a topic with its severity, verbatim statement, reasoning, exceptions, platform tag, rule id
-and citation; cross-references become relative links. Large spec tables move to a sibling
-`<page>.tables.md`. `provenance.json` travels with the skill so a copied directory can still say what
-it was built from.
-
-## Trust and verification
-
-| Check | What it proves | Runs |
+| Source | Build command | Generated output on GitHub |
 | --- | --- | --- |
-| `bun test` | Each stage in isolation, with regression fixtures for every bug the audit found | CI |
-| `bun run e2e` | The whole pipeline over a synthetic source, plus the cache and reconciliation contracts | CI |
-| `bun run validate <id>` | IR schema, scope integrity, provenance, Agent Skills frontmatter, token budget, license gate | CI + build |
-| `bun run validate:negative` | That all 18 validate guards actually fire, by corrupting a real build one defect at a time | CI |
-| `bun run eval <id>` | Rule-level assertions: severity, scope, conformance level, exceptions, citation anchors | build |
-| `bun run coverage` | That **nothing** the source said is missing from the shipped skill, beyond declared omissions | CI |
-| `bun run trace` | Each audit finding mapped to an assertion over the **shipped** `ir/` and `skills/` | local (needs a build) |
-| `bun run agenteval` | Whether an agent given the skill actually reviews UI better | manual (costs model calls) |
+| [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/) | `bun run build apple-hig` | Local build only |
+| [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and glossary | `bun run build wcag22` | Local build only |
+| Lumen Design System — synthetic example | `bun run example` | [skills/lumen-ds/](skills/lumen-ds/) |
 
-`coverage` is the complement of every other check: instead of asking whether the things I looked for
-survived, it walks every source line and fails on any whose content is missing downstream, excluding
-three declared omissions (page-header figures, table rows that moved to a sibling file, and skipped
-sections). It found a real loss nothing else was looking for — WCAG 4.1.1's explanation was in the IR
-but never rendered — and it reports **0 unexplained losses across 158 Apple pages and 14 WCAG
-guidelines**.
+The repository publishes the compiler and eligible generated skills. The current source manifests
+mark Apple HIG and WCAG as nonredistributable, so their generated text stays out of Git. See
+[source and output licensing](LICENSING.md) for the project's policy.
 
-A check that has never been seen to fail is a guess, so the guards are tested in both directions:
-`validate:negative` introduces one defect at a time into a copied build and asserts validate reports
-that specific error. An incomplete crawl is handled the same way — it is refused by default, and when
-forced with `--allow-partial` the resulting `SKILL.md` says so above the fold, because an agent that
-cannot tell a rulebook has holes in it will read absence as permission.
+Material Design 3 and a generic HTML adapter are planned; they are not currently supported.
 
-Evals assert facts about *rules*, not substrings on a page. An eval locates one rule and checks what
-an agent acts on, because a substring test passes happily while a criterion loses the exception list
-that made it satisfiable. Each was verified by reintroducing the original bug and confirming the eval
-fails with a precise diagnostic.
+## Use a generated skill
 
-`agenteval` runs the same review twice — no skill, then the compiled skill — over files seeded with
-real violations, decoys the guideline permits, and guidance from the wrong platform. Over three
-tasks × three samples per arm, the categorical result is **citations: 0 in every unaided run,
-11-40 in every skill run**. Recall is near-saturated either way, and precision differences are small
-at that sample size, so the honest claim is narrow: the skill does not mainly make an agent find
-more, it makes every finding checkable against the source, and it stops the agent inventing rules —
-in the unaided arm it asked to remove a trailing ellipsis that Apple in fact requires, and demanded
-a press state on a static text label. See [AUDIT-RESOLUTION.md](AUDIT-RESOLUTION.md) for the full
-table and for the three scoring bugs found while building it.
+Install the **whole skill folder**, including references and provenance. Copying only `SKILL.md`
+leaves the agent without the guidance it links to.
 
-`examples/` is not needed: the `lumen-ds` skill under `skills/lumen-ds/` is generated from a synthetic
-MIT-licensed guideline and **committed**, so you can read real output of this compiler without
-building anyone's proprietary content. CI fails if it drifts from what the compiler produces.
+Run the following from this repository's root after building the skills. The symlinks point to
+your local output, so rebuilding updates what the agent reads.
 
-## Why an intermediate representation
-
-Every rule in `ir/` carries its statement, severity, scope, exceptions, value, and **provenance**
-(URL, anchor, content hash, fetch date). One IR can feed many targets — Agent Skills today; Cursor
-rules, `AGENTS.md`, an MCP server later — and for redistributable sources a refresh PR is a diff of
-*rules*, not of a regenerated 40 KB markdown blob. Rebuilding unchanged input is byte-identical, so a
-diff only ever shows a real change.
-
-## Sources
-
-| id | guideline | kind | license | status |
-| --- | --- | --- | --- | --- |
-| `apple-hig` | Apple Human Interface Guidelines | `docc` | proprietary → build locally, not committed | working |
-| `wcag22` | WCAG 2.2 + glossary (from the w3c/wcag source tree, pinned to a commit) | `wcag` | W3C Document License → build locally, not committed | working |
-| `lumen-ds` | synthetic example guideline | `docc` | MIT → committed, readable in-repo | working |
-| `material-3` | Material Design 3 | — | CC-BY 4.0 | blocked: JS app shell, needs a headless-browser fetcher |
-
-See [LICENSING.md](LICENSING.md) for how proprietary sources are handled.
-
-## Usage
-
-Requires [Bun](https://bun.sh) ≥ 1.2. No API keys.
+### Codex
 
 ```sh
-bun install
-bun run build apple-hig      # fetch (≈170 pages, ~1 min) → normalize → extract → compose → validate → eval
-bun run build wcag22         # 13 guidelines / 86 success criteria, a few seconds
-bun run example              # the synthetic source, no network
-bun run check                # typecheck + tests + end-to-end build + manifest validation
+mkdir -p ~/.agents/skills
+ln -s "$PWD/skills/apple-hig" ~/.agents/skills/apple-hig
+ln -s "$PWD/skills/wcag22" ~/.agents/skills/wcag22
 ```
 
-Or step by step: `bun run fetch|normalize|extract|compose|validate <id>`. Re-running is cheap — only
-pages whose content *or configuration* changed are re-extracted. A crawl that fails part-way is
-marked partial and refuses to reconcile, so a network blip cannot delete guidance from your skill;
-`--allow-partial` overrides that and marks the artifact accordingly.
+Codex supports symlinked skill folders in its user skill directory. See the
+[official skill documentation](https://learn.chatgpt.com/docs/build-skills).
 
-The generated skill lands in `skills/apple-hig/`. To use it with Claude Code:
+### Claude Code
 
 ```sh
+mkdir -p ~/.claude/skills
 ln -s "$PWD/skills/apple-hig" ~/.claude/skills/apple-hig
+ln -s "$PWD/skills/wcag22" ~/.claude/skills/wcag22
 ```
 
-## Adding a source
+If a destination already exists, inspect the existing installation before replacing it.
 
-To rebuild eligible sources and publish their generated Markdown into this repository's
-[skills/ folder](skills/README.md), run `bun run publish:skills` from a clean working tree.
-It validates the output, commits `skills/<name>/` and the matching IR, and pushes to `origin`
-on the current branch. Use `bun run publish:skills lumen-ds --no-push` to commit locally for
-review. Only sources marked `license.redistributable: true` are published; Apple HIG and WCAG
-remain local builds under the current source settings.
+### Example requests
 
-1. Add `sources/<id>.yaml` (copy `apple-hig.yaml`). Set `license.redistributable` honestly; if false, add
-   `ir/<id>/` and `skills/<name>/` to `.gitignore` (validate enforces this against git's actual
-   behaviour, not the file's text).
-2. If the site isn't DocC, add a fetcher/normalizer for its `kind` under `src/fetch` and `src/normalize`.
-3. Add `evals/<id>/questions.yaml`. Prefer `rule:` assertions over `expect:` substrings — and check
-   that each one fails when you break the thing it guards.
-4. `bun run build <id>` and open a PR. CI runs typecheck, tests, the end-to-end build and manifest
-   validation; the weekly refresh workflow opens PRs when the upstream content hash changes.
+> Use the apple-hig skill to review this iOS settings screen. Include the applicable rule ID,
+> source link, platform scope, and exceptions for each finding.
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the adapter contract, the fixture conventions, and the one
-rule the compiler is built around: never say something the source did not.
+> Use the wcag22 skill to review this form against Level AA. Explain which criteria apply and
+> which checks require testing the running interface.
 
-## Layout
+Other agents can use the generated Markdown when their runtime supports Agent Skills or provides
+a way to load the entry file and follow its local references.
 
-```
-sources/      manifests                     src/fetch       crawlers (docc, wcag)
-ir/           rule IR + meta.json           src/normalize   → markdown
-skills/       generated Agent Skills        src/extract     structural rule extraction
-evals/        rule assertions per skill     src/compose     IR → SKILL.md + references
-.cache/       raw + normalized text (git-ignored)
-                                            src/e2e         synthetic source + end-to-end build
-                                            src/agenteval   does the skill change an agent's decisions?
+## What gets generated
+
+```text
+skills/<name>/
+├── SKILL.md              Task workflow and topic routing
+├── index.md              Full index when split from the entry file
+├── references/
+│   └── <category>/
+│       ├── <topic>.md     Rules, context, exceptions, IDs, and citations
+│       └── <topic>.tables.md  Large tables, when split out
+└── provenance.json       Source URLs, versions, hashes, and fetch dates
 ```
 
-## Status
+The compiler also writes structured rules under `ir/<source-id>/`. These record source text,
+platform scope, inferred requirement strength, and provenance. WCAG conformance levels are stored
+separately so the agent can select criteria for the project's target.
 
-Early, but the Apple HIG and WCAG 2.2 skills now hold up to scrutiny: guidance keeps its exceptions,
-platform scope is the source's own, requirement strength is not invented, and the checks fail when any
-of that regresses. Next: a headless-browser fetcher for Material 3, a generic `html` fetcher, and
-extra emitters (Cursor rules, `AGENTS.md`).
-Contributions welcome — especially new source manifests and eval questions.
+```text
+Source manifest → Fetch → Normalize → Extract → Compose → Validate → Evaluate
+```
+
+Fetched and normalized content lives in the ignored `.cache/` directory. Changes to extraction
+inputs invalidate cached rules; complete builds reconcile removed pages. Incomplete crawls are
+refused by default. An explicit `--allow-partial` build carries an incomplete-build warning.
+
+## Publish Markdown to the Git tree
+
+From a clean working tree with a configured `origin` and push access:
+
+```sh
+bun run publish:skills
+```
+
+This command builds sources marked `license.redistributable: true`, validates their output,
+commits changes under `skills/<name>/` and the matching `ir/<source-id>/`, and pushes the current
+branch to `origin`. It skips local-only sources and creates no empty commit when output is unchanged.
+
+To select an eligible source or commit locally for review:
+
+```sh
+bun run publish:skills lumen-ds
+bun run publish:skills lumen-ds --no-push
+```
+
+`--no-push` still creates a local commit when output changes. Lumen is currently the only eligible
+source. [The publishing guide](skills/README.md) describes failure handling and folder contents.
+
+## Verification and limitations
+
+```sh
+bun run check              # Typecheck, tests, synthetic e2e, validator probes, and manifest checks
+bun run eval apple-hig     # Assertions about selected rules and their rendered output
+bun run coverage           # Heuristic content-loss scan; needs local build caches
+bun run trace              # Selected audit assertions; needs Apple HIG and WCAG builds
+```
+
+The checks exercise extraction, scope, context retention, publishing, and validation. They do not
+establish complete source fidelity or guarantee correct agent decisions:
+
+- **Coverage is heuristic.** It compares vocabulary in normalized pages and generated references.
+  It can miss changed numbers, short instructions, tables, and losses introduced during normalization.
+  Missing caches are skipped; the current CI coverage step does not establish source coverage.
+- **Requirement strength is inferred.** MUST/SHOULD/MAY labels are compiler interpretations of
+  wording. Follow the source citation when a decision depends on that distinction.
+- **Visual guidance needs inspection.** Figure placeholders identify some visual dependencies;
+  they do not reproduce the information in the original images.
+- **Agent evaluation is preliminary.** The optional `bun run agenteval --runs 3` harness uses the
+  Claude CLI and makes model calls. Its scorer measures seeded cues and citation mentions, not
+  whether every finding is supported. The skill arm also receives an explicit citation instruction.
+
+The [original audit](AUDIT.md), [implementation responses](AUDIT-RESOLUTION.md), and
+[follow-up verification](AUDIT-VERIFICATION.md) document the findings, fixes, and remaining gaps.
+
+## Contributing
+
+Useful contributions include source adapters, regression fixtures, stronger fidelity checks, and
+agent tasks that test implementation as well as review.
+
+To add a guideline, define a manifest in `sources/`, use or implement its fetch/normalize/extract
+adapters, and add fixtures and rule-level assertions. Sources need an explicit output licensing
+policy before their generated text can be published.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the adapter contracts and development workflow.
+
+## License
+
+The compiler and synthetic example are [MIT licensed](LICENSE). Upstream guidelines retain their
+own terms; the code license does not apply to their text. See [LICENSING.md](LICENSING.md).
