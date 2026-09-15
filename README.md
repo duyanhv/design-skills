@@ -174,17 +174,21 @@ Lumen example are eligible sources. [The publishing guide](skills/README.md) des
 bun run check              # Typecheck, tests, synthetic e2e, validator probes, and manifest checks
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
+bun run fidelity           # Per-sentence verbatim scan of source against shipped references
 bun run trace              # Selected audit assertions; needs Apple HIG and WCAG builds
 ```
 
-The checks exercise extraction, scope, context retention, publishing, and validation. They do not
-establish complete source fidelity or guarantee correct agent decisions:
+The checks exercise extraction, scope, context retention, source fidelity, publishing, and
+validation. They do not guarantee correct agent decisions:
 
 - **Authored guides depend on upstream reading.** Build checks verify packaging and selected content,
   not whether remote pages are reachable, current, or correctly applied by an agent.
-- **Coverage is heuristic.** It compares vocabulary in normalized pages and generated references.
-  It can miss changed numbers, short instructions, tables, and losses introduced during normalization.
-  Missing caches are skipped; the current CI coverage step does not establish source coverage.
+- **Fidelity is checked per sentence, but only against the normalized cache.** `bun run fidelity`
+  asserts that every source sentence of six or more words appears verbatim in the shipped
+  references — currently 0 missing across 10,883 Apple and 625 WCAG sentences. It compares against
+  `.cache/<id>/md`, so a loss introduced during *normalization* is invisible to it, and a source
+  that is not built locally is skipped rather than passing. `bun run coverage` remains the
+  vocabulary-level complement.
 - **Requirement strength is inferred.** MUST/SHOULD/MAY labels are compiler interpretations of
   wording. Follow the source citation when a decision depends on that distinction.
 - **Visual guidance needs inspection.** Figure placeholders identify some visual dependencies;
@@ -194,7 +198,10 @@ establish complete source fidelity or guarantee correct agent decisions:
   whether every finding is supported. The skill arm also receives an explicit citation instruction.
 
 The [original audit](AUDIT.md), [implementation responses](AUDIT-RESOLUTION.md), and
-[follow-up verification](AUDIT-VERIFICATION.md) document the findings, fixes, and remaining gaps.
+[follow-up verification](AUDIT-VERIFICATION.md) cover the compiler. The
+[output audit](AUDIT-OUTPUT.md) and its [resolution](AUDIT-OUTPUT-RESOLUTION.md) cover what the
+compiler produces, compared against the raw sources and against established hand-written design
+skills. Together they document the findings, the fixes, and what was deliberately not done.
 
 ## Contributing
 

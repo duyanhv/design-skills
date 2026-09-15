@@ -40,5 +40,10 @@ jobs:
       # shipped skill? Skips sources that are not built, so it is meaningful without a network crawl.
       - name: No unexplained content loss
         run: bun run src/e2e/coverage.ts
+      # Sentence-level, verbatim. `coverage` compares vocabulary per line and is satisfied when the
+      # words appear anywhere on the page, so it could not see a paragraph that a stale render had
+      # dropped or that the extractor had attached to the wrong item. Same skip-if-not-built rule.
+      - name: Source sentences survive into the shipped references
+        run: bun run src/e2e/fidelity.ts
       - name: Manifests parse against the source schema
         run: bun run src/e2e/manifests.ts
