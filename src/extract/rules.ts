@@ -13,7 +13,7 @@
 import { MAX_BLOCK } from "../schema/ir.ts";
 import { ruleValue, severityOf } from "./severity.ts";
 
-export const EXTRACTOR = "bold-lead@9";
+export const EXTRACTOR = "bold-lead@10";
 
 /**
  * Where a rule's platform scope came from.
@@ -40,6 +40,12 @@ export interface ExtractedRule {
   rationale?: string;
   /** Blocks that qualify the rule: follow-up paragraphs, sub-bullets, notes. Verbatim, in order. */
   notes: string[];
+  /**
+   * Positional, parallel to `notes`: whether the source gives each block normative force. Only
+   * extractors whose source declares the distinction set it (WCAG marks notes and examples
+   * informative). Omitted means "this source does not draw the line", not "all normative".
+   */
+  note_authority?: ("normative" | "informative")[];
   value?: string;
 }
 
@@ -238,8 +244,17 @@ export function extractRules(markdown: string, opts: ExtractOptions): ExtractedP
     if (tableBuf.length >= 2) {
       const nearest = [...path].reverse().find((p) => p.anchor);
       const caption = isCaption(lastProse) ? stripMd(lastProse) : undefined;
-      // The caption line is already on the page as this table's lead-in; drop the context copy.
-      if (caption && lastContext && lastContext.list[lastContext.list.length - 1] === lastContext.text) lastContext.list.pop();
+      // The caption line is already on the page as this table's lead-in, so drop the context copy —
+      // but drop *that* line, not merely the last one pushed. `lastProse` skips figures and
+      // `lastContext` does not, so when a figure sits between the lead-in and the table the two
+      // disagree, and popping blind deleted the figure while leaving the duplicated prose. That
+      // silently removed 11 illustrations (wallet, game-center, top-shelf) whose sections are
+      // entirely about what the picture shows.
+      if (caption && lastContext) {
+        const list = lastContext.list;
+        const at = list.findIndex((t) => stripMd(t) === caption);
+        if (at >= 0) list.splice(at, 1);
+      }
       tables.push({
         section: path.map((p) => p.text).join(" › "),
         anchor: nearest?.anchor,
