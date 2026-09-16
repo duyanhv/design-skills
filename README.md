@@ -211,9 +211,10 @@ validation. They do not guarantee correct agent decisions:
   Claude CLI and makes model calls. Its scorer measures seeded cues and citation mentions, not
   whether every finding is supported, and it now resolves each cited id against the built skill so a
   fabricated-but-well-formed citation earns no credit. The skill arm also receives an explicit
-  citation instruction. Three samples per arm is a small sample and the ranges overlap; see the
-  [resolution](docs/audits/resolution-2026-09-15.md) for the last recorded run and the two defects
-  running it exposed.
+  citation instruction. Three samples per arm is a small sample and the ranges overlap. The last
+  recorded run found more violations with the skill (42 vs 38, no false positives either way) but
+  *fewer* decoys explicitly dismissed (13 vs 18), which is unresolved; see the
+  [resolution](docs/audits/resolution-2026-09-15.md).
 
 The [output audit](docs/audits/generated-output-2026-09-15.md) compares what the compiler produces
 against the raw sources and against established hand-written design skills; its
