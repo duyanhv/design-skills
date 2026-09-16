@@ -6,8 +6,8 @@ xcode:       Xcode 27.0 (Build version 27A266a)
 sdk:         iPhoneSimulator27.0.sdk
 swift:       Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
 target:      arm64-apple-ios18.0-simulator
-captured:    2026-09-16T08:03:07Z
-shots:
-  after-light.png   appearance=light  content_size=medium
-  after-dark.png    appearance=dark   content_size=medium
-  after-xxxl.png    appearance=light  content_size=accessibility-extra-extra-extra-large
+captured:    2026-09-16T08:25:13Z
+shots (settings as reported by the device after being set):
+  after-light.png  appearance=light  content_size=medium
+  after-dark.png  appearance=dark  content_size=medium
+  after-xxxl.png  appearance=light  content_size=accessibility-extra-extra-extra-large

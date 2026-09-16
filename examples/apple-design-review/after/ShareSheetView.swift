@@ -138,32 +138,47 @@ struct ShareSheetView: View {
         }
     }
 
+    /// Side by side while both fit; stacked once the text size makes that impossible.
+    /// `ViewThatFits` picks the first layout that fits, so the button never has to wrap its title.
     private var inviteRow: some View {
-        HStack(spacing: 12) {
-            TextField("Email address", text: $store.inviteEmail)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.send)
-                .focused($inviteFocused)
-                .onSubmit { store.invite() }
-                .accessibilityLabel("Email address to invite")
-
-            Button {
-                store.invite()
-            } label: {
-                if store.isSending {
-                    ProgressView()
-                        .accessibilityLabel("Sending invitation")
-                } else {
-                    Text("Send")
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                inviteField
+                sendButton.fixedSize(horizontal: true, vertical: false)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!store.canSend)
+            VStack(alignment: .leading, spacing: 12) {
+                inviteField
+                sendButton.frame(maxWidth: .infinity)
+            }
         }
+    }
+
+    private var inviteField: some View {
+        TextField("Email address", text: $store.inviteEmail)
+            .textContentType(.emailAddress)
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.send)
+            .focused($inviteFocused)
+            .onSubmit { store.invite() }
+            .accessibilityLabel("Email address to invite")
+    }
+
+    private var sendButton: some View {
+        Button {
+            store.invite()
+        } label: {
+            if store.isSending {
+                ProgressView()
+                    .accessibilityLabel("Sending invitation")
+            } else {
+                Text("Send").lineLimit(1)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(!store.canSend)
     }
 
     private func memberRow(_ member: Member) -> some View {

@@ -103,15 +103,51 @@ Claims are scoped: one screen, one run, one platform, no control arm.
 
 ## 4. Lead the README with the outcome
 
-- [ ] Open with a short explanation of what the skills help users accomplish.
-- [ ] Show the real before/after example near the top.
-- [ ] Add a “Browse the skills” table linking directly to complete public bundles.
-- [ ] Describe each skill's intended tasks and platform scope.
-- [ ] Link the worked example beside the relevant skill.
-- [ ] Put installation after the showcase and browsable output.
-- [ ] Move compiler architecture and local extraction instructions below the user-facing material.
-- [ ] Explain why local-only corpora are excluded and point visitors to the available public guides.
-- [ ] Check all README links and image rendering on GitHub.
+- [x] Open with a short explanation of what the skills help users accomplish.
+- [x] Show the real before/after example near the top.
+- [x] Add a “Browse the skills” table linking directly to complete public bundles.
+- [x] Describe each skill's intended tasks and platform scope.
+- [x] Link the worked example beside the relevant skill.
+- [x] Put installation after the showcase and browsable output.
+- [x] Move compiler architecture and local extraction instructions below the user-facing material.
+- [x] Explain why local-only corpora are excluded and point visitors to the available public guides.
+- [x] Check all README links and image rendering on GitHub.
+
+Order is now: what the skills do → the worked example with before/after screenshots → the skills
+table (with a worked-example column) → what they decide versus what they send the agent to read →
+what is not published and why → installation → the compiler.
+
+Rendering was checked against GitHub's own renderer (`api.github.com/markdown/raw`) rather than by
+eye: every table in the README, the example, `scoring.md`, `measurements.md`, `skills/README.md`,
+and `guidance/README.md` parses with its columns aligned, the escaped pipe in a code cell produces
+one cell, and the screenshot paths render as relative `<img src>` that resolve in the repository.
+`bun run docs` resolves all 123 relative links and both heading anchors.
+
+## 4a. Corrections after audit
+
+An audit of the first version of the example found four problems, all now fixed:
+
+- **The score did not match the published review.** P13 was counted as found when the review
+  explicitly declined it; the toolbar target was counted both as "left alone" and as "wrongly
+  dismissed"; a planted item (progress placement) was counted as unplanted; and false positives were
+  reported as zero while the review contradicted one of my own "leave alone" items. Adjudicated item
+  by item in `scoring.md`, including the two places where **my planted list was wrong**, not the
+  review. Totals fell from "14 of 15 found, 6 unplanted" to "12 of 14 valid found, 4 unplanted".
+- **The headline measurement was not reproducible.** The hit-test instrumentation existed only in my
+  shell history. Both probes and their raw output are now committed under `examples/*/probe/`, and
+  the claim is described as programmatic hit-testing rather than "what the finger gets", since real
+  taps remain untested.
+- **The "after" screen still had a Dynamic Type defect**: the Send button wrapped to "Sen"/"d" at
+  AX5, in the screen meant to demonstrate Dynamic Type being fixed. The review's own F3 had
+  recommended `ViewThatFits` for that row and I had not implemented it. Fixed and recaptured.
+- **Capture conditions could be recorded falsely.** `build.sh` suppressed failures from
+  `simctl ui` and then recorded the *requested* settings as fact. It now fails the capture when a
+  setting cannot be applied, and records what the device reports when queried.
+
+Also removed "a screen that adapts should differ almost everywhere" from `measurements.md`: pixel
+difference measures change, not adaptation quality. The larger AX5 difference was present *while*
+the Send button was still wrapping, which is the concrete demonstration that the metric cannot
+establish usable Dynamic Type support.
 
 ## 5. Verify packaging and usefulness
 

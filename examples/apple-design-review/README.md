@@ -12,13 +12,16 @@ as it was produced, real simulator screenshots, and an honest account of what th
 | Dark | ![before, dark](screenshots/before-dark.png) | ![after, dark](screenshots/after-dark.png) |
 | Largest accessibility text | ![before, AX5](screenshots/before-xxxl.png) | ![after, AX5](screenshots/after-xxxl.png) |
 
-Real captures from a running app on **iPhone 17 Pro, iOS 26.5**, Xcode 27.0. Exact conditions per
-capture are in [`screenshots/before-conditions.txt`](screenshots/before-conditions.txt) and
+Real captures from a running app on **iPhone 17 Pro, iOS 26.5**, Xcode 27.0. Per-capture settings,
+as reported by the device after being set, are in
+[`screenshots/before-conditions.txt`](screenshots/before-conditions.txt) and
 [`screenshots/after-conditions.txt`](screenshots/after-conditions.txt).
 
 The dark column is the clearest single result. Before, the light and dark captures differ in
-**0.45 %** of pixels, and the only pixels that differ are the ones the *system* drew. After, they
-differ in **99.78 %**. Full numbers in [`measurements.md`](measurements.md).
+**0.45 %** of pixels, and the only pixels that differ are ones the *system* drew. After, they differ
+in **99.78 %**. That measures how much changed, not whether the result is good; the case for the
+after screen is the image itself. Numbers and their instruments in
+[`measurements.md`](measurements.md).
 
 ## The files
 
@@ -27,9 +30,10 @@ differ in **99.78 %**. Full numbers in [`measurements.md`](measurements.md).
 | [`before/ShareSheetView.swift`](before/ShareSheetView.swift) | The screen as reviewed |
 | [`after/ShareSheetView.swift`](after/ShareSheetView.swift) | After applying the findings |
 | [`REVIEW.md`](REVIEW.md) | The review, verbatim |
-| [`scoring.md`](scoring.md) | What it got right, missed, and got wrong |
+| [`scoring.md`](scoring.md) | What it got right, missed, and got wrong, adjudicated item by item |
 | [`planted-defects.md`](planted-defects.md) | The defect list, written before the review |
-| [`measurements.md`](measurements.md) | Runtime measurements and their method |
+| [`measurements.md`](measurements.md) | Measurements, their instruments, and their limits |
+| [`probe/`](probe/) | The measurement probes and their raw output |
 | [`build.sh`](build.sh) | Rebuilds either variant and recaptures the screenshots |
 
 ## How the review was run
@@ -58,14 +62,18 @@ alone, because a small icon often sits inside a large target.
 The review did the right thing: it measured the rendered Liquid Glass container at exactly
 44.0 × 44.0 pt, refused to file a finding, and listed it as the screen's most likely false positive.
 
-Then a runtime hit test showed the region that actually receives a touch is **39.5 × 26.5 pt**. A
-touch at the container's corner lands on the navigation bar, not the button.
+Then a [hit-test probe](probe/main.swift) showed the region that actually receives a touch is
+**39.5 × 26.5 pt**. A sampled point at the container's corner resolves to the navigation bar, not
+the button.
 
 | Measurement of the same control | Value |
 | --- | --- |
 | Declared frame in the source | 24 × 24 pt |
 | Rendered glass container in the screenshot | 44.0 × 44.0 pt |
-| Region that actually receives a touch | **39.5 × 26.5 pt** |
+| Region the hit-test probe reaches | **39.5 × 26.5 pt** |
+
+That last row is programmatic hit-testing, not a finger on glass; real taps were not tested. Run it
+yourself with `./probe/run.sh before`.
 
 The guide says a screenshot cannot settle a hit-target question. The review said so too, in its own
 limitations section. Both then treated a pixel measurement as if it had settled one. The lesson is
@@ -74,18 +82,28 @@ avoiding one direction is not the same as avoiding both.
 
 ## Summary of the comparison
 
+Scored item by item in [`scoring.md`](scoring.md), including two places where my own planted list
+was wrong.
+
 | | |
 | --- | --- |
-| Planted defects found | 14 of 15 |
-| Planted defects wrongly dismissed | 1 (the toolbar target, above) |
-| **Real defects found that were not planted** | **6** |
-| Correct patterns wrongly reported as defects | 0 |
-| Correct patterns checked and explicitly left alone | 7 |
+| Valid planted defects | 14 (one invalidated on audit) |
+| Found | 12 |
+| Wrongly dismissed | 2 (the toolbar target, above; and one where the review was right) |
+| **Real defects found that were not planted** | **4** |
+| Correct patterns wrongly reported as defects | 1 |
+| Correct patterns checked and left alone | 6 |
 | Fabricated rule IDs | 0 |
 
-The six unplanted findings are the most informative column, since they are the part nobody staged.
-The best of them: the "⋯" button silently toggles link sharing, which was written as filler and is a
-genuine privacy-relevant defect. [`scoring.md`](scoring.md) lists them all.
+The unplanted findings are the most informative row, since they are the part nobody staged. The best
+of them: the "⋯" button silently toggles link sharing, which was written as filler and is a genuine
+privacy-relevant defect.
+
+## Remaining defect in the fixed version
+
+At the largest accessibility text size the navigation bar's large title truncates to
+"Quarterly R…". It is the system's large-title treatment rather than app-drawn text, and it is left
+in place rather than worked around. Visible in [`after-xxxl.png`](screenshots/after-xxxl.png).
 
 ## Reproducing it
 
@@ -94,6 +112,8 @@ Requires Xcode and an iOS simulator.
 ```sh
 ./build.sh before      # compile, install, and capture the three "before" screenshots
 ./build.sh after       # same for the fixed version
+./probe/run.sh after   # where a touch lands, by hit-testing a 0.5 pt grid
+./probe/sizes.sh after # what SwiftUI laid out, via GeometryReader
 ```
 
 There is no Xcode project: each variant is one Swift file compiled directly against the simulator

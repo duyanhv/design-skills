@@ -1,0 +1,18 @@
+variant: before
+=== programmatic hit-test probe ===
+device:     iPhone 17 Pro, iOS 26.5
+window:     402.0 x 874.0 pt
+appearance: light
+text size:  UICTContentSizeCategoryM
+grid step:  0.5 pt
+
+control: toolbar item
+  marker: BarItemView
+  scanned: x 320.0...402.0, y 45.0...120.0 (24915 samples)
+  reached at: x 344.5...383.5, y 71.0...97.0 (4187 samples)
+  touchable region: 39.5 x 26.5 pt -> under 44 x 44
+
+Note: SwiftUI does not give each Button its own UIView, so only controls hosted in an
+identifiable UIKit view (such as a toolbar item) can be measured this way. Sizes for
+in-body controls are reported by the GeometryReader probe instead; see measurements.md.
+=== end ===

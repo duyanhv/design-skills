@@ -108,3 +108,29 @@ the other direction.
 Also measured at runtime, confirming review findings:
 - Send button: 68.7 x 38.0 pt laid out (under on height) — matches the review's screenshot figure.
 - Row remove (x): 20.0 x 20.0 pt laid out (x3 rows) — matches the review.
+
+## CORRECTION to P13, made AFTER the blind review
+
+I planted "no visible label bound to the text field" as a defect. The review considered it and
+declined, arguing that the "Invite" section header is the describing label and that Apple's Text
+fields page endorses a placeholder as a hint. On audit the review is right and this planted item
+was wrong, so P13 is removed from the denominator in `scoring.md` rather than counted against the
+review. The field's missing keyboard and content type is a separate, genuine defect (planted as P12,
+found as F10).
+
+## CORRECTION to C2, made AFTER the blind review
+
+I listed `Divider().padding(.leading, 48)` as a correct pattern that should not be reported. The
+review reported it twice, in F3 and F13, as a hard-coded metric that stops matching once text
+scales. That argument is sound and my C2 was too generous. It is still counted as a false positive
+in `scoring.md`, because loosening the rubric after seeing the answer is precisely the failure this
+protocol exists to prevent.
+
+## Defect found in the FIXED version, after publishing
+
+The first "after" build still wrapped the Send button's title onto two lines ("Sen"/"d") at the
+largest accessibility text size — a Dynamic Type layout defect in the screen that was supposed to
+demonstrate Dynamic Type being fixed. The review's own F3 had recommended `ViewThatFits` for exactly
+this row and I had not implemented it. Fixed and recaptured. Worth recording because the pixel-diff
+number went *up* between default and AX5 while the defect was present: a larger difference measures
+change, not correctness.

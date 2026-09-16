@@ -31,11 +31,13 @@ dark captures differ in 0.45 % of pixels, and only where the *system* drew them.
 
 The review was run blind. The defect list was written first and kept outside the repository; a
 separate agent got only the screen, the skill, and the screenshots, and was not told defects had
-been planted. It found 14 of 15, invented no rule IDs, reported 6 real defects nobody planted, and
-**wrongly dismissed one** — it measured the toolbar button's glass container at 44 × 44 pt from a
-screenshot and declined to file a target finding, but the region that actually receives a touch is
-39.5 × 26.5 pt. The [review](examples/apple-design-review/REVIEW.md) is published verbatim and the
-[scoring](examples/apple-design-review/scoring.md) says so plainly.
+been planted. It found 12 of 14 valid planted defects, invented no rule IDs, and reported 4 real
+defects nobody planted. It **wrongly dismissed the most interesting one**: it measured the toolbar
+button's glass container at 44 × 44 pt from a screenshot and declined to file a target finding, but
+a [committed hit-test probe](examples/apple-design-review/probe/main.swift) puts the region that
+receives a touch at 39.5 × 26.5 pt. The [review](examples/apple-design-review/REVIEW.md) is
+published verbatim and the [scoring](examples/apple-design-review/scoring.md) adjudicates every
+item, including two where my own planted list was wrong.
 
 One screen, one run, no control arm. It is a worked example, not a measurement of effectiveness.
 
@@ -44,11 +46,11 @@ One screen, one run, no control arm. It is a worked example, not a measurement o
 These bundles are committed, so you can read every file on GitHub before installing anything.
 Install the whole folder: `SKILL.md` links to the references beside it.
 
-| Skill | Use it for | What is in the bundle |
-| --- | --- | --- |
-| [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) routes by task to six guides — [navigation](skills/apple-design/references/tasks/navigation.md), [actions](skills/apple-design/references/tasks/actions.md), [forms](skills/apple-design/references/tasks/forms.md), [typography](skills/apple-design/references/tasks/typography.md), [appearance](skills/apple-design/references/tasks/appearance.md), [accessibility](skills/apple-design/references/tasks/accessibility.md) — plus [platform/framework context](skills/apple-design/references/context/platforms.md), a [decision-to-page map](skills/apple-design/references/research/topics.md), an [evidence workflow](skills/apple-design/references/review/evidence.md), and `provenance.json` |
-| [**material-3**](skills/material-3/) | Google Material Design 3 work on Compose, Material Web, or another implementation: theming, component states, adaptive layout | [`SKILL.md`](skills/material-3/SKILL.md) implementation workflow, a [source map](skills/material-3/references/research/sources.md) with per-platform notes, an [evidence workflow](skills/material-3/references/review/evidence.md), `provenance.json` |
-| [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated [`SKILL.md`](skills/lumen-ds/SKILL.md) with routing and an inline index, [extracted reference pages](skills/lumen-ds/references/) carrying rule IDs, source text and citations, `provenance.json`. A larger corpus splits the index into its own `index.md` |
+| Skill | Use it for | What is in the bundle | Worked example |
+| --- | --- | --- | --- |
+| [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) routes by task to six guides — [navigation](skills/apple-design/references/tasks/navigation.md), [actions](skills/apple-design/references/tasks/actions.md), [forms](skills/apple-design/references/tasks/forms.md), [typography](skills/apple-design/references/tasks/typography.md), [appearance](skills/apple-design/references/tasks/appearance.md), [accessibility](skills/apple-design/references/tasks/accessibility.md) — plus [platform/framework context](skills/apple-design/references/context/platforms.md), a [decision-to-page map](skills/apple-design/references/research/topics.md), an [evidence workflow](skills/apple-design/references/review/evidence.md), and `provenance.json` | [Reviewing an iOS share screen](examples/apple-design-review/) |
+| [**material-3**](skills/material-3/) | Google Material Design 3 work on Compose, Material Web, or another implementation: theming, component states, adaptive layout | [`SKILL.md`](skills/material-3/SKILL.md) implementation workflow, a [source map](skills/material-3/references/research/sources.md) with per-platform notes, an [evidence workflow](skills/material-3/references/review/evidence.md), `provenance.json` | None yet |
+| [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated [`SKILL.md`](skills/lumen-ds/SKILL.md) with routing and an inline index, [extracted reference pages](skills/lumen-ds/references/) carrying rule IDs, source text and citations, `provenance.json`. A larger corpus splits the index into its own `index.md` | n/a (fixture) |
 
 ### What these skills decide, and what they send the agent to read
 

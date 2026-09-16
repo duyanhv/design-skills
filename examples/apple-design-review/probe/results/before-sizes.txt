@@ -1,0 +1,4 @@
+variant: before  (device: iPhone 17 Pro, light, default text size)
+row remove control: laid out 20.0 x 20.0 pt -> under 44 x 44
+Send button: laid out 68.7 x 38.0 pt -> under 44 x 44
+toolbar item: laid out 24.0 x 24.0 pt -> under 44 x 44

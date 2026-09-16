@@ -12,7 +12,6 @@ DEVICE="${2:-iPhone 17 Pro}"
 BUNDLE_ID="com.designskills.sharereview"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
 
 [ -d "$ROOT/$VARIANT" ] || { echo "no such variant: $VARIANT" >&2; exit 1; }
 
@@ -48,16 +47,42 @@ PLIST
 xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || xcrun simctl boot "$UDID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
 
+# Conditions are only worth recording if they were actually applied. `simctl ui` can fail (an older
+# runtime, a device that is not fully booted), and a suppressed failure would leave us captioning a
+# screenshot with a setting the device never adopted. So: set it, read it back, and abort on a
+# mismatch rather than writing a caption we cannot support.
+apply() { # apply <appearance|content_size> <value>
+  local key="$1" want="$2" got
+  if ! xcrun simctl ui "$UDID" "$key" "$want" >/dev/null 2>&1; then
+    echo "error: could not set $key=$want on $DEVICE" >&2; exit 1
+  fi
+  if got=$(xcrun simctl ui "$UDID" "$key" 2>/dev/null); then
+    got="${got//$'\n'/}"
+    if [ "$got" != "$want" ]; then
+      echo "error: asked for $key=$want but the device reports $key=$got" >&2; exit 1
+    fi
+    printf '%s' "$got"
+  else
+    # No read-back available on this runtime: say so instead of implying verification.
+    printf '%s (requested; not read back)' "$want"
+  fi
+}
+
 shot() { # shot <name> <appearance> <content-size>
-  local name="$1" appearance="$2" size="$3"
-  xcrun simctl ui "$UDID" appearance "$appearance" >/dev/null 2>&1 || true
-  xcrun simctl ui "$UDID" content_size "$size" >/dev/null 2>&1 || true
+  local name="$1" appearance="$2" size="$3" gotA gotS
+  gotA=$(apply appearance "$appearance")
+  gotS=$(apply content_size "$size")
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
   xcrun simctl launch "$UDID" "$BUNDLE_ID" >/dev/null
   sleep 3
   xcrun simctl io "$UDID" screenshot --mask=ignored "$ROOT/screenshots/$VARIANT-$name.png" >/dev/null
-  echo "   screenshots/$VARIANT-$name.png  ($appearance, text: $size)"
+  # Record what the device reported, not what we asked for.
+  echo "  $VARIANT-$name.png  appearance=$gotA  content_size=$gotS" >> "$CONDITIONS_SHOTS"
+  echo "   screenshots/$VARIANT-$name.png  (appearance: $gotA, text: $gotS)"
 }
+
+CONDITIONS_SHOTS="$(mktemp)"
+trap 'rm -rf "$WORK" "$CONDITIONS_SHOTS"' EXIT
 
 xcrun simctl uninstall "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 xcrun simctl install "$UDID" "$APP" >/dev/null
@@ -66,7 +91,8 @@ shot light light medium
 shot dark dark medium
 shot xxxl light accessibility-extra-extra-extra-large
 
-# Record the exact conditions, so a later run can be compared to this one.
+# Record the exact conditions. Per-shot appearance and text size are whatever the device reported
+# when queried, not what was requested, so this file cannot claim a setting that was never applied.
 cat > "$ROOT/screenshots/$VARIANT-conditions.txt" <<COND
 variant:     $VARIANT
 device:      $DEVICE
@@ -77,9 +103,7 @@ sdk:         $(basename "$SDK")
 swift:       $(xcrun swift --version 2>/dev/null | head -1)
 target:      arm64-apple-ios18.0-simulator
 captured:    $(date -u +%Y-%m-%dT%H:%M:%SZ)
-shots:
-  $VARIANT-light.png   appearance=light  content_size=medium
-  $VARIANT-dark.png    appearance=dark   content_size=medium
-  $VARIANT-xxxl.png    appearance=light  content_size=accessibility-extra-extra-extra-large
+shots (settings as reported by the device after being set):
+$(cat "$CONDITIONS_SHOTS")
 COND
 echo "   screenshots/$VARIANT-conditions.txt"

@@ -1,0 +1,3 @@
+variant: after  (device: iPhone 17 Pro, light, default text size)
+Send button: laid out 77.3 x 51.3 pt -> meets 44 x 44
+toolbar item: laid out 26.0 x 26.0 pt -> under 44 x 44
