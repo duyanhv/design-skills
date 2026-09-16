@@ -88,3 +88,30 @@
 - q: Does the forms file start from not asking, and cover keyboard and validation?
   source: forms
   expect: ["Entering data", "AutoFill", "never prepopulated", "validation"]
+
+# Added after an audit found three scope errors in the first version of these guides. Each of these
+# asserts the *correction*, so losing it again fails here rather than in someone's review.
+
+- q: Does the forms guide keep the switch/checkbox guidance attached to its platform?
+  source: forms
+  expect:
+    # The list-row restriction is iOS/iPadOS, and was once presented unqualified next to a macOS link.
+    - "toggles#iOS-iPadOS"
+    - "toggles#macOS"
+    - "window body"
+
+- q: Does the navigation guide allow toolbars to carry navigation?
+  source: navigation
+  expect:
+    - "toolbars#Navigation"
+    - "Back and Close"
+    # The warning must be about unpredictability, not about navigating from a toolbar at all.
+    - "unexpected"
+
+- q: Does the actions guide avoid stating a target size while still requiring the check?
+  source: actions
+  expect: ["for that platform", "visionOS", "record its"]
+
+- q: Does the accessibility guide treat target size and spacing as separate, per-platform values?
+  source: accessibility
+  expect: ["separate requirements", "one platform's number", "gaze-driven"]

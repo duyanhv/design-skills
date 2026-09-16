@@ -23,6 +23,18 @@ belong at the linked source. A guide that copies a number is wrong the next time
 it, and for Apple and Google it would also be redistributing text this project has no license to
 redistribute. Link the page that owns the answer and say what to read there.
 
+`bun run specs` enforces that: no lengths with units, pixel dimensions, contrast ratios, or colour
+literals in this folder. It exists because the rule is easy to break while writing a *helpful*
+example — an audit found a hit-target illustration quoting two point sizes, unqualified by platform,
+a few sections after the guide promised it carried no numbers.
+
+**Attach the platform to every borrowed statement.** Most HIG pages carry a *Platform
+considerations* section, and a statement under `iOS, iPadOS` is not the same statement as one under
+`macOS`. Cite the section, not the page. The same audit found a switch restriction that belongs to
+iOS and iPadOS presented unqualified next to a link to the macOS section, and a warning generalized
+into the reverse of what the source actually supports. Neither is caught by any automated check;
+read the source section before writing the sentence.
+
 Guidance in this folder is MIT licensed original writing. It is not affiliated with Apple or Google.
 
 ## Rules the build enforces

@@ -58,3 +58,11 @@ jobs:
         run: bun run src/e2e/docs.ts
       - name: Documentation link guards fire on reintroduced defects
         run: bun run src/e2e/docs-negative.ts
+      # The authored guides promise they carry no specifications. A copied number is wrong the next
+      # time the source revises it, is usually platform-specific, and is not ours to redistribute.
+      - name: Authored guidance carries no copied specification values
+        run: bun run src/e2e/specs.ts
+      # `links` itself needs the network, so CI runs its guards against a local stub instead. This
+      # is the check that would have caught a 200-with-{} being counted as a verified page.
+      - name: Link-verifier guards fire on reintroduced defects
+        run: bun run src/e2e/links-negative.ts

@@ -32,13 +32,14 @@ it does and what it is. Check:
 ## Targets and spacing
 
 Apple's accessibility guidance covers offering sufficiently sized controls and treats spacing
-between controls as being as important as their size. Two adjacent 44pt targets with no gap are
-still easy to mis-hit.
+between controls as being as important as their size. Two targets that each meet the minimum, placed
+with no gap between them, are still easy to mis-hit; size and separation are separate requirements.
 
-Read the platform's own page for the actual minimum, record its units, and do not carry an iOS
-number to watchOS or a pointer-based platform. And before filing any target finding, resolve the
-visible-size-versus-hit-region question described in [actions.md](actions.md): a small glyph inside
-a large tappable row is fine, and the screenshot cannot tell you which you are looking at.
+Read the platform's own page for the actual minimum and the spacing guidance, record the units, and
+do not carry one platform's number to another. The general figure and the visionOS figure differ,
+because gaze-driven targeting is not fingertip targeting. Before filing any target finding, resolve
+the visible-size-versus-hit-region question described in [actions.md](actions.md): a small glyph
+inside a large tappable row is fine, and a screenshot cannot tell you which you are looking at.
 
 ## Not color alone, not sound alone, not gesture alone
 

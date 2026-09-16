@@ -30,18 +30,22 @@ and [Managing accounts](https://developer.apple.com/design/human-interface-guide
 
 ### Switches, checkboxes, and radio buttons
 
-Apple's Toggles page treats these as different controls with different homes, and its macOS section
-covers checkboxes and radio buttons specifically. Two distinctions from that page are worth reading
-before you propose a swap:
+Apple's Toggles page gives these different homes **on different platforms**, and the guidance does
+not transfer between them. Each statement below belongs to the platform section it came from, so
+cite the section rather than the page:
 
-- The switch style is for a list row; outside a list, Apple points to a button that behaves like a
-  toggle rather than a switch.
-- On macOS, Apple discusses when a checkbox is preferable to a switch, including for a hierarchy of
-  settings, and says not to put these controls in the window frame.
+- **iOS and iPadOS:** use the switch style only in a list row, and outside a list prefer a button
+  that behaves like a toggle rather than a switch. Read
+  [Toggles › iOS, iPadOS](https://developer.apple.com/design/human-interface-guidelines/toggles#iOS-iPadOS).
+- **macOS:** switches, checkboxes, and radio buttons belong in the window body rather than the
+  window frame. Apple prefers a switch for a setting it wants to emphasize, generally advises
+  against replacing a checkbox with a switch, and points to a checkbox where a hierarchy of settings
+  is needed. Read [Toggles › macOS](https://developer.apple.com/design/human-interface-guidelines/toggles#macOS).
 
-Read [Toggles › macOS](https://developer.apple.com/design/human-interface-guidelines/toggles#macOS)
-rather than transferring an iOS habit to a Mac window, and check the current wording before calling
-a choice a violation.
+Note that these pull in opposite directions: the list-row restriction is an iOS and iPadOS rule, and
+applying it to a Mac window would be exactly the platform-transfer mistake described in
+[platforms.md](../context/platforms.md). Check which platform section your finding rests on, and
+check the current wording before calling a choice a violation.
 
 ## Keyboard and text entry
 

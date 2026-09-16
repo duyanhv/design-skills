@@ -31,9 +31,17 @@ this citable guidance rather than taste. A tab switches which content you are lo
 not compose, delete, or submit. Controls that act on the current view belong in a toolbar, a menu,
 or the content itself. See [actions.md](actions.md).
 
-The same confusion in reverse: a toolbar button that silently replaces the whole screen's context is
-navigation wearing an action's clothes. If it changes *where you are* rather than *what you did*,
-reconsider the surface.
+The converse is **not** true, and this is worth stating because the symmetry is tempting. A toolbar
+is a legitimate navigation surface: Apple's Toolbars page has a
+[Navigation](https://developer.apple.com/design/human-interface-guidelines/toolbars#Navigation)
+section describing toolbars that help people move through a hierarchy of content, often containing a
+search field for moving quickly between areas, and it asks for the standard Back and Close buttons.
+On iOS a navigation-specific toolbar is what was called a navigation bar. Back buttons, breadcrumbs,
+and toolbar search are all navigation doing its job.
+
+What is worth questioning is a control whose effect is *unexpected*: one that looks like an action
+and silently relocates you, or that discards work on the way. Judge it by whether someone can
+predict where the control leads, not by the fact that it navigates from a toolbar.
 
 ## Navigation bars merged into Toolbars
 

@@ -51,16 +51,21 @@ defeats the confirmation. Say so as a design suggestion, not as a cited rule.
 
 ## The mistake that wastes the most review time
 
-**A small-looking icon is not a small tap target.** A 16pt SF Symbol inside a 44pt button is
-correct, and the symbol size in isolation proves nothing. Before reporting a hit-target finding,
-trace the *interactive view*: padding, `frame`, `contentShape`, `.buttonStyle`, the parent stack's
-spacing, and whatever the framework adds by default. A list row's whole width is usually tappable
-even when the visible glyph is tiny.
+**A small-looking icon is not a small tap target.** A small glyph centered in a much larger
+interactive region is correct and common, and the symbol's own size proves nothing on its own.
+Before reporting a hit-target finding, trace the *interactive view*: padding, `frame`,
+`contentShape`, `.buttonStyle`, the parent stack's spacing, and whatever the framework adds by
+default. A list row's whole width is usually tappable even when the visible glyph is tiny.
 
 The same applies in reverse: a large visual area with a small `contentShape` is a real defect that a
 screenshot cannot show. This is a code question, and if you only have a screenshot, say the check is
-unverified. Apple's minimum target guidance is per platform; read the relevant platform page rather
-than reciting a remembered number, and record the units.
+unverified.
+
+Then, and only then, compare the measured region against the minimum **for that platform**. Apple
+states a general minimum on [Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)
+and a different one for visionOS, where gaze-driven targeting changes the requirement, and it
+discusses spacing between targets separately from their size. Read the value on the page, record its
+units and the platform section it came from, and do not carry one platform's number to another.
 
 ## What to check in the code
 
