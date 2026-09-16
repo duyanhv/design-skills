@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { comparability, findingBlocks, score, splitFindings } from "../src/agenteval/score.ts";
+import { comparability, findingBlocks, isReplayed, score, splitFindings } from "../src/agenteval/score.ts";
 import { TASKS } from "../src/agenteval/tasks.ts";
 import type { Task } from "../src/agenteval/tasks.ts";
 
@@ -331,4 +331,13 @@ test("a findings heading that merely contains 'failure' is still a findings head
     expect(findings).toContain(h);
     expect(dismissed).toBe("");
   }
+});
+
+test("re-scoring keeps the elapsed time of the run it replays", () => {
+  // `isReplayed` reads ms, so writing 0 back on a rescore erases the evidence that a sample was
+  // ever run: a set of genuinely fresh samples then reports itself, correctly by its own rule, as
+  // entirely stale. The scoring pass costs no time, but the *sample* did; that number belongs to
+  // the sample. This is the provenance marker the warning depends on, so it has to survive.
+  expect(isReplayed({ ms: 141125 })).toBe(false);
+  expect(isReplayed({ ms: 0 })).toBe(true);
 });

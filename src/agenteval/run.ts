@@ -168,7 +168,13 @@ for (const task of tasks) {
       let transcript: string;
       let ms: number;
       try {
-        ({ transcript, ms } = cached ? { transcript: cached, ms: 0 } : await sampleArm(task, arm));
+        // Re-scoring replays a saved transcript, so it costs no time — but writing `ms: 0` back
+        // *destroys the record of the run that produced it*, and every row then reports itself as
+        // replayed. The elapsed time belongs to the sample, not to the scoring pass, so it is
+        // carried forward. This is how a set of genuinely fresh samples came to look stale.
+        ({ transcript, ms } = cached
+          ? { transcript: cached, ms: prior.find((r) => r.task === task.id && r.arm === arm && r.run === run)?.ms ?? 0 }
+          : await sampleArm(task, arm));
       } catch (e) {
         // One flaky CLI invocation is not a reason to discard the batch. Record the failure as a
         // sample that produced nothing, so the summary can say "8 of 9 scored" instead of silently
