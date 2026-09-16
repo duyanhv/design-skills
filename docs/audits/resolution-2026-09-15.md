@@ -222,7 +222,7 @@ Every number below was observed, not projected.
 | `bun run check` | passing | passing |
 | Unit tests | 51 | 65 |
 | Trace requirements | 19 | 42 |
-| Trace negative probes | 22 | 59 |
+| Trace negative probes | 22 | 60 |
 | Validate guards | 20 | 22 |
 | Apple media occurrences rendered | 0 block videos, 0 captions | 1,334/1,536, 202 enumerated |
 | Apple prose sentences reaching the shipped text | not measured | 12,531/12,807, 279 enumerated |
@@ -240,11 +240,16 @@ its only non-metadata diff is the new empty array per rule.
 ## Standing rule observed
 
 Every guard added here was watched failing on the defect it claims to guard, then passing once
-restored. That is what turned up the two extractor bugs, the missing `lumen-ds` fixture in the
-negative trace tree, and the fact that one of the two `flushTable` fixes is not independently
-observable: reverting the heading-branch line alone leaves all five media checks green, because the
-content-based splice repairs the same symptom. It is retained as correct, and recorded here as not
-independently proven, rather than being claimed as guarded.
+restored. That is what turned up the extractor bugs and the missing `lumen-ds` fixture in the
+negative trace tree.
+
+It also produced the one case where the rule was applied against itself. When the two `flushTable`
+fixes landed, reverting the heading-branch line alone left all five media checks green, because the
+content-based splice repaired the same symptom for figures. That fix was therefore recorded here as
+correct but *not independently proven*, rather than being claimed as guarded. Prose coverage later
+made it observable — the block that defect deletes on `widgets` is a sentence, not a figure — so it
+now has a probe of its own and the earlier disclaimer is withdrawn. The rule works in both
+directions: it refuses credit for an unproven fix, and it notices when a fix becomes provable.
 
 ## Still open
 

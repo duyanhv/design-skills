@@ -184,6 +184,60 @@ const describe = (c: Coverage) =>
     .map(([k, v]) => `${v} ${k}`)
     .join(", ") || "none");
 
+/**
+ * The same question for WCAG, whose raw form is HTML rather than DocC JSON.
+ *
+ * Counted per innermost block element (`p`, `li`, `dt`, `td`, headings …) rather than over the
+ * document's whole text, because concatenating across element boundaries manufactures sentences the
+ * source never wrote and then reports them as lost. The comparison strips markdown syntax, since a
+ * sentence rendered as `` `name` - Full name`` or with an _italic_ run is the same sentence.
+ */
+export async function wcagProseCoverage(root: string): Promise<{ checked: number; found: number; missing: { page: string; sentence: string }[] }> {
+  const { parse } = await import("node-html-parser");
+  const raw = join(root, ".cache", "wcag22", "raw");
+  const refRoot = join(root, "skills", "wcag22", "references");
+  const { readdir, stat } = await import("node:fs/promises");
+
+  const shipped = new Map<string, string>();
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir)) {
+      const p = join(dir, e);
+      if ((await stat(p)).isDirectory()) await walk(p);
+      else if (p.endsWith(".md")) {
+        const base = e.replace(/\.tables\.md$|\.md$/, "");
+        shipped.set(base, (shipped.get(base) ?? "") + (await readFile(p, "utf8")));
+      }
+    }
+  };
+  await walk(refRoot);
+
+  // Markdown emphasis, code fences and link syntax are presentation; the sentence underneath is
+  // what has to survive.
+  const plain = (s: string) =>
+    norm(s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_>]/g, ""));
+  const BLOCKS = "p,li,dt,dd,h1,h2,h3,h4,h5,h6,td,th,caption";
+
+  let checked = 0;
+  let found = 0;
+  const missing: { page: string; sentence: string }[] = [];
+  for (const f of await listFiles(raw, ".html")) {
+    const page = f.replace(/\.html$/, "");
+    const ship = shipped.get(page);
+    if (!ship) continue;
+    const flat = plain(ship);
+    const doc = parse(await readFile(join(raw, f), "utf8"));
+    for (const el of doc.querySelectorAll(BLOCKS)) {
+      if (el.querySelector(BLOCKS)) continue; // innermost only; an ancestor repeats its children
+      for (const s of sentences(plain(el.text))) {
+        checked++;
+        if (flat.includes(s)) found++;
+        else missing.push({ page, sentence: s });
+      }
+    }
+  }
+  return { checked, found, missing };
+}
+
 export const CHECKS: Check[] = [
   {
     finding: "A7",
@@ -201,6 +255,22 @@ export const CHECKS: Check[] = [
       // Said out loud because this check starts from the raw JSON and the others do not: its
       // guarantee is about prose, and figures are the media probe's job.
       return `${describe(cov)}. Partial: prose only — media occurrences are finding A1's coverage check.`;
+    },
+  },
+  {
+    finding: "A7",
+    requirement: "Every sentence in WCAG's raw HTML reaches the shipped reference",
+    observe: async () => {
+      const cov = await wcagProseCoverage(process.cwd());
+      if (!cov.checked) throw new Error("no WCAG sentences were examined; the corpus or the skill is missing");
+      if (cov.missing.length) {
+        const eg = cov.missing.slice(0, 3).map((m) => `[${m.page}] ${m.sentence.slice(0, 90)}`).join(" | ");
+        throw new Error(`${cov.missing.length} sentence(s) lost, e.g. ${eg}`);
+      }
+      // WCAG needs no exclusion list: the fetcher selects the sections it wants up front, so
+      // everything crawled is meant to ship. That is a stronger guarantee than Apple's and is
+      // stated separately rather than averaged into one number.
+      return `${cov.found}/${cov.checked} sentences across WCAG's raw HTML reach the shipped references, with no exclusions. Partial: covers what the crawl fetched, not what w3.org publishes.`;
     },
   },
 ];
@@ -233,6 +303,38 @@ export const CASES: Case[] = [
       // behind, so the page still reads plausibly and a page-wide sentence scan still passes.
       const after = before.replace(/ — caption: [^\]]*/g, "");
       if (after === before) throw new Error("the defect did not change augmented-reality.md; the fixture text has moved");
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(p, after);
+    },
+  },
+  {
+    finding: "A7",
+    name: "a table deleting a context block from an earlier section (the lastContext defect)",
+    break: async (dir) => {
+      // The extractor defect this stands in for: a stale `lastContext` surviving a heading let a
+      // table pop a block out of a section several headings above it. The fix shipped without a
+      // probe of its own, because a second fix repaired the same symptom for figures and left the
+      // media checks green either way. Prose coverage does see it — the block it removes on widgets
+      // is a sentence — so the guard exists now rather than being recorded as absent.
+      const p = join(dir, "skills", SKILL, "references", "components", "widgets.md");
+      const before = await readFile(p, "utf8");
+      const after = before.replace(/^.*When Display Zoom is set to More Space\..*$\n?/m, "");
+      if (after === before) throw new Error("the defect did not change widgets.md; the fixture text has moved");
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(p, after);
+    },
+  },
+  {
+    finding: "A7",
+    name: "a phrasing element treated as a block, splitting a word in two",
+    break: async (dir) => {
+      // `M<sup>lle</sup>` shipped as "M lle " because SUP was missing from the normalizer's list of
+      // inline tags, so it flushed the run around it. The output was a spelling W3C never wrote,
+      // and every existing check passed: the fragments were present, just not as a word.
+      const p = join(dir, "skills", "wcag22", "references", "reference", "input-purposes.md");
+      const before = await readFile(p, "utf8");
+      const after = before.replace(/Mlle/g, "M lle ");
+      if (after === before) throw new Error("the defect did not change input-purposes.md; the fixture text has moved");
       const { writeFile } = await import("node:fs/promises");
       await writeFile(p, after);
     },

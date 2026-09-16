@@ -132,7 +132,7 @@ not hypothetical — it is how most of this project's real defects were found:
 
 - `src/e2e/validate-negative.ts` corrupts a real build, one defect at a time, and asserts `validate`
   reports each. 22 guards.
-- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 57 defects the project has
+- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 60 defects the project has
   actually shipped and asserting the named requirement fails. Two of those probes caught a *guard*
   that was too weak rather than a regression: one searched the whole of `SKILL.md` when it should
   have searched the index, and one accepted a state the bug it guarded actually produces.
@@ -154,8 +154,9 @@ So: when you add a check, add the defect alongside it. And when you claim a fix 
 claim the only way that settles it — revert the fix, run the check, watch it fail, restore. A
 requirement-to-check table is itself a claim; two rows of one such table once named guards that did
 not exist, and reverting the fix was what exposed them. A fix whose check still passes when you
-revert it is not guarded, however correct it is — `docs/audits/resolution-2026-09-15.md` records one
-that is kept on those terms.
+revert it is not guarded, however correct it is: say so and move on, rather than counting it. One
+fix was recorded that way until a later check could see it, at which point it got a real probe and
+the disclaimer was withdrawn.
 
 ## Running the agent evaluation
 

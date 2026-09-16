@@ -102,7 +102,16 @@ function block(el: HTMLElement): string {
   }
 }
 
-const INLINE_TAGS = new Set(["A", "EM", "I", "STRONG", "B", "CODE", "SPAN", "DFN", "ABBR"]);
+/**
+ * Phrasing elements, which continue the sentence they sit in. Anything not listed here is treated as
+ * a block and flushes the run around it, so a missing entry splits a *word*: `M<sup>lle</sup>`
+ * became "M lle " in the shipped Input Purposes list, inventing a spelling W3C did not write.
+ * `inline()` already renders all of these; the two lists have to agree.
+ */
+const INLINE_TAGS = new Set([
+  "A", "EM", "I", "STRONG", "B", "CODE", "SPAN", "DFN", "ABBR",
+  "SUP", "SUB", "Q", "CITE", "VAR", "SAMP", "KBD", "SMALL", "MARK", "TIME", "BDI", "BDO", "WBR", "U", "S",
+]);
 
 /** Children of a container: block elements, or (for <dd>/<li> written without <p>) mixed inline content. */
 function blocks(el: HTMLElement): string {
