@@ -2,7 +2,7 @@
 
 Date: 2026-09-15
 Audited revision: `fa7dca949be40652bad7ee997d91a1925d564623`
-Resolved revision: `f87b0ae`
+Implementation resolved through revision: `8fe1dd5`; this record includes the final recheck below.
 Status: **All seven findings resolved with guards.**
 
 Companion to [generated-output-2026-09-15.md](generated-output-2026-09-15.md), which states the
@@ -48,9 +48,9 @@ functionality while requesting tracking permission — now ships under its own t
 The audit's reproduction command, which returned an empty string, now returns the full 350-character
 description of `text-entry-pointer.mp4`.
 
-**1,322 of 1,536 occurrences render.** The remaining 214 are enumerated, not assumed: 186 page-header
-artwork and 28 table checkmark cells. There is no "known defect" allowance; the two extractor bugs
-were fixed rather than excused.
+**1,334 of 1,536 occurrences render.** The remaining 202 are enumerated, not assumed: 174 plain
+page-header artwork occurrences and 28 table checkmark cells. Captioned header figures are retained.
+There is no "known defect" allowance; the three extractor defects were fixed rather than excused.
 
 Guards: 5 checks in `src/e2e/probes/apple-media.ts`, including whole-corpus coverage, attachment to
 the correct section, and a multi-tab example where four tabs share one asset and keep separate
@@ -124,13 +124,14 @@ was added, per the audit's warning against importing a web-design aesthetic into
 
 | | Audited estimate | Measured |
 | --- | --- | --- |
-| Worst routing row | ~28,133 tok (iOS screen review) | ~40,901 tok (payments/Wallet/Apple Pay), a row the audit never named |
-| iOS screen-review row | ~28,133 tok | ~40,297 tok |
+| Worst routing row | ~28,133 tok (iOS screen review) | ~42,034 tok (iOS screen review) |
+| Payments/Wallet/Apple Pay row | not named | ~41,213 tok |
 
-Apple: entry ~4,541 tok, index ~3,774, 158 pages ~550,910 total, median 2,485, p90 7,356.
+Apple: entry ~4,930 tok, index ~3,774, 158 pages ~564,716 total, median 2,608, p90 7,356,
+maximum 15,437.
 
 The actionable finding was navigational, not size-related. 100% of Apple rules sit under a rendered
-anchor, but only 28.7% were in a Contents list, because compose added one to 22 of 164 pages on a
+anchor, but only 28.7% were in a Contents list, because compose added one to 20 of 158 pages on a
 length test.
 
 The threshold is now set from the measurement, using the comparison that matters to a reader, who
@@ -141,13 +142,15 @@ still saves 26. So three sections is the whole test. Rules reachable from a page
 go from **28.7% to 94.1%** on Apple and **13.8% to 45.7%** on WCAG, and nothing was removed to get
 there.
 
-Corpus-wide cost was the wrong lens and is recorded here to say why: adding 110 lists costs ~7,257
-tokens across a 552,840-token corpus, which sounds like a cost and is actually a saving, because no
+Corpus-wide cost was the wrong lens and is recorded here to say why: adding the lists increases the
+stored corpus slightly, which sounds like a cost and is actually a saving for a reader, because no
 reader reads the corpus.
 
 The remaining numeric budgets — entry ≤5k, page ≤15k, routing row ≤25k, narrow decision ≤12k — are
 reported by `budget`, which never fails a build. Those stay advisory: the audit asked for a budget
-derived from the numbers, not for a size limit that would force dropping source material.
+derived from the numbers, not for a size limit that would force dropping source material. The final
+report makes the current overages visible: Apple's largest page is ~15,437 tokens and its two largest
+routing rows are ~42,034 and ~41,213.
 
 ### A7 · Verification · resolved
 
@@ -211,6 +214,15 @@ sometimes and cites nothing at all on the two Apple tasks. No scope errors appea
 
 **Zero unresolvable citations**, down from 13 in one sample and three-of-three runs on another.
 
+On 2026-09-16 the deterministic application loop was run again over the whole shipped result:
+74/74 unit tests, the two review fixtures, 43/43 trace requirements, all 61 trace mutations, all 22
+validation mutations, CLI success and failure paths, authored publishing in an isolated remote, and
+two isolated clean-IR rebuilds covering 184 non-provenance files all passed. A second live attempt to
+regenerate the 18 model samples did not produce a transcript: the provider rejected all three first
+samples because the account session limit had been reached. The table above therefore remains the
+last completed fresh 18-sample run, not a newly repeated result. The blocked rerun is not counted as
+evidence for or against the skill.
+
 Running this evaluation exposed four defects, none of them visible to the fixtures, and two of them
 in the measurement rather than the artifact:
 
@@ -264,7 +276,7 @@ They predate this work and are recorded here rather than claimed as guarded.
 | Check | Before | After |
 | --- | --- | --- |
 | `bun run check` | passing | passing |
-| Unit tests | 51 | 73 |
+| Unit tests | 51 | 74 |
 | Trace requirements | 19 | 43 |
 | Trace negative probes | 22 | 61 |
 | Validate guards | 20 | 22 |
@@ -278,9 +290,10 @@ They predate this work and are recorded here rather than claimed as guarded.
 | Apple evals | 13/13 | 13/13 |
 | WCAG evals | 10/10 | 17/17 |
 
-Rebuilding from scratch stays byte-identical apart from timestamps; verified by deleting `ir/` and
-rebuilding twice. The synthetic example was regenerated for `bold-lead@10` and `note_authority`, and
-its only non-metadata diff is the new empty array per rule.
+Rebuilding from scratch stays byte-identical apart from timestamps. The final check copied the whole
+project to an isolated scratch directory, deleted both extracted IR trees there, and rebuilt twice;
+all 184 non-provenance files were byte-identical. The synthetic example was regenerated for
+`bold-lead@10` and `note_authority`, and its only non-metadata diff is the new empty array per rule.
 
 ## Standing rule observed
 
