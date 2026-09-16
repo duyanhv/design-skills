@@ -88,9 +88,14 @@ an isolated directory received only the screen, the skill, and the screenshots, 
 defects existed. Its review is published verbatim, including the corrections it made to its own
 figures.
 
-Result: 14 of 15 found, 0 fabricated rule IDs, 7 permitted patterns explicitly checked and left
-alone, and **6 real defects nobody planted** — the best of which, a toolbar button that silently
-toggles link sharing, I had written as filler without noticing.
+Result: **13 of 14 valid planted defects** found, 0 fabricated rule IDs, 6 permitted patterns
+explicitly checked and left alone, and **4 real defects nobody planted** — the best of which, a
+toolbar button that silently toggles link sharing, I had written as filler without noticing.
+
+One planted item (P13) was invalidated on audit: the review declined it and was right, so it leaves
+the denominator rather than being charged to either side. One pre-designated acceptable pattern (C2)
+was flagged by the review, and on audit the review's argument holds, so it is reported as a
+disagreement with the rubric rather than as a false positive. Adjudicated false positives: 0.
 
 **One wrong dismissal, settled by measurement rather than by argument.** The review declined to file
 a target finding on the toolbar button, measuring its Liquid Glass container at 44 × 44 pt from the
@@ -130,9 +135,11 @@ An audit of the first version of the example found four problems, all now fixed:
 - **The score did not match the published review.** P13 was counted as found when the review
   explicitly declined it; the toolbar target was counted both as "left alone" and as "wrongly
   dismissed"; a planted item (progress placement) was counted as unplanted; and false positives were
-  reported as zero while the review contradicted one of my own "leave alone" items. Adjudicated item
-  by item in `scoring.md`, including the two places where **my planted list was wrong**, not the
-  review. Totals fell from "14 of 15 found, 6 unplanted" to "12 of 14 valid found, 4 unplanted".
+  reported as zero without examining the one pattern where the review contradicted my rubric.
+  Adjudicated item by item in `scoring.md`. A second audit caught an over-correction in that fix —
+  P13 had been removed from the denominator *and* charged as a dismissal — and separated rubric
+  disagreement (C2) from actual false positives. Final: 13 of 14 valid found, 1 wrongly dismissed,
+  4 unplanted, 0 adjudicated false positives.
 - **The headline measurement was not reproducible.** The hit-test instrumentation existed only in my
   shell history. Both probes and their raw output are now committed under `examples/*/probe/`, and
   the claim is described as programmatic hit-testing rather than "what the finger gets", since real

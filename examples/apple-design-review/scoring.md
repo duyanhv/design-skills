@@ -13,22 +13,37 @@ by item, including the cases where my own planted list turned out to be wrong.
 
 | | Count |
 | --- | --- |
-| Valid planted defects | 14 (one invalidated on audit — see P13) |
-| Found | 12 |
-| **Wrongly dismissed** | 2 (P2, P13) |
+| Planted items, as written | 15 |
+| Invalidated on audit (my error, not the review's) | 1 (P13) |
+| **Valid planted defects** | **14** |
+| Found | **13** |
+| Wrongly dismissed | 1 (P2) |
 | Missed without comment | 0 |
 | Real defects found that were not planted | 4 |
 | Findings unsupported by their citation | 0 found |
-| Correct patterns wrongly reported as defects | 1 (C2) |
+| Disagreements with a pre-designated acceptable pattern | 1 (C2) |
+| Adjudicated false positives | 0 |
 | Correct patterns checked and left alone | 6 |
 
-These totals are lower than the ones first published here. The originals counted P13 as found when
-the review explicitly declined to file it, counted the toolbar target among both "left alone" and
-"wrongly dismissed", counted a planted item (progress placement) as unplanted, and reported zero
-false positives while the review contradicted one of my own "leave alone" items. Each is corrected
-below. The review itself is unchanged.
+Two rows deserve their own explanation, because both are places where the scoring itself was wrong
+before being corrected.
 
-## The two it dismissed
+**P13 is excluded, not charged.** It was counted as *found* in the first version of this page and
+then, in the first correction, as a *dismissal*. Both are wrong: the review declined it and the
+review was right, so it leaves the denominator entirely and is charged to neither side.
+
+**C2 is a disagreement, not a false positive.** The pre-registered list designated the divider inset
+as acceptable; the review flagged it; on audit the review's argument is sound. Reporting that as a
+reviewer error would present my rubric mistake as theirs. It is reported as a disagreement with a
+pre-designated pattern, and the adjudicated false-positive count — findings that are actually wrong
+— is zero. Detail below.
+
+These totals differ from both earlier versions of this page. The original counted P13 as found, the
+toolbar target as both "left alone" and "wrongly dismissed", a planted item (progress placement) as
+unplanted, and false positives as zero without examining C2. The first correction over-corrected by
+charging P13 twice. The review itself has never been edited.
+
+## The one it dismissed, and the one I got wrong
 
 **P2 — the toolbar button's touch target.** The code says `.frame(width: 24, height: 24)`. The
 review refused to file it, measured the rendered Liquid Glass container at exactly 44.0 × 44.0 pt
@@ -52,8 +67,8 @@ it.
 **P13 — the text field has no bound label.** I planted this as a defect. The review considered it
 and explicitly declined: the "Invite" section header supplies a describing label, and Apple's Text
 fields page endorses a placeholder as a hint. **On audit the review is right and my planted item was
-wrong**, so P13 is removed from the denominator rather than counted against the review. Its keyboard
-and content-type configuration is a separate, real defect, and the review filed that as F10.
+wrong**, so P13 leaves the denominator and is charged to neither side. Its keyboard and content-type
+configuration is a separate, real defect, and the review filed that as F10.
 
 ## Planted defects, item by item
 
@@ -94,17 +109,24 @@ Removed from this list since the first version: *progress placement*, which was 
 and is counted there; and the *title duplication* item, which the review labelled a design
 suggestion rather than a defect.
 
-## Where the review contradicted itself
+## Where the review disagreed with the rubric
 
-**C2 — the divider inset.** My planted list named `Divider().padding(.leading, 48)` a correct
+**C2 — the divider inset.** My pre-registered list named `Divider().padding(.leading, 48)` a correct
 pattern that should not be reported. The review reported it twice: in F3 ("Use `@ScaledMetric` for
 the … 48 pt divider inset") and again in F13 as a smaller item.
 
-Adjudicating honestly: **my C2 was too generous and the review's point is sound** — a hard-coded
-inset tied to a 36 pt avatar does stop matching once text scales. But it is counted as a false
-positive here anyway, because it is a hard-coded-metric observation filed against an item I had
-designated as acceptable, and adjusting the rubric after seeing the answer is exactly what this page
-exists to avoid. It is the weakest of the review's findings, not a wrong one.
+On audit **the review's argument is sound**: a hard-coded inset tied to a 36 pt avatar does stop
+matching once text scales, and the fixed screen uses `@ScaledMetric` for exactly that reason. My C2
+was too generous.
+
+So this is scored as a **disagreement with a pre-designated acceptable pattern**, and counted in its
+own row rather than as a false positive. The distinction matters: a false positive is a finding that
+is *wrong*, and this one is right. Filing it under "correct patterns wrongly reported as defects" —
+as an earlier version of this page did — would present my rubric error as a reviewer error.
+
+The original rubric is preserved as written in [`planted-defects.md`](planted-defects.md), including
+C2, with the correction appended rather than edited in. That way the pre-registration stays
+falsifiable and the disagreement stays visible.
 
 ## Correct patterns checked and left alone
 
@@ -147,8 +169,9 @@ contradicted one of its conclusions, and the line-number spot check.
 **Does:** on this screen, with this skill, a reviewing agent produced findings that were traceable
 to a page and section, correctly scoped to iOS, ordered by consequence, explicit about what it had
 not run, and included four real problems nobody planted. It argued six correct patterns as correct
-rather than ignoring them, and it declined the obvious-but-wrong target finding — the right instinct,
-stopping one measurement short of the right answer.
+rather than ignoring them, correctly rejected one item I had wrongly planted as a defect, and
+declined the obvious-but-wrong target finding — the right instinct, stopping one measurement short
+of the right answer.
 
 **Does not:** one screen, one run, one platform, one model, no control arm. Nothing here says how a
 reviewer without the skill would have done on the same input, how much the result varies between

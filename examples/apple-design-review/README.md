@@ -82,16 +82,19 @@ avoiding one direction is not the same as avoiding both.
 
 ## Summary of the comparison
 
-Scored item by item in [`scoring.md`](scoring.md), including two places where my own planted list
-was wrong.
+Scored item by item in [`scoring.md`](scoring.md), including the two places where my own
+pre-registered list was wrong rather than the review.
 
 | | |
 | --- | --- |
-| Valid planted defects | 14 (one invalidated on audit) |
-| Found | 12 |
-| Wrongly dismissed | 2 (the toolbar target, above; and one where the review was right) |
+| Planted items, as written | 15 |
+| Invalidated on audit (my error) | 1 |
+| **Valid planted defects** | **14** |
+| Found | **13** |
+| Wrongly dismissed | 1 (the toolbar target, above) |
 | **Real defects found that were not planted** | **4** |
-| Correct patterns wrongly reported as defects | 1 |
+| Adjudicated false positives | 0 |
+| Disagreements with a pre-designated acceptable pattern | 1 |
 | Correct patterns checked and left alone | 6 |
 | Fabricated rule IDs | 0 |
 

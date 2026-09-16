@@ -31,13 +31,13 @@ dark captures differ in 0.45 % of pixels, and only where the *system* drew them.
 
 The review was run blind. The defect list was written first and kept outside the repository; a
 separate agent got only the screen, the skill, and the screenshots, and was not told defects had
-been planted. It found 12 of 14 valid planted defects, invented no rule IDs, and reported 4 real
+been planted. It found 13 of 14 valid planted defects, invented no rule IDs, and reported 4 real
 defects nobody planted. It **wrongly dismissed the most interesting one**: it measured the toolbar
 button's glass container at 44 × 44 pt from a screenshot and declined to file a target finding, but
 a [committed hit-test probe](examples/apple-design-review/probe/main.swift) puts the region that
 receives a touch at 39.5 × 26.5 pt. The [review](examples/apple-design-review/REVIEW.md) is
 published verbatim and the [scoring](examples/apple-design-review/scoring.md) adjudicates every
-item, including two where my own planted list was wrong.
+item, including the two where my own pre-registered list was wrong rather than the review.
 
 One screen, one run, no control arm. It is a worked example, not a measurement of effectiveness.
 
