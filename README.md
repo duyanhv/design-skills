@@ -195,8 +195,10 @@ validation. They do not guarantee correct agent decisions:
   that is not built locally is skipped rather than passing.
 - **Counting the output only finds what someone looked for.** Two checks count the raw Apple corpus
   instead: media (1,334 of 1,536 occurrences rendered, 202 enumerated by reason) and prose (12,531 of
-  12,807 sentences reaching the shipped text, 279 enumerated). That is how three figure-deleting
-  defects were found while every other check passed. WCAG has no raw-corpus equivalent yet.
+  12,807 sentences reaching the shipped text, 279 enumerated), and WCAG's raw HTML (839/839, no
+  exclusions). That is how three figure-deleting defects and a word-splitting normalizer bug were
+  found while every other check passed. Nothing yet verifies that the *crawl* fetched everything
+  upstream publishes.
 - **Requirement strength is inferred, per source.** For a source that does not declare normative
   status, MUST/SHOULD/MAY rank how firmly the source worded something and are the compiler's
   reading, not a claim the source made; the generated entry says so and asks for the source's own

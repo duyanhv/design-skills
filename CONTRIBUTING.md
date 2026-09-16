@@ -132,7 +132,7 @@ not hypothetical — it is how most of this project's real defects were found:
 
 - `src/e2e/validate-negative.ts` corrupts a real build, one defect at a time, and asserts `validate`
   reports each. 22 guards.
-- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 60 defects the project has
+- `src/e2e/trace-negative.ts` does the same for `trace`, reintroducing 61 defects the project has
   actually shipped and asserting the named requirement fails. Two of those probes caught a *guard*
   that was too weak rather than a regression: one searched the whole of `SKILL.md` when it should
   have searched the index, and one accepted a state the bug it guarded actually produces.

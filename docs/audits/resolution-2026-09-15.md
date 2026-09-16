@@ -170,8 +170,17 @@ in the raw JSON, split into sentences, must reach the shipped reference or carry
 reason. **12,531 of 12,807 reach it**; of the 279 excused, 276 are Change log and other declared
 `skip_sections` and 3 are on pages that produce no reference at all.
 
-Writing it removed the last excuse category it started with. A "figure caption" exemption was
-covering a real loss: a captioned figure above the first heading was dropped as decorative
+The same count now covers WCAG, whose raw form is HTML: **839 of 839 sentences reach the shipped
+references, with no exclusions at all**. That check needed two corrections before it was worth
+trusting, both of which would have made it lie: counting the document's whole text concatenates
+across element boundaries and manufactures sentences the source never wrote, and comparing raw text
+against markdown reports every formatted sentence as lost. It also found a real defect — `SUP` was
+missing from the normalizer's inline-tag list, so W3C's `M<sup>lle</sup>` shipped as "M lle ", a
+spelling the source never used and one every existing check accepted because the fragments were all
+present.
+
+Writing the Apple check removed the last excuse category it started with. A "figure caption"
+exemption was covering a real loss: a captioned figure above the first heading was dropped as decorative
 page-header art, so 12 captions that the source wrote as explanations — "The Digital Crown on Apple
 Vision Pro", "A confirmation snippet requires additional input to proceed." — existed nowhere in the
 output. Plain header art is still dropped, so the fix keeps 12 and discards 174. The media probe
@@ -221,11 +230,12 @@ Every number below was observed, not projected.
 | --- | --- | --- |
 | `bun run check` | passing | passing |
 | Unit tests | 51 | 65 |
-| Trace requirements | 19 | 42 |
-| Trace negative probes | 22 | 60 |
+| Trace requirements | 19 | 43 |
+| Trace negative probes | 22 | 61 |
 | Validate guards | 20 | 22 |
 | Apple media occurrences rendered | 0 block videos, 0 captions | 1,334/1,536, 202 enumerated |
 | Apple prose sentences reaching the shipped text | not measured | 12,531/12,807, 279 enumerated |
+| WCAG sentences reaching the shipped text from raw HTML | not measured | 839/839, no exclusions |
 | WCAG sentences retained | 625 | 760 |
 | Apple sentences retained | 10,883 | 10,883 |
 | Apple rules reachable from their page's contents list | 28.7% | 94.1% |
@@ -253,11 +263,10 @@ directions: it refuses credit for an unproven fix, and it notices when a fix bec
 
 ## Still open
 
-- Raw-corpus counting now covers Apple's media and prose. WCAG has no equivalent: its normalized
-  HTML is compared by `coverage`, not by a count of the raw document.
-- S-1 to S-3 establish that what IR holds is reachable and correctly attached. Combined with prose
-  and media coverage, the gap left is narrower than it was, but still real: nothing verifies that
-  the *crawl* fetched everything the upstream site publishes.
+- Nothing verifies the *crawl*. Raw-corpus counting now covers Apple's media and prose and all of
+  WCAG, so everything fetched is accounted for; whether the fetch itself got everything w3.org and
+  developer.apple.com publish is unchecked, and a page missed upstream would look identical to a
+  page that does not exist.
 - The numeric budgets `bun run budget` reports (entry ≤5k, page ≤15k, routing row ≤25k) are
   advisory and do not fail a build. Making them binding would mean dropping source material to meet
   a number, which is the wrong trade for this project.
