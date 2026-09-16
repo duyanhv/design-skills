@@ -39,7 +39,12 @@ receives a touch at 39.5 × 26.5 pt. The [review](examples/apple-design-review/R
 published verbatim and the [scoring](examples/apple-design-review/scoring.md) adjudicates every
 item, including the two where my own pre-registered list was wrong rather than the review.
 
-One screen, one run, no control arm. It is a worked example, not a measurement of effectiveness.
+A [second example](examples/apple-design-build/) exercises the other half: an agent *building* a
+screen from scratch against an iOS 16 deployment floor, with six pre-registered traps in the task.
+It avoided or handled all six, and the result compiles warning-free at that floor.
+
+Two tasks, one run each, no control arm. These are worked examples, not a measurement of
+effectiveness.
 
 ## Browse the skills
 
@@ -48,7 +53,7 @@ Install the whole folder: `SKILL.md` links to the references beside it.
 
 | Skill | Use it for | What is in the bundle | Worked example |
 | --- | --- | --- | --- |
-| [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) routes by task to six guides — [navigation](skills/apple-design/references/tasks/navigation.md), [actions](skills/apple-design/references/tasks/actions.md), [forms](skills/apple-design/references/tasks/forms.md), [typography](skills/apple-design/references/tasks/typography.md), [appearance](skills/apple-design/references/tasks/appearance.md), [accessibility](skills/apple-design/references/tasks/accessibility.md) — plus [platform/framework context](skills/apple-design/references/context/platforms.md), a [decision-to-page map](skills/apple-design/references/research/topics.md), an [evidence workflow](skills/apple-design/references/review/evidence.md), and `provenance.json` | [Reviewing an iOS share screen](examples/apple-design-review/) |
+| [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) routes by task to six guides — [navigation](skills/apple-design/references/tasks/navigation.md), [actions](skills/apple-design/references/tasks/actions.md), [forms](skills/apple-design/references/tasks/forms.md), [typography](skills/apple-design/references/tasks/typography.md), [appearance](skills/apple-design/references/tasks/appearance.md), [accessibility](skills/apple-design/references/tasks/accessibility.md) — plus [platform/framework context](skills/apple-design/references/context/platforms.md), a [decision-to-page map](skills/apple-design/references/research/topics.md), an [evidence workflow](skills/apple-design/references/review/evidence.md), and `provenance.json` | [Review](examples/apple-design-review/) · [Build](examples/apple-design-build/) |
 | [**material-3**](skills/material-3/) | Google Material Design 3 work on Compose, Material Web, or another implementation: theming, component states, adaptive layout | [`SKILL.md`](skills/material-3/SKILL.md) implementation workflow, a [source map](skills/material-3/references/research/sources.md) with per-platform notes, an [evidence workflow](skills/material-3/references/review/evidence.md), `provenance.json` | None yet |
 | [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated [`SKILL.md`](skills/lumen-ds/SKILL.md) with routing and an inline index, [extracted reference pages](skills/lumen-ds/references/) carrying rule IDs, source text and citations, `provenance.json`. A larger corpus splits the index into its own `index.md` | n/a (fixture) |
 

@@ -71,3 +71,11 @@ jobs:
       # is the check that would have caught a 200-with-{} being counted as a verified page.
       - name: Link-verifier guards fire on reintroduced defects
         run: bun run src/e2e/links-negative.ts
+      # The worked example's published numbers are prose, and prose drifts. Three audits found
+      # figures that disagreed with the artifacts they summarised; these invariants are the fix.
+      - name: The worked example's claims match its artifacts
+        run: bun run src/e2e/example.ts
+      # Ignore rules answer "is this path excluded?", not "did the text get in another way?".
+      # Skips itself when the proprietary sources are not built, so it is silent here.
+      - name: No bulk source text in tracked files
+        run: bun run src/e2e/leak.ts

@@ -20,7 +20,7 @@
     "test": "bun test",
     "example": "bun run src/e2e/run.ts",
     "e2e": "bun run src/e2e/run.ts",
-    "check": "bun run typecheck && bun test && bun run build:public && bun run src/e2e/run.ts && bun run src/e2e/validate-negative.ts && bun run src/e2e/coverage.ts && bun run src/e2e/fidelity.ts && bun run src/e2e/trace-negative.ts && bun run src/e2e/manifests.ts && bun run src/e2e/docs.ts && bun run src/e2e/docs-negative.ts && bun run src/e2e/specs.ts && bun run src/e2e/specs-negative.ts && bun run src/e2e/links-negative.ts",
+    "check": "bun run typecheck && bun test && bun run build:public && bun run src/e2e/run.ts && bun run src/e2e/validate-negative.ts && bun run src/e2e/coverage.ts && bun run src/e2e/fidelity.ts && bun run src/e2e/trace-negative.ts && bun run src/e2e/manifests.ts && bun run src/e2e/docs.ts && bun run src/e2e/docs-negative.ts && bun run src/e2e/specs.ts && bun run src/e2e/specs-negative.ts && bun run src/e2e/links-negative.ts && bun run src/e2e/example.ts",
     "agenteval": "bun run src/agenteval/run.ts",
     "validate:negative": "bun run src/e2e/validate-negative.ts",
     "trace": "bun run src/e2e/trace.ts",
@@ -34,7 +34,9 @@
     "links": "bun run src/e2e/links.ts",
     "links:negative": "bun run src/e2e/links-negative.ts",
     "specs": "bun run src/e2e/specs.ts",
-    "specs:negative": "bun run src/e2e/specs-negative.ts"
+    "specs:negative": "bun run src/e2e/specs-negative.ts",
+    "leak": "bun run src/e2e/leak.ts",
+    "example:claims": "bun run src/e2e/example.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

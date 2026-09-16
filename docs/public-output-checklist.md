@@ -158,13 +158,48 @@ establish usable Dynamic Type support.
 
 ## 5. Verify packaging and usefulness
 
-- [ ] Commit both authored inputs in `guidance/` and generated public bundles in `skills/`.
-- [ ] Verify CI detects drift between authored inputs and generated output.
-- [ ] Validate every local reference and required bundled file.
-- [ ] Confirm local-only source text and caches remain excluded from publishing.
-- [ ] Exercise the public Apple skill on a build task and a review task.
-- [ ] Check findings for unsupported claims, missed exceptions, and confusion between visible size and actual interaction bounds.
-- [ ] Confirm the worked example's results match the claims made in the README.
+- [x] Commit both authored inputs in `guidance/` and generated public bundles in `skills/`.
+- [x] Verify CI detects drift between authored inputs and generated output.
+- [x] Validate every local reference and required bundled file.
+- [x] Confirm local-only source text and caches remain excluded from publishing.
+- [x] Exercise the public Apple skill on a build task and a review task.
+- [x] Check findings for unsupported claims, missed exceptions, and confusion between visible size and actual interaction bounds.
+- [x] Confirm the worked example's results match the claims made in the README.
+
+**Packaging.** `guidance/` and `skills/` are both tracked (10 and 11 files for apple-design). The CI
+drift gate was verified by *causing* drift: editing `guidance/apple-design/SKILL.md` and rebuilding
+changes `skills/`, so CI's `git diff --exit-code` would fail. `validate` reports 0 errors and 0
+warnings for all three published sources. `ir/apple-hig/`, `skills/apple-hig/`, `ir/wcag22/`,
+`skills/wcag22/` and `.cache/` are present locally, git-ignored, and carry 0 tracked files.
+
+**The exclusion check was too weak, and is now direct.** Ignore rules answer "is this path
+excluded?", not "did the text get in by another route?". `bun run leak` (new) checks every tracked
+text file against the *complete* local corpus of each non-redistributable source. The first version
+sampled the corpus instead, and a planted file carrying 20 Apple sentences passed it; the rewrite
+catches that file. Short attributed quotation is allowed, since the worked example quotes Apple in
+order to cite it; bulk in a single file is not. Result: 7,971 Apple and 571 WCAG sentences checked,
+0 bulk, 2 short quotations in the published review.
+
+**The build task.** [`examples/apple-design-build/`](../examples/apple-design-build/) — a blind run
+with six traps pre-registered outside the agent's workspace. All six avoided or handled: it stayed
+on iOS 16 API, used a segmented control rather than a switch for a three-state setting, deferred OS
+permission to system Settings, protected the async action against repeats, derived the count rather
+than storing it, and named the alternative for the one genuinely debatable choice. The result
+compiles warning-free at the stated floor, verified independently, and all 13 of its HIG citations
+resolve including both section anchors.
+
+**Findings audited for the three failure modes.** No fabricated rule IDs in either exercise. No
+copied numeric specifications. On visible-size-versus-interaction-bounds: the review example
+contains a *documented failure* of exactly this kind, where the reviewer measured a 44 × 44 pt
+visual container and concluded the control was adequately sized while the touchable region is
+39.5 × 26.5 pt. It is published as the headline lesson rather than smoothed over.
+
+**README claims.** `bun run example:claims` (new, in `check` and CI) asserts that the scoring
+table's rows add up, that the summary agrees with the table it summarises, that every document
+quoting the headline quotes the same one, that the measurements match the committed probe output,
+and that `REVIEW.md` has never been edited. Each invariant was verified by reintroducing the exact
+defect an audit had found: the 12-vs-13 double-count, a stale headline in one document, and a
+measurement drifting from its probe.
 
 ## 6. Extend the proven structure
 
