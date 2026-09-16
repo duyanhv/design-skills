@@ -294,3 +294,16 @@ test("only a refused launch is retried, not a run that actually produced somethi
   // Lasted long enough to have done work, so an empty result is a fact about the run.
   expect(isRefusedLaunch("claude exited 1 after 9400ms: no output on stdout or stderr after 9400ms")).toBe(false);
 });
+
+test("a replayed transcript is distinguishable from a fresh sample", async () => {
+  // A rescored row prints in exactly the same shape as a fresh one, but its transcript describes
+  // whatever the skill was when it was captured. Quoting a mixed file as current is how this turn
+  // nearly reported pre-fix behaviour as post-fix. Elapsed time is the only per-row tell: the
+  // file's single `rescored` flag records what the *last* invocation did, not what each row is.
+  const { isReplayed } = await import("../src/agenteval/score.ts");
+  expect(isReplayed({ ms: 0 })).toBe(true);
+  expect(isReplayed({ ms: 141125 })).toBe(false);
+  // A failed run has ms 0 too, but it carries an error and is already excluded from the figures;
+  // reporting it as "replayed" would be a second, wrong explanation for the same row.
+  expect(isReplayed({ ms: 0, error: "claude exited 1" })).toBe(false);
+});

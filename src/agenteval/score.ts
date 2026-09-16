@@ -257,3 +257,14 @@ export function comparability(rows: { task: string; arm: string }[]): {
  * importing `run.ts` starts the harness.
  */
 export const isRefusedLaunch = (message: string): boolean => /after \d{1,3}ms: no output/.test(message);
+
+/**
+ * Whether a scored row is a replayed transcript rather than a fresh run.
+ *
+ * `--rescore` re-scores saved transcripts without calling a model, so the row describes the skill
+ * as it was when the transcript was captured. After any source change that is a different skill,
+ * and the row prints identically to a fresh sample. Elapsed time is the tell, because only a replay
+ * has none. A failed run also has no elapsed time, but it carries an error and is already excluded
+ * from the figures, so calling it "replayed" would explain the same row twice and wrongly.
+ */
+export const isReplayed = (row: { ms: number; error?: string }): boolean => row.ms === 0 && !row.error;

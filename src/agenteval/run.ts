@@ -31,7 +31,7 @@ import { tmpdir } from "node:os";
 import { paths, ROOT, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 import { TASKS, knownCitations, type Task } from "./tasks.ts";
-import { comparability, isRefusedLaunch, score, type Score } from "./score.ts";
+import { comparability, isRefusedLaunch, isReplayed, score, type Score } from "./score.ts";
 
 const ARMS = ["none", "skill"] as const;
 type Arm = (typeof ARMS)[number];
@@ -262,4 +262,18 @@ if (lopsided.length) {
 }
 if (singleSample.length) {
   log.warn(`single sample per arm: ${singleSample.map((x) => x.task).join(", ")} — a range needs at least two runs`);
+}
+
+// A rescored row keeps the transcript it was scored from, not the skill as it stands now. Once any
+// source file changes, that transcript describes a skill that no longer exists, and it prints in
+// exactly the same shape as a fresh sample. `ms === 0` is the tell: only a replayed transcript has
+// no elapsed time. The file's single `rescored` flag cannot say this, because it records whatever
+// the *last* invocation did while the rows underneath it are a mixture.
+const replayed = merged.filter(isReplayed);
+if (replayed.length) {
+  const byTask = [...new Set(replayed.map((r) => `${r.task}/${r.arm}`))].join(", ");
+  log.warn(
+    `${replayed.length} of ${merged.filter((r) => !r.error).length} samples are replayed transcripts, not fresh runs (${byTask}). ` +
+      `They were scored by the current scorer against a skill that may since have changed; re-run those task/arm pairs before quoting them as current.`,
+  );
 }
