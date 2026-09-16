@@ -218,7 +218,7 @@ bun run docs               # Relative doc links: target exists, git publishes it
 bun run docs:negative      # Reintroduces each broken-link defect and asserts the matching case fails
 bun run links              # Official links in the authored guides still resolve; needs network
 bun run links:negative     # Stub-server guards: an unidentifiable or merged page must not verify
-bun run specs              # Authored guidance carries no copied sizes, ratios, or colour values
+bun run specs              # Prose scan for copied sizes, ratios, or colour values in guidance/
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references
@@ -239,8 +239,10 @@ validation. They do not guarantee correct agent decisions:
   judges whether a linked page still *says* what the guide implies it says, which is the check that
   would have caught the three scope errors an audit found: guidance attached to the wrong platform
   section, a warning generalized past what the source supports, and an unqualified numeric example.
-  `bun run specs` now catches the last of those categories by refusing any measurement literal in
-  `guidance/`, but the first two are only caught by reading the source.
+  `bun run specs` reduces the last category by scanning prose for measurement literals, but it is a
+  pattern scan with known holes — it skips fenced code and matches only the shapes it was given, so
+  a value written in words or hidden in an example still passes. The first two categories have no
+  automated check at all and are caught only by reading the source section.
 - **Fidelity is per sentence, page-wide, and against the normalized cache.** `bun run fidelity`
   asserts that every source sentence of six or more words appears verbatim *somewhere* in the
   corresponding shipped reference — currently 0 missing across 10,883 Apple and 760 WCAG sentences.

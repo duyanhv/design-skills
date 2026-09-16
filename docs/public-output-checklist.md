@@ -51,10 +51,18 @@ Apple's own DocC page data. A status code cannot do this: developer.apple.com re
 app shell for a page that does not exist, and the retired `navigation-bars` URL serves the
 *Toolbars* document. Both failure modes, plus a bogus anchor, were reproduced and seen to fail.
 
-The eval suite went from 2 checks to 17, rewritten to assert requirements rather than sentences
-after the old ones broke on rephrasing. Removing a requirement (the fabricated-citation warning, the
-accessibility conformance-scope limit) was verified to fail the matching check. One eval caught a
-real defect: a paraphrase that had dropped Apple's own wording.
+The eval suite went from 2 checks to 21, rewritten to assert requirements rather than sentences
+after the old ones broke on rephrasing. Removing a requirement was verified to fail the matching
+check. One eval caught a real defect: a paraphrase that had dropped Apple's own wording.
+
+An audit then found four more: three scope errors in the guides (a switch rule detached from iOS and
+iPadOS, a toolbar warning generalized past its source, and unqualified point sizes in the file that
+forbids them) and a hole in the link verifier, which counted a 200 carrying `{}` as a verified page.
+All fixed in `5e03b6f`. Of those four, only the numeric one is machine-detectable: `bun run specs`
+scans prose for measurement literals, and `specs:negative` pins both what it catches and the four
+shapes it knowingly misses (words, unitless numbers, prose ratios, fenced code). The platform-scope
+errors are reachable only by reading the source section, which is now stated in `guidance/README.md`
+rather than implied.
 
 Not done here: section 3's worked example, which is what will demonstrate the guide rather than
 describe it.

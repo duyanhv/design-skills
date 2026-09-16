@@ -23,10 +23,16 @@ belong at the linked source. A guide that copies a number is wrong the next time
 it, and for Apple and Google it would also be redistributing text this project has no license to
 redistribute. Link the page that owns the answer and say what to read there.
 
-`bun run specs` enforces that: no lengths with units, pixel dimensions, contrast ratios, or colour
-literals in this folder. It exists because the rule is easy to break while writing a *helpful*
-example — an audit found a hit-target illustration quoting two point sizes, unqualified by platform,
-a few sections after the guide promised it carried no numbers.
+`bun run specs` helps hold that line: it scans prose for lengths with units, pixel dimensions,
+contrast ratios, and colour literals. It exists because the rule is easy to break while writing a
+*helpful* example — an audit found a hit-target illustration quoting two point sizes, unqualified by
+platform, a few sections after the guide promised it carried no numbers.
+
+Treat it as a net with known holes, not a guarantee. It matches the patterns listed above, so a
+value written in words ("forty-four points"), a unitless number, or a ratio phrased as prose passes.
+It also skips fenced code blocks deliberately, since an example may legitimately name an API
+constant, which means a specification smuggled into a code fence is invisible to it. The rule is
+yours to keep; the check only catches the shapes it was told about.
 
 **Attach the platform to every borrowed statement.** Most HIG pages carry a *Platform
 considerations* section, and a statement under `iOS, iPadOS` is not the same statement as one under

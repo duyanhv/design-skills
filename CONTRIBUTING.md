@@ -50,6 +50,13 @@ An authored guide has no IR, so its evals can only assert page content. Write ea
 requirement changing. Asserting a whole sentence produces a check that breaks when someone improves
 the prose while the guide still says the same thing.
 
+`bun run specs` scans authored prose for copied measurement literals, which is the one failure mode
+of an authored guide that a machine can see at all. Do not read a pass as a guarantee: it matches
+known patterns, skips fenced code, and cannot tell whether a surviving sentence is attached to the
+right platform section. `bun run specs:negative` records both what it catches and what it knowingly
+misses, so that caveat cannot rot. The errors it cannot reach — a statement borrowed from the wrong
+platform section, a warning generalized past its source — are found only by reading the source.
+
 ## Adding an extracted source
 
 1. **Write the manifest.** Copy `sources/apple-hig.yaml`. Set `license.redistributable` honestly. If

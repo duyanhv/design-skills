@@ -18,6 +18,19 @@
  * encouraged; prose that states one is not. Version numbers, list markers, and ordinary English
  * survive, because the patterns below match a number bound to a unit.
  *
+ * **What this does not do.** It is a pattern scan over prose, not a proof. Three known holes, stated
+ * so nobody mistakes a pass for a guarantee:
+ *
+ *   - It matches the shapes in `PATTERNS` and nothing else. "Forty-four points", a unitless "use 44
+ *     here", or a ratio spelled out in words all pass.
+ *   - It skips fenced code deliberately, because an example may legitimately name an API constant.
+ *     A specification written inside a fence is invisible to it.
+ *   - It says nothing about whether surviving prose is *correct*. The other two defects from the
+ *     same audit — a statement attached to the wrong platform section, and a warning generalized
+ *     past what the source supports — are unreachable by any check of this kind.
+ *
+ * It exists to catch the accident, not to replace reading the source.
+ *
  * Usage: bun run src/e2e/specs.ts
  */
 import { readdir, readFile } from "node:fs/promises";
@@ -111,4 +124,6 @@ if (failed) {
   log.warn(`${failed} specification value(s) in authored guidance, which is supposed to carry none`);
   process.exit(1);
 }
-log.info(`${scanned} authored guidance file(s) carry no copied specification values`);
+// Deliberately not "carries no specifications": this scanned prose for known patterns, and saying
+// more than that would turn a pattern match into a guarantee it cannot make.
+log.info(`no ${PATTERNS.length} known specification patterns found in the prose of ${scanned} authored guidance file(s)`);

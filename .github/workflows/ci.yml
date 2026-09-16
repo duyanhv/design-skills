@@ -60,8 +60,13 @@ jobs:
         run: bun run src/e2e/docs-negative.ts
       # The authored guides promise they carry no specifications. A copied number is wrong the next
       # time the source revises it, is usually platform-specific, and is not ours to redistribute.
-      - name: Authored guidance carries no copied specification values
+      # A pattern scan over prose: it catches the accidental literal, not every possible one.
+      - name: No known specification patterns in authored guidance prose
         run: bun run src/e2e/specs.ts
+      # Pins what that scan catches *and* what it knowingly misses, so the documented caveat cannot
+      # quietly become false in either direction.
+      - name: Specification scan catches and misses exactly what is documented
+        run: bun run src/e2e/specs-negative.ts
       # `links` itself needs the network, so CI runs its guards against a local stub instead. This
       # is the check that would have caught a 200-with-{} being counted as a verified page.
       - name: Link-verifier guards fire on reintroduced defects
