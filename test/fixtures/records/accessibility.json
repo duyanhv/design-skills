@@ -1,0 +1,174 @@
+{
+ "metadata": {
+  "title": "Accessibility"
+ },
+ "primaryContentSections": [
+  {
+   "kind": "content",
+   "content": [
+    {
+     "type": "heading",
+     "level": 2,
+     "text": "Vision",
+     "anchor": "Vision"
+    },
+    {
+     "type": "paragraph",
+     "inlineContent": [
+      {
+       "type": "text",
+       "text": "Every platform has different default and minimum sizes for type styles."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "header": "row",
+     "rows": [
+      [
+       [
+        {
+         "type": "text",
+         "text": "Platform"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "Default size"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "Minimum size"
+        }
+       ]
+      ],
+      [
+       [
+        {
+         "type": "text",
+         "text": "iOS, iPadOS"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "17 pt"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "11 pt"
+        }
+       ]
+      ],
+      [
+       [
+        {
+         "type": "text",
+         "text": "macOS"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "13 pt"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "10 pt"
+        }
+       ]
+      ]
+     ]
+    },
+    {
+     "type": "heading",
+     "level": 2,
+     "text": "Mobility",
+     "anchor": "Mobility"
+    },
+    {
+     "type": "paragraph",
+     "inlineContent": [
+      {
+       "type": "text",
+       "text": "Strive to meet the recommended minimum control size for each platform. Consider spacing between controls as important as size. In general, it works well to add about 12 points of padding around elements that include a bezel. Place buttons so their centers are at least 60 points apart, leaving 16 points or more of space between them."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "header": "row",
+     "rows": [
+      [
+       [
+        {
+         "type": "text",
+         "text": "Platform"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "Default control size"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "Minimum control size"
+        }
+       ]
+      ],
+      [
+       [
+        {
+         "type": "text",
+         "text": "iOS, iPadOS"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "44x44 pt"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "28x28 pt"
+        }
+       ]
+      ],
+      [
+       [
+        {
+         "type": "text",
+         "text": "tvOS"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "66x66 pt"
+        }
+       ],
+       [
+        {
+         "type": "text",
+         "text": "56x56 pt"
+        }
+       ]
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

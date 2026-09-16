@@ -3,27 +3,28 @@
  * Verify measurement records against the source they cite.
  *
  * A record is the only route by which a number may enter published guidance, so a record that
- * drifts is worse than no record: it is a wrong number wearing a citation. This re-reads the live
- * page and checks that every value still appears in the section the record names.
+ * drifts is worse than no record: a wrong number wearing a citation.
  *
- * **Why this exists rather than a regex over prose.** The previous rule banned measurements from
- * `guidance/` outright, which was a blunt reaction to having quoted "44pt" carelessly. It stopped
- * the symptom and prevented the cure: a skill that cannot state a number cannot answer the question
- * an agent most often gets wrong. But relaxing to "a number is fine if it names a platform and
- * cites a section" would not have caught the error that prompted this file. I proposed publishing
- * "iOS minimum target is 44x44 pt" — platform named, section citable, and **wrong**, because
- * Apple's table gives 44x44 as the *Default* and 28x28 as the *Minimum*. A regex cannot tell that a
- * citation fails to support its claim. A record can, because it has to name which column a value
- * came from, and this script checks the column header is really there.
+ * **Matching a value is not verifying it, and three rounds of this file got that wrong.**
+ * The first version searched the whole page for each value and checked the table header
+ * separately. That passes every mutation that matters, as an audit demonstrated:
  *
- * What it verifies, per record:
- *   - the cited page exists and is its own document (not a redirect or a shell);
- *   - the cited section anchor exists on that page;
- *   - every value string still appears in the page's data;
- *   - for table-sourced records, the declared table header still matches the live table;
- *   - the record declares meaning, conditions, and a snapshot version.
+ *   - swap iOS's default and minimum        → both strings still on the page → passed
+ *   - give tvOS the iOS values              → both strings still on the page → passed
+ *   - cite Mobility, take 17 pt from Vision → string still on the page       → passed
  *
- * Network-dependent, so not part of `bun run check`. Run when editing records, and on a schedule.
+ * All three are the default-versus-minimum confusion the format was built to prevent, so the
+ * format was not preventing it. The failure was structural: the check knew the page contained a
+ * value, not *where* the value came from.
+ *
+ * So verification now **resolves** each value: section → table in that section → the row whose
+ * first cell names the record's platform → the column whose header the record names. A value is
+ * verified only when the cell at that intersection holds it. Cross-table borrowing, swapped
+ * columns, and misattributed platforms all fail, because each names a different cell.
+ *
+ * Prose-sourced values cannot be resolved that way, so they are constrained differently: the value
+ * must appear inside the *cited section's* text, and any qualifier the source attaches to it
+ * ("at least", "about") must be carried in the record verbatim.
  *
  * Usage: bun run src/e2e/records.ts [--quiet]
  */
@@ -32,30 +33,39 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { ROOT, exists } from "../util/fs.ts";
 import { log } from "../util/log.ts";
+import { fetchPage, resolveTableCell, sectionText, type PageData } from "./record-source.ts";
 
-const UA = "design-skills/0.1 (+https://github.com/duyanhv/design-skills; guideline compiler)";
 const quiet = process.argv.includes("--quiet");
 
-interface MeasurementRecord {
+export interface MeasurementRecord {
   id: string;
   platform?: string[];
   values?: { [k: string]: string };
   meaning?: { [k: string]: string };
+  /** Maps each value key to the source table column whose header gives it meaning. */
+  columns?: { [k: string]: string };
+  /** The table row this record's values come from, matched against the row's first cell. */
+  row?: string;
   conditions?: string;
   exceptions?: string;
   source_page?: string;
   source_anchor?: string;
   source_kind?: string;
+  /** For prose-sourced values: the qualifier the source attaches, carried verbatim. */
+  qualifiers?: { [k: string]: string };
 }
-interface Doc {
+
+export interface RecordDoc {
   topic: string;
-  source_page: string;
-  source_url: string;
-  source_anchor: string;
+  source_page?: string;
+  source_url?: string;
+  source_anchor?: string;
   source_table?: string;
-  source_version: string;
+  /** Per-page provenance: url, retrieved, content hash, local snapshot. */
+  provenance?: {
+    [page: string]: { url: string; retrieved: string; sha256: string; snapshot: string; page_updated?: string };
+  };
   tension?: string;
-  /** Set on a file of measured observations: marks it as ours, not the source's. */
   origin?: string;
   method?: string;
   conditions?: string;
@@ -70,173 +80,181 @@ const fail = (id: string, msg: string) => {
   failed++;
 };
 
-/** Fetch a page's structured render: title, anchors, raw text, and its tables with section + header. */
-const cache = new Map<string, PageData | null>();
-interface PageData {
-  title: string | null;
-  anchors: Set<string>;
-  raw: string;
-  tables: { anchor: string | null; header: string[] }[];
+/** Pull the measurement out of a hedged value ("at least 60 points apart" → "60 points"). */
+function measurementIn(value: string): string | null {
+  const m = /\d+(?:\.\d+)?\s*(?:x\s*\d+(?:\.\d+)?\s*)?(?:pt|px|points?|pixels?)/i.exec(value);
+  return m ? m[0] : null;
 }
 
-/** Pull the visible text out of a DocC inline-content node. */
-function nodeText(node: unknown): string {
-  if (Array.isArray(node)) return node.map(nodeText).join("");
-  if (node && typeof node === "object") {
-    const r = node as Record<string, unknown>;
-    if (r.type === "text" && typeof r.text === "string") return r.text;
-    return Object.values(r).map(nodeText).join("");
-  }
-  return "";
-}
-
-/**
- * Walk the render, tracking the most recent heading anchor, and collect each table's first row as
- * its header. Apple's DocC emits `{type: "table", header: "row", rows: [...]}`, so the header cells
- * are the first row rather than a separate field.
- */
-function collectTables(node: unknown, out: PageData["tables"], current: { anchor: string | null }): void {
-  if (Array.isArray(node)) {
-    for (const child of node) collectTables(child, out, current);
-    return;
-  }
-  if (!node || typeof node !== "object") return;
-  const r = node as Record<string, unknown>;
-  if (r.type === "heading" && typeof r.anchor === "string") current.anchor = r.anchor;
-  if (r.type === "table" && Array.isArray(r.rows) && r.rows.length) {
-    out.push({ anchor: current.anchor, header: (r.rows[0] as unknown[]).map(nodeText) });
-  }
-  for (const value of Object.values(r)) collectTables(value, out, current);
-}
-
-async function fetchPage(page: string): Promise<PageData | null> {
-  if (cache.has(page)) return cache.get(page)!;
-  const url = `https://developer.apple.com/tutorials/data/design/human-interface-guidelines/${page}.json`;
-  try {
-    const res = await fetch(url, { headers: { "user-agent": UA, accept: "application/json" } });
-    if (!res.ok) {
-      cache.set(page, null);
-      return null;
-    }
-    const raw = await res.text();
-    const data = JSON.parse(raw) as { metadata?: { title?: string } };
-    const anchors = new Set<string>();
-    for (const m of raw.matchAll(/"anchor"\s*:\s*"([^"]+)"/g)) anchors.add(m[1]!);
-    const tables: PageData["tables"] = [];
-    collectTables(data, tables, { anchor: null });
-    const out = { title: data.metadata?.title ?? null, anchors, raw, tables };
-    cache.set(page, out);
-    return out;
-  } catch {
-    cache.set(page, null);
-    return null;
-  }
-}
-
-/** Normalise for comparison: Apple writes 44x44 pt, a record may write 44x44 pt. */
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[×✕]/g, "x").trim();
 
-const dir = join(ROOT, "guidance", "apple-design", "records");
-if (!(await exists(dir))) {
-  log.info("no records directory, nothing to verify");
-  process.exit(0);
-}
+/** Verify one record against a fetched page. Exported so the negative suite can drive it offline. */
+export async function verifyRecord(
+  record: MeasurementRecord,
+  doc: RecordDoc,
+  page: PageData,
+  anchor: string,
+  report: (id: string, msg: string) => void,
+): Promise<number> {
+  let ok = 0;
 
-for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort()) {
-  const doc = parse(await readFile(join(dir, file), "utf8")) as Doc;
-
-  // Two kinds of record, warranted differently. A source-derived record is checkable against
-  // Apple's page and must be. A measured record is our own observation, warranted by a re-runnable
-  // probe, with no source page to verify against — checking it here would be a category error, and
-  // silently "passing" it would imply a verification that never happened. So it is reported as
-  // skipped, with the artifact that does warrant it named.
-  if (doc.origin) {
-    if (!quiet) {
-      console.log(`\n== ${file} (${doc.records?.length ?? 0} measured records)`);
-      console.log(`   not verified here: these are our measurements, not Apple's values`);
-      console.log(`   warranted by: ${doc.origin}${doc.raw_output ? ` (raw output: ${doc.raw_output})` : ""}`);
-      if (!doc.method) fail(file, "a measured record file must state its method");
-      if (!doc.conditions) fail(file, "a measured record file must state the conditions it was taken under");
-    }
-    continue;
+  if (!page.anchors.has(anchor)) {
+    report(record.id, `page has no section "${anchor}"`);
+    return 0;
   }
-
-  if (!quiet) console.log(`\n== ${file} (${doc.records?.length ?? 0} records, snapshot ${doc.source_version})`);
-  if (!doc.source_version) fail(file, "no source_version: a value that cannot be re-verified is not a record");
-
-  for (const record of doc.records ?? []) {
-    const page = record.source_page ?? doc.source_page;
-    const anchor = record.source_anchor ?? doc.source_anchor;
-    const fetched = await fetchPage(page);
-
-    if (!fetched) {
-      fail(record.id, `cited page "${page}" could not be fetched or does not exist`);
-      continue;
+  if (!record.values || !Object.keys(record.values).length) {
+    report(record.id, "no values");
+    return 0;
+  }
+  for (const key of Object.keys(record.values)) {
+    if (!record.meaning?.[key]) {
+      report(record.id, `value "${key}" has no stated meaning — a bare number is the error this format prevents`);
     }
-    if (!fetched.anchors.has(anchor)) {
-      fail(record.id, `page "${page}" has no section "${anchor}"`);
-      continue;
-    }
+  }
+  if (!record.conditions?.trim()) report(record.id, "no conditions stated");
 
-    // Structure the record must carry for its numbers to mean anything.
-    if (!record.values || !Object.keys(record.values).length) {
-      fail(record.id, "no values");
-      continue;
+  // ---- Table-sourced: resolve section → table → row → column. ----
+  if (!record.source_kind) {
+    if (!record.row) {
+      report(record.id, "table-sourced record must name the `row` its values come from");
+      return 0;
     }
-    for (const key of Object.keys(record.values)) {
-      if (!record.meaning?.[key]) {
-        fail(record.id, `value "${key}" has no stated meaning — a bare number is the error this format exists to prevent`);
-      }
-    }
-    if (!record.conditions?.trim()) fail(record.id, "no conditions stated");
-
-    // The values themselves must still be present in the live page.
-    const haystack = norm(fetched.raw);
     for (const [key, value] of Object.entries(record.values)) {
-      // Prose values are hedged ("about 12 points of padding"); match the measurement inside them.
-      const measurement = /(\d+(?:\.\d+)?\s*x\s*\d+(?:\.\d+)?\s*(?:pt|px)|\d+(?:\.\d+)?\s*(?:pt|px|points?))/i.exec(value);
-      const needle = norm(measurement ? measurement[0] : value);
-      if (!haystack.includes(needle)) {
-        fail(record.id, `value ${key}="${value}" (searched "${needle}") no longer appears on ${page}`);
-      } else {
-        verified++;
+      const column = record.columns?.[key];
+      if (!column) {
+        report(record.id, `value "${key}" names no source column; without one, default and minimum are indistinguishable`);
+        continue;
       }
-    }
-
-    // For a table-sourced record, the column headers are what give the values their meaning, so a
-    // renamed or reordered table must fail rather than pass on the numbers alone.
-    //
-    // This must read the page's actual table structure, not its raw text. Three weaker versions
-    // failed in turn: searching for each header independently passed a record that borrowed
-    // "Minimum size" from the page's *text size* table; allowing a few hundred characters between
-    // headers matched through an unrelated sentence containing "default and minimum sizes"; and
-    // even a tight sequence match still accepted "Platform | Default size | Minimum size", which is
-    // the genuine header of a *different table on the same page*. Only comparing against the parsed
-    // header row of the table in the record's own section distinguishes them — and that distinction
-    // is the whole point, since it is the default-versus-minimum confusion this format prevents.
-    const table = doc.source_table;
-    if (table && !record.source_kind) {
-      const declared = table.split("|").map((h) => norm(h)).filter(Boolean);
-      const inSection = fetched.tables.filter((t) => t.anchor === anchor);
-      if (!inSection.length) {
-        fail(record.id, `no table found under section "${anchor}" on ${page}, but the record declares one`);
-      } else if (!inSection.some((t) => t.header.map(norm).join(" | ") === declared.join(" | "))) {
-        const actual = inSection.map((t) => `"${t.header.join(" | ")}"`).join(", ");
-        fail(
+      const cell = resolveTableCell(page, anchor, record.row, column);
+      if (cell === null) {
+        report(
           record.id,
-          `declared table header "${table}" does not match the table under ${page}#${anchor}. ` +
-            `That section actually has: ${actual}`,
+          `could not resolve ${anchor} → row "${record.row}" → column "${column}". ` +
+            `Tables under that section: ${page.tables.filter((t) => t.anchor === anchor).map((t) => `[${t.header.join(" | ")}]`).join(", ") || "(none)"}`,
         );
+        continue;
+      }
+      if (norm(cell) !== norm(value)) {
+        report(
+          record.id,
+          `${anchor} → "${record.row}" → "${column}" holds "${cell}", but the record says ${key}="${value}"`,
+        );
+        continue;
+      }
+      ok++;
+    }
+    return ok;
+  }
+
+  // ---- Prose-sourced: the value must appear in the cited section, with its qualifier. ----
+  const text = sectionText(page, anchor);
+  if (!text) {
+    report(record.id, `no prose found under section "${anchor}"`);
+    return 0;
+  }
+  const haystack = norm(text);
+  for (const [key, value] of Object.entries(record.values)) {
+    const needle = measurementIn(value);
+    if (!needle) {
+      report(record.id, `value ${key}="${value}" contains no measurement to verify`);
+      continue;
+    }
+    if (!haystack.includes(norm(needle))) {
+      report(record.id, `value ${key}="${value}" does not appear in the text under ${anchor}`);
+      continue;
+    }
+    // A hedge changes what the number means, so it must survive into the record.
+    const qualifier = record.qualifiers?.[key];
+    if (qualifier) {
+      const phrase = norm(`${qualifier} ${needle}`);
+      if (!haystack.includes(phrase)) {
+        report(record.id, `the source under ${anchor} does not read "${qualifier} ${needle}"; check the qualifier`);
+        continue;
+      }
+      if (!norm(value).includes(norm(qualifier))) {
+        report(record.id, `value ${key}="${value}" drops the source's qualifier "${qualifier}"`);
+        continue;
       }
     }
-
-    if (!quiet && !failed) console.log(`  ✓ ${record.id} (${(record.platform ?? []).join(", ") || "unscoped"})`);
+    ok++;
   }
+  return ok;
 }
 
-console.log("");
-if (failed) {
-  log.warn(`${failed} record problem(s)`);
-  process.exit(1);
+if (import.meta.main) {
+  const dir = join(ROOT, "guidance", "apple-design", "records");
+  if (!(await exists(dir))) {
+    log.info("no records directory, nothing to verify");
+    process.exit(0);
+  }
+
+  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort()) {
+    const doc = parse(await readFile(join(dir, file), "utf8")) as RecordDoc;
+
+    // Measured observations are ours, warranted by a re-runnable probe rather than a source page.
+    // Verifying them here would be a category error; passing them silently would imply a check
+    // that never ran, so they are reported as skipped.
+    if (doc.origin) {
+      if (!quiet) {
+        console.log(`\n== ${file} (${doc.records?.length ?? 0} measured records)`);
+        console.log(`   not verified here: these are our measurements, not the source's values`);
+        console.log(`   warranted by: ${doc.origin}${doc.raw_output ? ` (raw: ${doc.raw_output})` : ""}`);
+      }
+      if (!doc.method) fail(file, "a measured record file must state its method");
+      if (!doc.conditions) fail(file, "a measured record file must state its conditions");
+      continue;
+    }
+
+    if (!quiet) console.log(`\n== ${file} (${doc.records?.length ?? 0} records)`);
+
+    for (const record of doc.records ?? []) {
+      const pageName = record.source_page ?? doc.source_page;
+      const anchor = record.source_anchor ?? doc.source_anchor;
+      if (!pageName || !anchor) {
+        fail(record.id, "no source page or anchor");
+        continue;
+      }
+
+      // Provenance is per page: a record citing a second page must carry that page's own snapshot,
+      // not inherit the file's. A date alone does not identify content.
+      const prov = doc.provenance?.[pageName];
+      if (!prov) {
+        fail(record.id, `no provenance entry for page "${pageName}" (needs url, retrieved, sha256, snapshot)`);
+      } else {
+        for (const field of ["url", "retrieved", "sha256", "snapshot"] as const) {
+          if (!prov[field]) fail(record.id, `provenance for "${pageName}" has no ${field}`);
+        }
+        const snapshot = join(ROOT, "guidance", "apple-design", "records", prov.snapshot ?? "");
+        if (prov.snapshot && !(await exists(snapshot))) {
+          fail(record.id, `snapshot "${prov.snapshot}" does not resolve to a file`);
+        }
+      }
+
+      const page = await fetchPage(pageName);
+      if (!page) {
+        fail(record.id, `cited page "${pageName}" could not be fetched or does not exist`);
+        continue;
+      }
+      if (prov?.sha256) {
+        const live = Bun.CryptoHasher ? new Bun.CryptoHasher("sha256").update(page.raw).digest("hex") : "";
+        if (live && live !== prov.sha256) {
+          console.log(`  ! ${pageName} has changed since the snapshot (${prov.sha256.slice(0, 12)} → ${live.slice(0, 12)})`);
+          console.log(`    values are still checked against the live page below; refresh the snapshot if they hold`);
+        }
+      }
+
+      const before = failed;
+      verified += await verifyRecord(record, doc, page, anchor, fail);
+      if (!quiet && failed === before) {
+        console.log(`  ✓ ${record.id} (${(record.platform ?? []).join(", ") || "unscoped"})`);
+      }
+    }
+  }
+
+  console.log("");
+  if (failed) {
+    log.warn(`${failed} record problem(s)`);
+    process.exit(1);
+  }
+  log.info(`${verified} measurement value(s) resolved to a specific cell or passage in the live source`);
 }
-log.info(`${verified} measurement value(s) verified against the live source`);

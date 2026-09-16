@@ -10,3 +10,7 @@ skills/apple-hig/
 ir/wcag22/
 skills/wcag22/
 evals/agent-results.json
+
+# Cached source pages backing measurement records. Apple's text, so local-only like ir/apple-hig/.
+# The records commit each page's sha256 instead, which identifies the content without republishing it.
+guidance/*/records/snapshots/

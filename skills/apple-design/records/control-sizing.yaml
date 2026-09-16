@@ -1,70 +1,81 @@
-# Measurement records
+# Measurement records: control sizing
 #
-# Pilot topic: control sizing. One record per platform, carrying the facts Apple states plus the
-# context that makes a number usable. Records are the ONLY place a measurement may enter published
-# guidance; prose must cite a record id, and `bun run specs` enforces that.
+# The only route by which a specification may enter published guidance. Prose states a value and
+# names the record id; `bun run specs` enforces that link offline, `bun run records` resolves each
+# value against the live source.
 #
-# Why records rather than numbers in prose:
-#   - A number without its meaning is wrong. "iOS minimum is 44x44 pt" is a real error I made and
-#     an audit caught: Apple's table gives 44x44 as the DEFAULT and 28x28 as the MINIMUM.
-#   - A number without its platform is wrong for five of the six platforms.
-#   - A number without a snapshot cannot be re-verified when Apple revises the page.
+# Each value is bound to a CELL, not to a page. A record names the section, the table row, and the
+# column whose header gives the value its meaning, so verification resolves
+# section → table → row → column and compares that one cell. This is not pedantry: an audit showed
+# that page-wide string matching passes a record that swaps default and minimum, gives tvOS the iOS
+# values, or borrows 17 pt from the text-size table on the same page. Every one of those is the
+# confusion this format exists to prevent.
 #
-# Each record is checked against the live source by `bun run records`. Fields:
-#   id            stable handle prose cites
-#   topic         grouping
-#   platform      exactly the platforms this value applies to
-#   values        keyed by MEANING, never a bare number
-#   meaning       what the source calls each value, in the source's own framing
-#   conditions    when the value applies
-#   exceptions    when it does not, or what modifies it
-#   tension       where the source is ambiguous or its prose and tables differ
-#   source        page, section anchor, and the table header the values came from
-#   snapshot      the source version these values were read from, for re-verification
+# Provenance is per page, not per file. A record citing a second page carries that page's own
+# retrieval and hash. The snapshots themselves are git-ignored (they are Apple's text); the sha256
+# identifies the content without republishing it, and `./snapshots/` is rebuilt by refetching.
 
 topic: control-sizing
+
+provenance:
+  accessibility:
+    url: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    retrieved: "2026-09-16T09:51:32Z"
+    sha256: be49ec0b34397f356a1e3fd8c7ad323713198515523947097913cb9c57da699b
+    snapshot: snapshots/accessibility.json
+    page_updated: "2025-06-09"   # Apple's own revision date, distinct from when we fetched it
+  spatial-layout:
+    url: https://developer.apple.com/design/human-interface-guidelines/spatial-layout
+    retrieved: "2026-09-16T09:51:32Z"
+    sha256: 146f0f556fbba1218a77339dd28894af38639d384503c42720e800d90846ec30
+    snapshot: snapshots/spatial-layout.json
+
 source_page: accessibility
 source_url: https://developer.apple.com/design/human-interface-guidelines/accessibility
 source_anchor: Mobility
 source_table: "Platform | Default control size | Minimum control size"
-source_version: "2025-06-09"
-verified_against_live: "2026-09-16"
 
-# Apple's prose under this table says to "strive to meet the recommended minimum control size for
-# each platform", while the table itself labels its two columns Default and Minimum. The page does
-# not state which column "recommended minimum" refers to. Records carry both columns and name the
-# ambiguity rather than resolving it for the reader.
+# The section's prose asks readers to "strive to meet the recommended minimum control size for each
+# platform", singular, while the table publishes two columns and labels neither "recommended". The
+# records carry both columns and name the ambiguity rather than resolving it for the reader.
 tension: |
-  The Mobility section's prose refers to a "recommended minimum control size" (singular), but the
-  table publishes two distinct columns, Default and Minimum. Treating the Default column as a floor
-  overstates the requirement; treating the Minimum column as a target understates Apple's own
-  default. Cite the column you mean, and read the section before asserting either as a requirement.
+  Prose says "recommended minimum control size" (singular); the table has Default and Minimum
+  columns. Treating Default as a floor overstates the requirement; treating Minimum as a target
+  understates Apple's own default. Cite the column you mean.
 
 records:
   - id: control-size.ios
     platform: [iOS, iPadOS]
+    row: "iOS, iPadOS"
     values:
       default: "44x44 pt"
       minimum: "28x28 pt"
+    columns:
+      default: "Default control size"
+      minimum: "Minimum control size"
     meaning:
-      default: "The size the table lists as Default control size for this platform."
-      minimum: "The size the table lists as Minimum control size for this platform."
+      default: "The value in this platform's Default control size column."
+      minimum: "The value in this platform's Minimum control size column."
     conditions: >-
       Applies to the control's interaction region, not its visible glyph. A small symbol inside a
       larger interactive region satisfies the size; a large visual container whose touch region is
       smaller does not. Neither can be settled from a screenshot.
     exceptions: >-
-      The table is per platform and does not transfer. Spacing is a separate requirement; see
+      Per platform; does not transfer. Spacing is a separate requirement, see
       control-spacing.general.
 
   - id: control-size.macos
     platform: [macOS]
+    row: macOS
     values:
       default: "28x28 pt"
       minimum: "20x20 pt"
+    columns:
+      default: "Default control size"
+      minimum: "Minimum control size"
     meaning:
-      default: "The size the table lists as Default control size for this platform."
-      minimum: "The size the table lists as Minimum control size for this platform."
+      default: "The value in this platform's Default control size column."
+      minimum: "The value in this platform's Minimum control size column."
     conditions: >-
       Pointer-driven platform: the values are smaller than the touch platforms because a pointer is
       more precise than a fingertip.
@@ -74,12 +85,16 @@ records:
 
   - id: control-size.tvos
     platform: [tvOS]
+    row: tvOS
     values:
       default: "66x66 pt"
       minimum: "56x56 pt"
+    columns:
+      default: "Default control size"
+      minimum: "Minimum control size"
     meaning:
-      default: "The size the table lists as Default control size for this platform."
-      minimum: "The size the table lists as Minimum control size for this platform."
+      default: "The value in this platform's Default control size column."
+      minimum: "The value in this platform's Minimum control size column."
     conditions: >-
       Focus-driven platform: nothing is tapped, so the value concerns the focusable region and its
       focused appearance rather than a touch target.
@@ -87,62 +102,79 @@ records:
 
   - id: control-size.visionos
     platform: [visionOS]
+    row: visionOS
     values:
       default: "60x60 pt"
       minimum: "28x28 pt"
+    columns:
+      default: "Default control size"
+      minimum: "Minimum control size"
     meaning:
-      default: "The size the table lists as Default control size for this platform."
-      minimum: "The size the table lists as Minimum control size for this platform."
+      default: "The value in this platform's Default control size column."
+      minimum: "The value in this platform's Minimum control size column."
     conditions: >-
       Gaze-driven targeting. The larger default reflects that the eyes select less precisely than a
       fingertip.
-    exceptions: >-
-      visionOS also carries a separate centre-to-centre spacing guidance; see
-      control-spacing.visionos.
+    exceptions: "See control-spacing.visionos for the separate centre-to-centre guidance."
 
   - id: control-size.watchos
     platform: [watchOS]
+    row: watchOS
     values:
       default: "44x44 pt"
       minimum: "28x28 pt"
+    columns:
+      default: "Default control size"
+      minimum: "Minimum control size"
     meaning:
-      default: "The size the table lists as Default control size for this platform."
-      minimum: "The size the table lists as Minimum control size for this platform."
+      default: "The value in this platform's Default control size column."
+      minimum: "The value in this platform's Minimum control size column."
     conditions: >-
       Matches the iOS values despite the much smaller display, so a design scaled down from iPhone
       will usually violate them.
     exceptions: ""
 
+  # ---- Prose-sourced. No table to resolve against, so the qualifier is carried verbatim and
+  # verification requires it to appear in the cited section's text.
   - id: control-spacing.general
     platform: []
     values:
-      bezelled: "about 12 points of padding"
-      unbezelled: "about 24 points of padding"
+      bezelled: "about 12 points"
+      unbezelled: "about 24 points"
+    qualifiers:
+      bezelled: about
+      unbezelled: about
     meaning:
-      bezelled: "Padding around elements that include a bezel, per the Mobility section's prose."
+      bezelled: "Padding around elements that include a bezel."
       unbezelled: "Padding around the visible edges of elements without a bezel."
     conditions: >-
-      Stated as prose, not in the table, and hedged with "in general" and "about". It is a
-      recommendation with soft numbers, not a threshold.
+      Stated as prose, hedged with "in general" and "about". A recommendation with soft numbers,
+      not a threshold.
     exceptions: >-
-      Apple frames spacing as being as important as size, and marks the statement as a MAY rather
-      than a requirement. Two controls that each meet the size values can still be easy to mis-hit.
+      Two controls that each meet the size values can still be easy to mis-hit. The source presents
+      spacing as being as important as size, in a sentence beginning "Consider".
     source_anchor: Mobility
     source_kind: prose
 
   - id: control-spacing.visionos
     platform: [visionOS]
     values:
-      centre_to_centre: "at least 60 points apart"
-      margin: "at least 16 points around the bounds"
+      centre_to_centre: "at least 60 points"
+      gap_between: "16 points"
+    qualifiers:
+      centre_to_centre: at least
     meaning:
-      centre_to_centre: "Minimum distance between the centres of adjacent interactive items."
-      margin: "Alternative expression of the same guidance, as a margin around each item."
-    conditions: "Applies to regular-size buttons placed side by side."
+      centre_to_centre: "Minimum distance between the CENTRES of adjacent regular-size buttons."
+      gap_between: >-
+        The space left BETWEEN those buttons. The source states both in one sentence: centres at
+        least 60 points apart, "leaving 16 points or more of space between them". These are two
+        different measurements of the same arrangement, not alternative phrasings of one — an
+        earlier version of this record called the 16 points a "margin around each item", which
+        describes a different layout.
+    conditions: "Applies to multiple regular-size buttons placed side by side."
     exceptions: >-
-      The same guidance appears on the Eyes page under a different section
-      (eyes#Making-items-easy-to-see), framed around gaze targeting. Cite whichever section you
-      actually read.
+      The source adds that controls should not overlap other interactive elements or views. Similar
+      guidance appears on the Eyes page under a different section; cite the one you read.
     source_page: spatial-layout
     source_anchor: Best-practices
     source_kind: prose

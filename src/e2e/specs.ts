@@ -104,28 +104,28 @@ async function markdownFiles(dir: string, prefix = ""): Promise<string[]> {
   return out;
 }
 
-/** Every value published in a source's records, normalised, plus the record ids that carry it. */
-async function recordedValues(id: string): Promise<Map<string, string[]>> {
-  const values = new Map<string, string[]>();
+/** value → the record ids and value keys that publish it. */
+interface Publisher {
+  recordId: string;
+  key: string;
+}
+
+async function publishedValues(id: string): Promise<Map<string, Publisher[]>> {
+  const values = new Map<string, Publisher[]>();
   const dir = join(ROOT, "guidance", id, "records");
   if (!(await exists(dir))) return values;
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml"))) {
     const doc = parse(await readFile(join(dir, file), "utf8")) as {
       records?: { id: string; values?: { [k: string]: string } }[];
-      source_table?: string;
     };
     for (const record of doc.records ?? []) {
-      for (const raw of Object.values(record.values ?? {})) {
-        // Index every measurement inside the value, so prose may quote "44x44 pt" from a record
-        // whose value string is "at least 60 points apart".
+      for (const [key, raw] of Object.entries(record.values ?? {})) {
         for (const m of raw.matchAll(/\d+(?:\.\d+)?\s*(?:[x\u00d7]\s*\d+(?:\.\d+)?\s*)?(?:pt|px|dp|points?|pixels?)/gi)) {
-          const key = norm(m[0]);
-          values.set(key, [...(values.get(key) ?? []), record.id]);
+          const value = norm(m[0]);
+          values.set(value, [...(values.get(value) ?? []), { recordId: record.id, key }]);
         }
       }
     }
-    // Column headers legitimately contain the words that give values meaning.
-    if (doc.source_table) values.set(norm(doc.source_table), ["<table header>"]);
   }
   return values;
 }
@@ -136,16 +136,13 @@ let licensed = 0;
 
 for (const id of await listSources()) {
   if ((await loadSource(id)).kind !== "authored") continue;
-  const recorded = await recordedValues(id);
+  const published = await publishedValues(id);
+  const knownIds = new Set([...published.values()].flat().map((p) => p.recordId));
 
-  for (const file of await markdownFiles(join(ROOT, "guidance", id))) {
+  for (const file of await markdownFiles(join(ROOT, id === "apple-design" ? `guidance/${id}` : `guidance/${id}`))) {
     scanned++;
     const shown = relative(ROOT, file);
     const text = await readFile(file, "utf8");
-    // A file may cite records anywhere in it; citation is per file, not per line, because the
-    // record id usually appears in a table column or a lead paragraph.
-    const citesRecord = /\b[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\b/.test(text) &&
-      [...recorded.values()].flat().some((rid) => rid !== "<table header>" && text.includes(rid));
 
     for (const { line, number } of proseLines(text)) {
       const stripped = withoutLinks(line);
@@ -158,20 +155,51 @@ for (const id of await listSources()) {
           if (consumed.some(([s, e]) => at >= s && at < e)) continue;
           consumed.push([at, at + match[0].length]);
           const value = norm(match[0]);
-          if (pattern.recordable && recorded.has(value) && citesRecord) {
+
+          if (!pattern.recordable) {
+            failed++;
+            console.log(`\u2717 ${shown}:${number}: ${pattern.name} \u2014 "${match[0].trim()}"`);
+            console.log(`    ${pattern.why}`);
+            continue;
+          }
+
+          const publishers = published.get(value);
+          if (!publishers?.length) {
+            failed++;
+            console.log(`\u2717 ${shown}:${number}: ${pattern.name} \u2014 "${match[0].trim()}"`);
+            console.log(`    no record in guidance/${id}/records/ publishes this value`);
+            console.log(`    ${pattern.why}`);
+            continue;
+          }
+
+          // The value must be attributed to a record that actually carries it. Citing *some*
+          // record is not enough: an audit fixture wrote "66x66 pt on iOS (control-size.ios)",
+          // where only the tvOS record holds that value, and the old file-level check passed it.
+          //
+          // Scope: the citation must appear on this line, in the surrounding table row, or in the
+          // paragraph, so the binding is local rather than anywhere in the document.
+          const contextLines = text.split("\n");
+          const context = contextLines.slice(Math.max(0, number - 4), number + 3).join(" ");
+          const cited = publishers.filter((p) => context.includes(p.recordId));
+          if (cited.length) {
             licensed++;
             continue;
           }
+
+          const citedButWrong = [...knownIds].filter((rid) => context.includes(rid));
           failed++;
           console.log(`\u2717 ${shown}:${number}: ${pattern.name} \u2014 "${match[0].trim()}"`);
-          if (!pattern.recordable) {
-            console.log(`    ${pattern.why}`);
-          } else if (!recorded.has(value)) {
-            console.log(`    no record in guidance/${id}/records/ publishes this value`);
-            console.log(`    ${pattern.why}`);
+          if (citedButWrong.length) {
+            console.log(
+              `    cites ${citedButWrong.map((r) => `\`${r}\``).join(", ")}, which does not publish this value`,
+            );
+            console.log(
+              `    "${match[0].trim()}" comes from ${publishers.map((p) => `\`${p.recordId}\`.${p.key}`).join(" or ")}`,
+            );
           } else {
-            console.log(`    a record carries this value, but this file cites no record id`);
-            console.log(`    name the record (e.g. \`control-size.ios\`) so a reader can check the column it came from`);
+            console.log(
+              `    no record cited nearby; name ${publishers.map((p) => `\`${p.recordId}\``).join(" or ")} so a reader can check the column it came from`,
+            );
           }
         }
       }

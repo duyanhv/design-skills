@@ -25,7 +25,34 @@ interface Case {
   caught: boolean;
   /** Why the boundary sits here. */
   note: string;
+  /** Optional records file, so a case can test the measurement-to-record binding. */
+  records?: string;
+  /** True when passing is the intended behaviour rather than a gap in the scan. */
+  allowed?: boolean;
 }
+
+/** Two records publishing different values, so a mis-citation is distinguishable from a citation. */
+const RECORDS = `topic: t
+provenance:
+  accessibility: { url: "https://example.invalid", retrieved: "x", sha256: "y", snapshot: "s" }
+source_page: accessibility
+source_anchor: Mobility
+records:
+  - id: control-size.ios
+    platform: [iOS]
+    row: "iOS, iPadOS"
+    values: { default: "44x44 pt", minimum: "28x28 pt" }
+    columns: { default: "Default control size", minimum: "Minimum control size" }
+    meaning: { default: "d", minimum: "m" }
+    conditions: "c"
+  - id: control-size.tvos
+    platform: [tvOS]
+    row: "tvOS"
+    values: { default: "66x66 pt" }
+    columns: { default: "Default control size" }
+    meaning: { default: "d" }
+    conditions: "c"
+`;
 
 const CASES: Case[] = [
   // Caught: the shapes the patterns were built for.
@@ -72,6 +99,45 @@ const CASES: Case[] = [
     caught: false,
     note: "fences are skipped on purpose, since an example may name a real API constant",
   },
+
+  // ---- Record-bearing cases. The suite had none, so it could not have caught an audit finding:
+  // prose citing *a* record while quoting a value only some *other* record publishes.
+  {
+    name: "a measurement citing the record that publishes it is licensed",
+    prose: "Targets are 44x44 pt on iOS (`control-size.ios`).",
+    caught: false,
+    note: "a value bound to the record that carries it is exactly what records are for",
+    allowed: true,
+    records: RECORDS,
+  },
+  {
+    name: "a measurement citing a record that does NOT publish it is flagged",
+    prose: "Use 66x66 pt on iOS (`control-size.ios`).",
+    caught: true,
+    note: "",
+    records: RECORDS,
+  },
+  {
+    name: "a recorded value with no record cited nearby is flagged",
+    prose: "Targets are 44x44 pt.",
+    caught: true,
+    note: "",
+    records: RECORDS,
+  },
+  {
+    name: "a value no record publishes is flagged even when a record is cited",
+    prose: "Targets are 50x50 pt on iOS (`control-size.ios`).",
+    caught: true,
+    note: "",
+    records: RECORDS,
+  },
+  {
+    name: "a colour literal is flagged even when a record is cited",
+    prose: "Use #1a73e8 (`control-size.ios`).",
+    caught: true,
+    note: "no record can license a colour literal",
+    records: RECORDS,
+  },
 ];
 
 let failed = 0;
@@ -97,6 +163,10 @@ try {
       }),
     );
     await writeFile(join(root, "guidance", "probe", "SKILL.md"), `# Probe\n\n${testCase.prose}\n`);
+    if (testCase.records) {
+      await mkdir(join(root, "guidance", "probe", "records"), { recursive: true });
+      await writeFile(join(root, "guidance", "probe", "records", "r.yaml"), testCase.records);
+    }
 
     const proc = Bun.spawn([process.execPath, join(REPO, "src", "e2e", "specs.ts")], {
       cwd: root,
@@ -108,7 +178,7 @@ try {
 
     if (flagged === testCase.caught) {
       console.log(`✓ ${testCase.name}`);
-      console.log(`    → ${flagged ? "flagged, as it must be" : `not flagged — known hole: ${testCase.note}`}`);
+      console.log(`    → ${flagged ? "flagged, as it must be" : `${testCase.allowed ? "allowed" : "not flagged — known hole"}: ${testCase.note}`}`);
     } else {
       failed++;
       console.log(`✗ ${testCase.name}`);
@@ -124,8 +194,9 @@ try {
 }
 
 const caught = CASES.filter((c) => c.caught).length;
+const allowed = CASES.filter((c) => !c.caught && c.allowed).length;
 if (failed) {
   log.warn(`${failed} specification-scan expectation(s) no longer hold`);
   process.exit(1);
 }
-log.info(`specification scan: ${caught} shapes caught, ${CASES.length - caught} known misses, all as documented`);
+log.info(`specification scan: ${caught} shapes caught, ${allowed} deliberately allowed, ${CASES.length - caught - allowed} known misses, all as documented`);

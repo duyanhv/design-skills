@@ -11,7 +11,7 @@
   "partial": false,
   "note": "Original design-skills workflow instructions. Linked upstream guidelines are not bundled; upstream completeness and freshness are not asserted.",
   "files": {
-    "records/control-sizing.yaml": "c1454c0b2b6bfd54",
+    "records/control-sizing.yaml": "e5f27218a9d72764",
     "records/measured.yaml": "4fd0d91277d62276",
     "references/context/platforms.md": "bad35aaa1c7b17aa",
     "references/research/topics.md": "0fe2a4e39779194d",
@@ -19,7 +19,7 @@
     "references/tasks/accessibility.md": "f304b332566d672e",
     "references/tasks/actions.md": "56bfef10c533eaee",
     "references/tasks/appearance.md": "ca0c10e003ce92c6",
-    "references/tasks/control-sizing.md": "4e2cb5f721647ee1",
+    "references/tasks/control-sizing.md": "07db49ae1fd14fd8",
     "references/tasks/forms.md": "3690078d219f9a29",
     "references/tasks/navigation.md": "3e3cc0310bab0511",
     "references/tasks/typography.md": "567f1c2ae346d193",
