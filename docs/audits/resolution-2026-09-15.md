@@ -264,7 +264,7 @@ They predate this work and are recorded here rather than claimed as guarded.
 | Check | Before | After |
 | --- | --- | --- |
 | `bun run check` | passing | passing |
-| Unit tests | 51 | 71 |
+| Unit tests | 51 | 73 |
 | Trace requirements | 19 | 43 |
 | Trace negative probes | 22 | 61 |
 | Validate guards | 20 | 22 |
@@ -310,8 +310,11 @@ directions: it refuses credit for an unproven fix, and it notices when a fix bec
 - The agent evaluation is 3 samples per arm and is not a significance claim. Most ranges overlap;
   what does not overlap is citation behaviour, which is also the thing the skill most directly
   causes.
-- A5's checks assert that the authored workflow's sentences are present and marked as authored.
-  That is text presence, not behaviour. A4's check is stronger: it derives what the entry file
-  permits and tests a real prohibition independently of the severity classifier.
+- A5's checks establish that the shipped workflow *demands* each thing, by concept rather than by
+  the sentence that happens to satisfy it: three semantic rewordings pass, and dropping any of the
+  Building, Reviewing or Evidence requirements fails. That is a property of the instructions, not of
+  a reviewer following them; only the agent evaluation speaks to behaviour. A4's check goes further,
+  deriving what the entry file permits and testing a real prohibition independently of the severity
+  classifier.
 - Twelve older findings (`1`–`8` and some `O-n`) have checks but no negative probe. They predate
   this work; a check that has never been seen to fail is still a guess, whoever wrote it.

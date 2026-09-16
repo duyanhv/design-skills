@@ -103,6 +103,12 @@ Return an *observation*, not a boolean. `observed: 1322/1536 rendered, 214 excus
 refactor that quietly stops matching; `true` does not. Say where a check is partial in its own
 output, so a passing report cannot be read as more than it measured.
 
+Check the requirement, not the sentence that satisfies it today. A check written by copying the text
+you just wrote passes for the wrong reason and fails on any honest reword, which trains the next
+person to edit the check instead of thinking about it. Match concepts with alternatives, then prove
+it both directions: reword the text and watch it still pass, delete the requirement and watch it
+fail.
+
 ## Changing the compiler
 
 Anything that changes generated output has to show its work:
