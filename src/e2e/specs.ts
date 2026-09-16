@@ -1,74 +1,77 @@
-#!/usr/bin/env bun
 /**
- * The authored guides promise they carry no specifications. This checks that they keep the promise.
+ * Measurements in authored guidance must come from a verified record.
  *
- * `apple-design/SKILL.md` says, in as many words, that the bundle contains no sizes, spacing, type
- * scales, contrast ratios, or colour values, and every task file repeats some form of "read the
- * value on the page and record its units". That boundary exists for two reasons: a copied number is
- * wrong the next time the source revises it, and copying Apple's or Google's specifications is
- * redistribution this project has no licence for.
+ * The rule here used to be simpler and wrong: *no measurements at all*. That was a blunt reaction to
+ * having once written "a 16pt SF Symbol inside a 44pt button" with no platform and no source. It
+ * stopped the symptom and prevented the cure, because a design guide that cannot state a target size
+ * cannot answer the question agents most often get wrong.
  *
- * It is also easy to breach by accident while writing a helpful example. An audit found exactly
- * that: a guide illustrating hit targets with "a 16pt SF Symbol inside a 44pt button", stated
- * without platform qualification, two sections after promising no numbers — and 44 is not even
- * universal, since visionOS differs. The sentence read as an explanation and functioned as an
- * unsourced specification.
+ * Relaxing it to "a number is fine if it names a platform and cites a section" would not have been
+ * enough either. A review of that proposal caught me about to publish "iOS minimum target is
+ * 44x44 pt" — platform named, section citable, and **false**: Apple's table gives 44x44 as the
+ * *Default* and 28x28 as the *Minimum*. A regex cannot tell that a citation fails to support the
+ * claim built on it.
  *
- * So: no measurement literals in `guidance/`. Prose that describes *how* to find a number is
- * encouraged; prose that states one is not. Version numbers, list markers, and ordinary English
- * survive, because the patterns below match a number bound to a unit.
+ * So the rule is now: a measurement may appear in `guidance/` only where a record in
+ * `guidance/<id>/records/` carries that exact value, and the file citing it names the record. The
+ * record supplies what a bare number cannot — which column it came from, what the source calls it,
+ * which platforms it covers, its conditions and exceptions, and a snapshot to re-verify against.
+ * `bun run records` then checks those records against the live source, including that the declared
+ * table header really is the header of the table in that section.
  *
- * **What this does not do.** It is a pattern scan over prose, not a proof. Three known holes, stated
- * so nobody mistakes a pass for a guarantee:
+ * Division of labour:
+ *   - this check (offline, in `check` and CI): every measurement traces to a record.
+ *   - `bun run records` (network): every record still matches the source.
  *
- *   - It matches the shapes in `PATTERNS` and nothing else. "Forty-four points", a unitless "use 44
- *     here", or a ratio spelled out in words all pass.
- *   - It skips fenced code deliberately, because an example may legitimately name an API constant.
- *     A specification written inside a fence is invisible to it.
- *   - It says nothing about whether surviving prose is *correct*. The other two defects from the
- *     same audit — a statement attached to the wrong platform section, and a warning generalized
- *     past what the source supports — are unreachable by any check of this kind.
- *
- * It exists to catch the accident, not to replace reading the source.
+ * Still refused outright: colour literals, which have no legitimate place in guidance that tells
+ * readers to use semantic colours.
  *
  * Usage: bun run src/e2e/specs.ts
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { ROOT, listSources, loadSource } from "../util/fs.ts";
+import { parse } from "yaml";
+import { ROOT, exists, listSources, loadSource } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 
 interface Pattern {
   name: string;
   re: RegExp;
   why: string;
+  /** A measurement may be licensed by a record; a colour literal never can be. */
+  recordable: boolean;
 }
 
 const PATTERNS: Pattern[] = [
   {
-    name: "a length with a unit",
-    re: /\b\d+(?:\.\d+)?\s*(?:pt|px|dp|sp|points?|pixels?)\b/gi,
-    why: "sizes and spacing are per platform and change between releases; link the page instead",
+    name: "a pixel dimension",
+    re: /(?<![\d.])\d+(?:\.\d+)?\s*[x\u00d7]\s*\d+(?:\.\d+)?(?:\s*(?:pt|px|dp|points?|pixels?))?(?!\.?\d)/gi,
+    why: "a target dimension belongs to a source table with named columns; publish a record and cite it",
+    recordable: true,
   },
   {
-    name: "a pixel dimension",
-    re: /\b\d+\s*[x×]\s*\d+\s*(?:pt|px|dp|points?|pixels?)?\b/gi,
-    why: "a target or asset dimension belongs to the source, and differs by platform",
+    name: "a length with a unit",
+    re: /(?<![\d.])\d+(?:\.\d+)?\s*(?:pt|px|dp|sp|points?|pixels?)\b/gi,
+    why: "sizes are per platform and per meaning (default vs minimum); publish a record and cite it",
+    recordable: true,
   },
   {
     name: "a contrast ratio",
     re: /\b\d+(?:\.\d+)?\s*:\s*1\b/g,
-    why: "a ratio belongs to the standard that defines it; name the standard and link it",
+    why: "a ratio belongs to the standard that defines it; publish a record naming that standard",
+    recordable: true,
   },
   {
     name: "a colour literal",
     re: /#[0-9a-f]{3,8}\b|\brgba?\s*\(|\bhsla?\s*\(/gi,
-    why: "system colours are semantic and adapt; a literal does not",
+    why: "system colours are semantic and adapt; a literal does not, and no record can license one",
+    recordable: false,
   },
   {
     name: "a font weight or size value",
     re: /\bfont-(?:size|weight)\s*[:=]|\bweight\s*[:=]\s*\d+/gi,
-    why: "type scales are published per platform and per text style",
+    why: "type scales are published per platform and per text style; publish a record and cite it",
+    recordable: true,
   },
 ];
 
@@ -89,6 +92,8 @@ function proseLines(markdown: string): { line: string; number: number }[] {
 /** A URL may contain digits that mean nothing here (anchors, versions). Strip links first. */
 const withoutLinks = (line: string) => line.replace(/\]\([^)]*\)/g, "]()").replace(/https?:\/\/\S+/g, "");
 
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[\u00d7\u2715]/g, "x").trim();
+
 async function markdownFiles(dir: string, prefix = ""): Promise<string[]> {
   const out: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -99,21 +104,75 @@ async function markdownFiles(dir: string, prefix = ""): Promise<string[]> {
   return out;
 }
 
+/** Every value published in a source's records, normalised, plus the record ids that carry it. */
+async function recordedValues(id: string): Promise<Map<string, string[]>> {
+  const values = new Map<string, string[]>();
+  const dir = join(ROOT, "guidance", id, "records");
+  if (!(await exists(dir))) return values;
+  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml"))) {
+    const doc = parse(await readFile(join(dir, file), "utf8")) as {
+      records?: { id: string; values?: { [k: string]: string } }[];
+      source_table?: string;
+    };
+    for (const record of doc.records ?? []) {
+      for (const raw of Object.values(record.values ?? {})) {
+        // Index every measurement inside the value, so prose may quote "44x44 pt" from a record
+        // whose value string is "at least 60 points apart".
+        for (const m of raw.matchAll(/\d+(?:\.\d+)?\s*(?:[x\u00d7]\s*\d+(?:\.\d+)?\s*)?(?:pt|px|dp|points?|pixels?)/gi)) {
+          const key = norm(m[0]);
+          values.set(key, [...(values.get(key) ?? []), record.id]);
+        }
+      }
+    }
+    // Column headers legitimately contain the words that give values meaning.
+    if (doc.source_table) values.set(norm(doc.source_table), ["<table header>"]);
+  }
+  return values;
+}
+
 let failed = 0;
 let scanned = 0;
+let licensed = 0;
 
 for (const id of await listSources()) {
   if ((await loadSource(id)).kind !== "authored") continue;
+  const recorded = await recordedValues(id);
+
   for (const file of await markdownFiles(join(ROOT, "guidance", id))) {
     scanned++;
     const shown = relative(ROOT, file);
-    for (const { line, number } of proseLines(await readFile(file, "utf8"))) {
-      const text = withoutLinks(line);
+    const text = await readFile(file, "utf8");
+    // A file may cite records anywhere in it; citation is per file, not per line, because the
+    // record id usually appears in a table column or a lead paragraph.
+    const citesRecord = /\b[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\b/.test(text) &&
+      [...recorded.values()].flat().some((rid) => rid !== "<table header>" && text.includes(rid));
+
+    for (const { line, number } of proseLines(text)) {
+      const stripped = withoutLinks(line);
+      // A dimension ("39.5 x 26.5 pt") contains a length ("26.5 pt"). Report the whole dimension
+      // once rather than its tail a second time, so one value produces one finding.
+      const consumed: [number, number][] = [];
       for (const pattern of PATTERNS) {
-        for (const match of text.matchAll(pattern.re)) {
+        for (const match of stripped.matchAll(pattern.re)) {
+          const at = match.index ?? 0;
+          if (consumed.some(([s, e]) => at >= s && at < e)) continue;
+          consumed.push([at, at + match[0].length]);
+          const value = norm(match[0]);
+          if (pattern.recordable && recorded.has(value) && citesRecord) {
+            licensed++;
+            continue;
+          }
           failed++;
-          console.log(`✗ ${shown}:${number}: ${pattern.name} — "${match[0].trim()}"`);
-          console.log(`    ${pattern.why}`);
+          console.log(`\u2717 ${shown}:${number}: ${pattern.name} \u2014 "${match[0].trim()}"`);
+          if (!pattern.recordable) {
+            console.log(`    ${pattern.why}`);
+          } else if (!recorded.has(value)) {
+            console.log(`    no record in guidance/${id}/records/ publishes this value`);
+            console.log(`    ${pattern.why}`);
+          } else {
+            console.log(`    a record carries this value, but this file cites no record id`);
+            console.log(`    name the record (e.g. \`control-size.ios\`) so a reader can check the column it came from`);
+          }
         }
       }
     }
@@ -121,9 +180,9 @@ for (const id of await listSources()) {
 }
 
 if (failed) {
-  log.warn(`${failed} specification value(s) in authored guidance, which is supposed to carry none`);
+  log.warn(`${failed} unsourced measurement(s) or colour literal(s) in authored guidance`);
   process.exit(1);
 }
-// Deliberately not "carries no specifications": this scanned prose for known patterns, and saying
-// more than that would turn a pattern match into a guarantee it cannot make.
-log.info(`no ${PATTERNS.length} known specification patterns found in the prose of ${scanned} authored guidance file(s)`);
+log.info(
+  `${scanned} authored guidance file(s): ${licensed} measurement(s) traced to a verified record, 0 unsourced`,
+);

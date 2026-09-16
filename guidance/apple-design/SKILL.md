@@ -16,11 +16,13 @@ and review instructions written for design-skills, not extracted Apple requireme
 [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) remain
 the source for platform behavior and specifications. Not affiliated with Apple.
 
-**This bundle carries no specifications.** No sizes, spacing, type scales, contrast ratios, or color
-values, and no images. Those are per platform and per OS version, they change, and they are not ours
-to copy. Read them at the linked page and record the units and platform section you took them from.
-If you cannot open the linked pages, say which decisions are unverified rather than working from
-recollection.
+**Specifications appear only where a record backs them.** One topic — [control sizing](references/tasks/control-sizing.md)
+— carries Apple's published values, because each is held in a
+[measurement record](records/control-sizing.yaml) naming the source table, the column the
+value came from, its platforms, conditions and exceptions, and a snapshot to re-verify against.
+Everywhere else this bundle carries no numbers and no images: read them at the linked page and
+record the units and platform section you took them from. If you cannot open the linked pages, say
+which decisions are unverified rather than working from recollection.
 
 ## 1. Establish the context first
 
@@ -38,6 +40,7 @@ about one control is not an invitation to restructure the screen.
 | --- | --- |
 | App structure, tabs, sidebars, screen-to-screen movement | [navigation.md](references/tasks/navigation.md) |
 | Buttons, menus, destructive or confirming operations | [actions.md](references/tasks/actions.md) |
+| Target sizes and spacing, with Apple's published values | [control-sizing.md](references/tasks/control-sizing.md) |
 | Fields, pickers, toggles, validation, settings | [forms.md](references/tasks/forms.md) |
 | Text, type styles, Dynamic Type, localization | [typography.md](references/tasks/typography.md) |
 | Color, light and dark, materials, contrast | [appearance.md](references/tasks/appearance.md) |

@@ -1,0 +1,55 @@
+# Measurement records: values WE measured, not values Apple publishes.
+#
+# Kept separate from source-derived records because their warrant is different. A record in
+# control-sizing.yaml is checkable against Apple's page; these are checkable only by re-running the
+# probe that produced them. Conflating the two would let an observation borrow a source's authority.
+#
+# `bun run records` skips these (they have no source page to verify against) and `bun run specs`
+# accepts them as licensing a measurement in prose, provided the prose cites the record id.
+
+topic: measured-observations
+origin: examples/apple-design-review/probe
+method: >-
+  UIWindow.hitTest(_:with:) sampled on a 0.5 pt grid, and SwiftUI GeometryReader in a .background.
+  Programmatic hit-testing, not a finger on glass: real taps were not tested.
+conditions: iPhone 17 Pro, iOS 26.5, light appearance, default text size
+raw_output: examples/apple-design-review/probe/results/
+
+records:
+  - id: measured.toolbar-declared
+    platform: [iOS]
+    values:
+      frame: "24x24 pt"
+    meaning:
+      frame: "The frame the example's before/ code declares on its toolbar button."
+    conditions: "Read from the source file, not measured."
+    exceptions: "Does not describe the rendered or touchable size; the other two records do."
+    source_kind: measured
+
+  - id: measured.toolbar-container
+    platform: [iOS]
+    values:
+      rendered: "44.0 x 44.0 pt"
+    meaning:
+      rendered: "Bounding box of the rendered Liquid Glass container, measured from the screenshot."
+    conditions: "Pixel measurement of before-light.png at @3x, divided by 3."
+    exceptions: >-
+      This is what the eye sees and what a screenshot can establish. It is NOT the touchable region,
+      and the blind review's one wrong conclusion came from treating it as such.
+    source_kind: measured
+
+  - id: measured.toolbar-touchable
+    platform: [iOS]
+    values:
+      touchable: "39.5 x 26.5 pt"
+      touchable_after_fix: "39.5 x 39.5 pt"
+    meaning:
+      touchable: "Region from which a sampled point reaches the bar item, before the fix."
+      touchable_after_fix: "The same region after removing the explicit frame."
+    conditions: >-
+      4,187 of 24,915 sampled points reached the control, spanning x 344.5-383.5, y 71.0-97.0.
+      Reproduce with ./probe/run.sh before.
+    exceptions: >-
+      The post-fix figure is the system's own metric for a toolbar item on this OS version, not
+      something the screen controls. Reported rather than presented as fixed.
+    source_kind: measured

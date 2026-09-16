@@ -15,13 +15,22 @@ const Frontmatter = z.object({
   metadata: z.record(z.string(), z.string()),
 });
 
-async function markdownFiles(dir: string, prefix = ""): Promise<Record<string, string>> {
+/**
+ * Files that make up an authored bundle.
+ *
+ * Markdown is the guidance itself. YAML is carried too, because a measurement record is part of what
+ * the bundle publishes: prose states a value and names the record that warrants it, so shipping the
+ * prose without the record would leave a number no reader could check.
+ */
+async function bundleFiles(dir: string, prefix = ""): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
   for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
     const name = prefix + entry.name;
     if (entry.isSymbolicLink()) throw new Error(`Authored bundle cannot contain symlinks: ${name}`);
-    if (entry.isDirectory()) Object.assign(files, await markdownFiles(join(dir, entry.name), name + "/"));
-    else if (entry.name.endsWith(".md")) files[name] = await readFile(join(dir, entry.name), "utf8");
+    if (entry.isDirectory()) Object.assign(files, await bundleFiles(join(dir, entry.name), name + "/"));
+    else if (entry.name.endsWith(".md") || entry.name.endsWith(".yaml")) {
+      files[name] = await readFile(join(dir, entry.name), "utf8");
+    }
   }
   return files;
 }
@@ -50,7 +59,10 @@ export function inspectAuthored(files: Record<string, string>, source: Source): 
       if (!reachable.has(target)) { reachable.add(target); queue.push(target); }
     }
   }
-  for (const file of Object.keys(files)) if (!reachable.has(file)) errors.push(`Unreachable reference: ${file}`);
+  for (const file of Object.keys(files)) {
+    if (reachable.has(file)) continue;
+    errors.push(`Unreachable reference: ${file}`);
+  }
   if (!Object.values(files).some((text) => text.includes(source.base_url))) errors.push("Official source URL is missing");
   return errors;
 }
@@ -72,7 +84,7 @@ function assertAuthoredSource(source: Source): void {
 
 export async function buildAuthoredSource(source: Source): Promise<void> {
   assertAuthoredSource(source);
-  const files = await markdownFiles(join(ROOT, "guidance", source.id));
+  const files = await bundleFiles(join(ROOT, "guidance", source.id));
   const errors = inspectAuthored(files, source);
   if (errors.length) throw new Error(errors.join("\n"));
   const output = paths.skill(source.skill.name);
@@ -88,8 +100,8 @@ export async function buildAuthoredSource(source: Source): Promise<void> {
 export async function validateAuthoredSource(source: Source): Promise<Finding[]> {
   try {
     assertAuthoredSource(source);
-    const expected = await markdownFiles(join(ROOT, "guidance", source.id));
-    const shipped = await markdownFiles(paths.skill(source.skill.name));
+    const expected = await bundleFiles(join(ROOT, "guidance", source.id));
+    const shipped = await bundleFiles(paths.skill(source.skill.name));
     const errors = inspectAuthored(shipped, source);
     if (JSON.stringify(expected) !== JSON.stringify(shipped)) errors.push("Published Markdown differs from its authored inputs; rebuild");
     const actual = await readFile(join(paths.skill(source.skill.name), "provenance.json"), "utf8");

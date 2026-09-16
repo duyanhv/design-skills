@@ -247,7 +247,8 @@ bun run docs               # Relative doc links: target exists, git publishes it
 bun run docs:negative      # Reintroduces each broken-link defect and asserts the matching case fails
 bun run links              # Official links in the authored guides still resolve; needs network
 bun run links:negative     # Stub-server guards: an unidentifiable or merged page must not verify
-bun run specs              # Prose scan for copied sizes, ratios, or colour values in guidance/
+bun run specs              # Every measurement in guidance/ traces to a verified record
+bun run records            # Records still match the live source; needs network
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references

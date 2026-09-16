@@ -36,7 +36,8 @@
     "specs": "bun run src/e2e/specs.ts",
     "specs:negative": "bun run src/e2e/specs-negative.ts",
     "leak": "bun run src/e2e/leak.ts",
-    "example:claims": "bun run src/e2e/example.ts"
+    "example:claims": "bun run src/e2e/example.ts",
+    "records": "bun run src/e2e/records.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

@@ -50,12 +50,33 @@ An authored guide has no IR, so its evals can only assert page content. Write ea
 requirement changing. Asserting a whole sentence produces a check that breaks when someone improves
 the prose while the guide still says the same thing.
 
-`bun run specs` scans authored prose for copied measurement literals, which is the one failure mode
-of an authored guide that a machine can see at all. Do not read a pass as a guarantee: it matches
-known patterns, skips fenced code, and cannot tell whether a surviving sentence is attached to the
-right platform section. `bun run specs:negative` records both what it catches and what it knowingly
-misses, so that caveat cannot rot. The errors it cannot reach — a statement borrowed from the wrong
-platform section, a warning generalized past its source — are found only by reading the source.
+### Measurements need a record
+
+An authored guide may state a specification only where a **measurement record** in
+`guidance/<id>/records/` carries that value, and the prose naming it cites the record id.
+
+The rule used to be "no measurements at all", which was a blunt reaction to one careless `44pt` and
+stopped the guide answering the question agents most often get wrong. Relaxing it to "cite a
+section" would not have been enough either: a review caught a proposal to publish *"iOS minimum
+target is 44x44 pt"*, which names a platform, cites a real section, and is **false** — Apple's table
+gives 44x44 as the *Default* and 28x28 as the *Minimum*. A regex cannot tell that a citation fails
+to support its claim.
+
+A record therefore carries what a bare number cannot: values keyed by **meaning**, the platforms
+they cover, conditions, exceptions, the source table's header row, and a snapshot version. Where the
+source is itself ambiguous, say so in `tension:` rather than resolving it silently.
+
+- `bun run specs` (offline, in `check`) — every measurement traces to a record.
+- `bun run records` (network) — every record still matches the live source, including that the
+  declared table header is really the header of the table in that section.
+
+Records of our own measurements go in a file with an `origin:` key. They are skipped by `records`
+and reported as skipped, because verifying an observation against Apple's page would be a category
+error, and passing it silently would imply a check that never ran.
+
+`bun run specs:negative` records what the scan catches and what it knowingly misses, so that caveat
+cannot rot. The errors neither check can reach — a statement borrowed from the wrong platform
+section, a warning generalized past its source — are found only by reading the source.
 
 ## Adding an extracted source
 
