@@ -307,3 +307,28 @@ test("a replayed transcript is distinguishable from a fresh sample", async () =>
   // reporting it as "replayed" would be a second, wrong explanation for the same row.
   expect(isReplayed({ ms: 0, error: "claude exited 1" })).toBe(false);
 });
+
+test("a dismissal heading phrased as rejecting an assertion is recognised", () => {
+  // A real transcript opened its non-findings section with "## Three comments in the file assert
+  // failures that do not hold". REPORTING had no word for asserting or failing, so the section never
+  // split and three correct dismissals scored as zero — which read as the skill making the reviewer
+  // *worse* at exceptions, the opposite of what it did.
+  for (const h of [
+    "## Three comments in the file assert failures that do not hold",
+    "## Claims I could not substantiate",
+    "## Comments that do not hold up",
+  ]) {
+    const { dismissed } = splitFindings(`## Issues\n- a real finding here that is long enough\n\n${h}\n- the decoy, explained`);
+    expect(dismissed).toContain(h);
+  }
+});
+
+test("a findings heading that merely contains 'failure' is still a findings heading", () => {
+  // Adding fail/assert/claim to REPORTING risks the opposite error: swallowing the report itself.
+  // A heading has to pair the vocabulary with a negation or a correctness claim, not just mention it.
+  for (const h of ["## Failures at Level AA", "## Accessibility failures", "## Assertions to fix"]) {
+    const { findings, dismissed } = splitFindings(`${h}\n- 44x44 pt target is too small here\n`);
+    expect(findings).toContain(h);
+    expect(dismissed).toBe("");
+  }
+});

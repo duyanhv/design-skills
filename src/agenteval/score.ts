@@ -46,7 +46,7 @@ export interface Score {
  */
 const NEGATIVE = String.raw`not|n't|never|non-|no\b|without|deliberate|rather than|instead|exclud|omit|skip|out[- ]of|outside|rule[sd]? out|set aside|dismiss`;
 const CORRECT = String.raw`correct|conform|fine|ok\b|okay|valid|pass(?:es|ing)?|right|allowed|permitted|acceptable|as annotated|as intended|compliant`;
-const REPORTING = String.raw`flag|report|apply|applied|applicable|rais(?:e|ed)|list(?:ed)?|find(?:ing)?s?|issue|violat|call(?:ed)? out|consider(?:ed)?|rules?\b|scope|platform`;
+const REPORTING = String.raw`flag|report|apply|applied|applicable|rais(?:e|ed)|list(?:ed)?|find(?:ing)?s?|issue|violat|call(?:ed)? out|consider(?:ed)?|rules?\b|scope|platform|fail(?:s|ed|ure)?s?|assert(?:s|ed|ion)?s?|claim(?:s|ed)?|comments?`;
 /**
  * Headings that are a dismissal on their own, with no reporting verb to pair with: "## Dismissed",
  * "## Out of scope", "## False positives". Kept as an explicit short list rather than folded into

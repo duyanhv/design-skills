@@ -261,7 +261,11 @@ struct WorkoutSummary: View {
     decoys: [
       // A full-width prominent button is the watchOS pattern (apple-hig/buttons/034: "Prefer buttons
       // that span the width of the screen for primary actions"). Flagging it is a false positive.
-      { id: "full-width-button-is-fine", cues: ["done", "span", "breaks"], dismissCues: ["done", "span"] },
+      // The dismissal cue is the control, not Apple's wording for it: requiring "span" demanded the
+      // reviewer echo the source's verb, and scored a correct dismissal ("The `Done` button is
+      // right, and for the stated reason … `.borderedProminent` at `maxWidth: .infinity` gets the
+      // capsule from the system") as no dismissal at all.
+      { id: "full-width-button-is-fine", cues: ["done", "span", "breaks"], dismissCues: ["done"] },
       // Complications on the watch face are exactly what Apple recommends.
       { id: "complication-is-fine", cues: ["complication", "remove"], dismissCues: ["complication"] },
     ],
