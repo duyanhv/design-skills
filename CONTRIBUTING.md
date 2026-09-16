@@ -39,6 +39,17 @@ and records deterministic hashes and source URLs. There is no extraction or IR. 
 guides and commit both input and output. Smoke assertions check selected content; they do not
 prove that an agent reads or correctly applies external guidance.
 
+Because an authored guide is mostly links, run `bun run links` after editing one. It resolves every
+official URL against the source's own page data rather than an HTTP status, which is what catches a
+page that has been merged away: `developer.apple.com` answers 200 with an app shell for a URL that
+does not exist, and serves the *Toolbars* document at the retired `navigation-bars` address. It
+needs the network, so it is not in `bun run check`.
+
+An authored guide has no IR, so its evals can only assert page content. Write each one against a
+*requirement* the guide must keep meeting, and choose strings that cannot be reworded without the
+requirement changing. Asserting a whole sentence produces a check that breaks when someone improves
+the prose while the guide still says the same thing.
+
 ## Adding an extracted source
 
 1. **Write the manifest.** Copy `sources/apple-hig.yaml`. Set `license.redistributable` honestly. If

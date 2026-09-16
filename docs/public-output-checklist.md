@@ -26,15 +26,38 @@ files — which is why the guards are now a suite rather than shell-history prob
 
 ## 2. Complete the Apple public skill first
 
-- [ ] Expand `guidance/apple-design/` with original, actionable guidance beyond research instructions.
-- [ ] Organize references around concrete tasks: navigation, actions, forms, typography, appearance, and accessibility.
-- [ ] Cover component selection, implementation considerations, common mistakes, and relevant exceptions.
-- [ ] Attach official source links to specification-dependent guidance and verify the linked sections.
-- [ ] Retain platform, OS-version, framework, and interaction-state context where it affects a decision.
-- [ ] Distinguish upstream requirements, recommendations, and our own design judgments.
-- [ ] Include verification steps and identify checks that require runtime or visual inspection.
-- [ ] Keep `SKILL.md` concise and route readers to focused references.
-- [ ] Rebuild `skills/apple-design/` and verify its links, provenance, and synchronization with authored inputs.
+- [x] Expand `guidance/apple-design/` with original, actionable guidance beyond research instructions.
+- [x] Organize references around concrete tasks: navigation, actions, forms, typography, appearance, and accessibility.
+- [x] Cover component selection, implementation considerations, common mistakes, and relevant exceptions.
+- [x] Attach official source links to specification-dependent guidance and verify the linked sections.
+- [x] Retain platform, OS-version, framework, and interaction-state context where it affects a decision.
+- [x] Distinguish upstream requirements, recommendations, and our own design judgments.
+- [x] Include verification steps and identify checks that require runtime or visual inspection.
+- [x] Keep `SKILL.md` concise and route readers to focused references.
+- [x] Rebuild `skills/apple-design/` and verify its links, provenance, and synchronization with authored inputs.
+
+Six task guides under `references/tasks/`, plus `references/context/platforms.md` for the
+platform/OS/framework/system-vs-custom context that decides whether guidance applies at all. Each
+task file ends with a **Verify** section separating what code review settles from what needs a
+running app. `SKILL.md` is a router: context, task table, build loop, and the three failure modes
+that produce bad findings.
+
+Grounded against the local `apple-hig` build rather than recall, which is how the guide came to
+carry Apple's actual wording ("not to provide actions") and its stated exceptions (a modal covering
+the tab bar) instead of a paraphrase.
+
+`bun run links` (new) verifies all 97 official link targets, including deep section anchors, against
+Apple's own DocC page data. A status code cannot do this: developer.apple.com returns 200 with an
+app shell for a page that does not exist, and the retired `navigation-bars` URL serves the
+*Toolbars* document. Both failure modes, plus a bogus anchor, were reproduced and seen to fail.
+
+The eval suite went from 2 checks to 17, rewritten to assert requirements rather than sentences
+after the old ones broke on rephrasing. Removing a requirement (the fabricated-citation warning, the
+accessibility conformance-scope limit) was verified to fail the matching check. One eval caught a
+real defect: a paraphrase that had dropped Apple's own wording.
+
+Not done here: section 3's worked example, which is what will demonstrate the guide rather than
+describe it.
 
 ## 3. Publish one real worked example
 

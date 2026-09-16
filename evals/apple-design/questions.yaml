@@ -1,6 +1,90 @@
-- q: Where should the agent research platform-specific component decisions?
+# Smoke checks for the authored Apple guide.
+#
+# These are page-level `expect` checks, because an authored guide has no IR and no rules to assert
+# against: there is nothing to look up a severity or a platform set on. So each question names a
+# *requirement* the guide has to keep meeting, and the strings are chosen to be the ones that cannot
+# be reworded without the requirement itself changing.
+#
+# Deliberately not matched: whole sentences. An earlier version asserted "Do not invent rule IDs"
+# verbatim, and rewriting that paragraph into a clearer table broke the check while the guide still
+# said the same thing, in the same place, more plainly. Match the concept — a rule-ID-shaped example
+# and the word "fabricated" — not the sentence that happened to express it that day.
+
+- q: Does the source map route a decision to a real HIG page, and warn that a title is not evidence?
   source: topics
-  expect: ["Buttons", "designing-for-tvos", "platform scope"]
-- q: Does the public guide distinguish authored advice from extracted rule IDs?
+  expect:
+    - "human-interface-guidelines/buttons"
+    - "designing-for-tvos"
+    # The map must keep saying that a page title does not establish a requirement.
+    - "not evidence"
+
+- q: Does the source map keep the reader from applying a value without its context?
+  source: topics
+  expect: ["unit", "platform", "exception"]
+
+- q: Does the review workflow forbid citing rule IDs this bundle does not have?
   source: evidence
-  expect: ["Do not invent rule IDs", "unverified", "exceptions"]
+  expect:
+    - "HIG-"         # the fabricated-citation example
+    - "fabricated"
+    - "no extracted rule catalogue"
+
+- q: Does the review workflow separate requirement, recommendation and personal judgment?
+  source: evidence
+  expect: ["recommends", "design suggestion", "prohibition"]
+
+- q: Does the review workflow demand reproducibility and honesty about unverified checks?
+  source: evidence
+  expect: ["reproduce", "unverified", "left unchanged"]
+
+- q: Does the platform file insist on the platform section rather than the page title?
+  source: platforms
+  expect:
+    - "Platform considerations"
+    - "minimum deployment target"
+    # The system-vs-custom distinction is what most often decides whether a finding is real.
+    - "system-provided or custom"
+
+- q: Does the platform file warn that a stale URL can resolve to a different page?
+  source: platforms
+  expect: ["navigation-bars", "Toolbars"]
+
+- q: Does the actions file separate semantic role from styling, and protect destructive actions?
+  source: actions
+  expect: ["role", "destructive", "not styling"]
+
+- q: Does the actions file stop the visible-size-versus-hit-region mistake?
+  source: actions
+  expect: ["contentShape", "interactive", "unverified"]
+
+- q: Does the accessibility file state that the HIG is not a conformance standard?
+  source: accessibility
+  expect: ["WCAG", "does not establish conformance", "which standard"]
+
+- q: Does the accessibility file require a redundant channel for colour, sound and gesture?
+  source: accessibility
+  expect: ["more than color", "haptics", "alternatives to gestures"]
+
+- q: Does the typography file treat Dynamic Type as a layout concern with runtime verification?
+  source: typography
+  expect: ["Dynamic Type", "AX5", "truncat"]
+
+- q: Does the typography file refuse to restate Apple's numeric specifications?
+  source: typography
+  expect: ["Specifications", "rather than reproducing a remembered number"]
+
+- q: Does the appearance file prefer semantic colours over hard-coded values?
+  source: appearance
+  expect: ["hard-cod", "semantic", "Reduce Transparency"]
+
+- q: Does the appearance file avoid attributing WCAG ratios to Apple?
+  source: appearance
+  expect: ["contrast", "cite the standard you are actually applying"]
+
+- q: Does the navigation file distinguish navigating from acting?
+  source: navigation
+  expect: ["not to provide actions", "Sheets", "size class"]
+
+- q: Does the forms file start from not asking, and cover keyboard and validation?
+  source: forms
+  expect: ["Entering data", "AutoFill", "never prepopulated", "validation"]

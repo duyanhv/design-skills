@@ -30,7 +30,8 @@
     "budget": "bun run src/e2e/budget.ts",
     "probe:structure": "bun run src/e2e/probes/structure.ts",
     "docs": "bun run src/e2e/docs.ts",
-    "docs:negative": "bun run src/e2e/docs-negative.ts"
+    "docs:negative": "bun run src/e2e/docs-negative.ts",
+    "links": "bun run src/e2e/links.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",

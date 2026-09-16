@@ -35,6 +35,13 @@ Guidance in this folder is MIT licensed original writing. It is not affiliated w
 - The manifest's `base_url` must appear somewhere in the bundle.
 - No symlinks. A bundle is installed by copying or linking the folder, and a symlink inside it
   would point at something the installing machine does not have.
+- Evals in [`evals/<id>/questions.yaml`](../evals/) must pass. For an authored guide these assert
+  page content, since there is no IR to look a rule up in. Reference files live at
+  `references/<category>/<page>.md`, and the eval router finds a page by that shape.
+
+Run `bun run links` after editing, to confirm every official URL still resolves. It asks the source
+for its own page data rather than trusting an HTTP status, because a 200 from a documentation SPA
+can be an empty shell or a different page entirely.
 
 ## Authored versus extracted
 

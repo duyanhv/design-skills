@@ -1,6 +1,6 @@
 ---
 name: apple-design
-description: "Design or review Apple-platform interfaces using an original workflow and official HIG references. Use for component choices, navigation, accessibility, and platform-specific UI decisions. Requires reading the linked guidance; this is not an offline HIG copy."
+description: "Design or review Apple-platform interfaces using an original workflow and official HIG references. Use for component choices, navigation, actions, forms, typography, appearance, and accessibility decisions on iOS, iPadOS, macOS, watchOS, tvOS, and visionOS. Requires reading the linked guidance; this is not an offline HIG copy."
 license: MIT
 metadata:
   compatibility: "A coding agent with file access and a way to read official Apple documentation."
@@ -11,45 +11,66 @@ metadata:
 
 # Apple interface design
 
-Use this original workflow to connect a concrete UI task to the relevant Apple guidance. It contains
-research and review instructions written for design-skills, not extracted Apple requirements.
-The official [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines)
-remain the source for platform behavior and specifications. This project is not affiliated with Apple.
+An original workflow for connecting a UI task to the relevant Apple guidance. It contains research
+and review instructions written for design-skills, not extracted Apple requirements. The official
+[Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) remain
+the source for platform behavior and specifications. Not affiliated with Apple.
 
-## Establish the context
+**This bundle carries no specifications.** No sizes, spacing, type scales, contrast ratios, or color
+values, and no images. Those are per platform and per OS version, they change, and they are not ours
+to copy. Read them at the linked page and record the units and platform section you took them from.
+If you cannot open the linked pages, say which decisions are unverified rather than working from
+recollection.
 
-Identify the target platform, supported OS versions, UI framework, and the user's requested change.
-Inspect existing components and theme conventions before proposing alternatives. If the request is
-about a single control, keep the work focused on that control and its dependencies.
+## 1. Establish the context first
 
-Use [the topic map](references/research/topics.md) to choose official pages. Read their platform
-considerations and linked examples before using a specification. Page titles are navigation aids;
-they are not evidence that a particular requirement exists.
+Before choosing or judging anything, settle: **platform, minimum OS version, UI framework, and
+whether the component is system-provided or custom.** These decide whether a piece of guidance
+applies at all, and the last one changes findings most often, because a system control supplies
+interaction states and accessibility behavior that a custom lookalike does not.
 
-When online reading is unavailable, explain which decisions remain unverified. Work from supplied
-source excerpts where possible, and distinguish project conventions from claims about Apple's guidance.
+See [platforms.md](references/context/platforms.md). Keep the work scoped to what was asked: a question
+about one control is not an invitation to restructure the screen.
 
-## Build or change an interface
+## 2. Route to the task
 
-1. Connect the user's task to a control or navigation pattern. Compare plausible alternatives using
-   the relevant official pages and the behavior already established in the app.
-2. Check the chosen component's API in the project's framework and supported OS version. Separate
-   what a native component supplies from behavior the app must implement.
-3. Trace component size, interaction state, text behavior, and semantic role through the actual code.
-   A screenshot cannot establish the hit region or accessibility behavior by itself.
-4. Exercise the states affected by the change: long content, localization, larger text, input methods,
-   and appearance variations where supported. Record which states were tested.
-5. Explain material design decisions with the official page and section used. Call recommendations
-   recommendations; do not translate a general preference into a mandatory requirement.
+| The task involves… | Read |
+| --- | --- |
+| App structure, tabs, sidebars, screen-to-screen movement | [navigation.md](references/tasks/navigation.md) |
+| Buttons, menus, destructive or confirming operations | [actions.md](references/tasks/actions.md) |
+| Fields, pickers, toggles, validation, settings | [forms.md](references/tasks/forms.md) |
+| Text, type styles, Dynamic Type, localization | [typography.md](references/tasks/typography.md) |
+| Color, light and dark, materials, contrast | [appearance.md](references/tasks/appearance.md) |
+| Labels, VoiceOver, targets, motion, keyboard access | [accessibility.md](references/tasks/accessibility.md) |
 
-For an existing interface review, use [the evidence workflow](references/review/evidence.md).
+Each task file names the official pages for that decision, what to inspect in code, and what needs a
+running app. [The source map](references/research/topics.md) is the fuller decision-to-page table.
+For reviewing an existing interface, follow [the evidence workflow](references/review/evidence.md).
 
-## Keep platform scope attached
+## 3. Build or change an interface
 
-Check the platform named in the actual section, not only the page title. Do not transfer a
-macOS-specific behavior to an iOS finding or a spatial interaction assumption to a touch interface.
-If the project serves several platforms, document each platform's decision rather than producing
-one unqualified checklist.
+1. Connect the task to a control or pattern, and compare plausible alternatives against the official
+   pages and the conventions already in the app.
+2. Confirm the component's API exists in the project's framework and minimum OS version. Separate
+   what the system supplies from what the app must implement.
+3. Trace size, interaction bounds, state, text behavior, and semantic role through the actual code.
+   A screenshot establishes none of these.
+4. Exercise the states the change touches: long content, localization, larger text, appearance
+   modes, and the platform's input methods. Record which you tested.
+5. Cite the official page and section for material decisions. Call a recommendation a
+   recommendation, and label your own preferences as design suggestions.
 
-Read the original illustration when a decision depends on visual anatomy, geometry, or state.
-This bundle includes no Apple images, fonts, icons, or downloaded guideline text.
+## 4. Keep the claim proportional to the evidence
+
+Three failure modes account for most bad findings, so check yourself against them:
+
+- **Transferring platform scope.** Read the platform section, not the page title. A macOS behavior
+  is not an iOS finding.
+- **Confusing visible size with interaction bounds.** A small glyph may sit in a large tappable
+  region; a large view may have a small hit shape. Both are code questions.
+- **Promoting a preference to a requirement.** If the source did not prohibit it, do not report it
+  as a violation. This bundle has no rule IDs, so a citation like `HIG-1234` from here is fabricated;
+  use real URLs and section names.
+
+Illustrations carry information this bundle does not reproduce. When a decision depends on visual
+anatomy, geometry, or state, read the original figure on the page.
