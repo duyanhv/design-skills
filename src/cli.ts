@@ -42,12 +42,36 @@ const { values, positionals } = parseArgs({
 });
 
 const [command, sourceArg] = positionals;
-if (values.help || !command) {
+// `--help` was asked for and answered, so it succeeds. No command at all is a usage error. The
+// single `command ? 0 : 1` that used to cover both cases failed `bun run ds --help`, because help
+// is requested without one.
+if (values.help) {
   console.log(USAGE);
-  process.exit(command ? 0 : 1);
+  process.exit(0);
+}
+if (!command) {
+  console.log(USAGE);
+  process.exit(1);
 }
 
-const ids = sourceArg ? [sourceArg] : await listSources();
+const COMMANDS = ["fetch", "normalize", "extract", "compose", "validate", "eval", "build"];
+// Checked before any work starts. Validating inside the loop printed a step header for a command
+// that was about to be rejected, so the output claimed to be doing something it never did.
+if (!COMMANDS.includes(command)) {
+  console.error(`unknown command: ${command}\n\n${USAGE}`);
+  process.exit(1);
+}
+
+const known = await listSources();
+const ids = sourceArg ? [sourceArg] : known;
+// A mistyped source id used to surface as a raw ENOENT stack trace from `readFile`, which reads as
+// a crash in the compiler rather than a typo in the argument.
+for (const id of ids) {
+  if (!known.includes(id)) {
+    console.error(`unknown source: ${id}\n\nknown sources: ${known.join(", ")}`);
+    process.exit(1);
+  }
+}
 const limit = values.limit ? Number(values.limit) : undefined;
 const allowPartial = values["allow-partial"] === true;
 
@@ -94,7 +118,9 @@ for (const id of ids) {
       failed = reportEval(await evalSource(source)) || failed;
       break;
     default:
-      console.error(`unknown command: ${command}\n\n${USAGE}`);
+      // Unreachable: COMMANDS is checked above. Kept so that adding a name to that list without
+      // adding a case here fails loudly instead of silently doing nothing for every source.
+      console.error(`command "${command}" is accepted but not implemented`);
       process.exit(1);
   }
 }
