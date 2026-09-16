@@ -139,9 +139,16 @@ not hypothetical — it is how most of this project's real defects were found:
 
 A check that counts what the *output* contains can only find what someone thought to look for. The
 strongest checks here start from the raw source and require every occurrence to be accounted for:
-that is what `src/e2e/probes/apple-media.ts` does, and balancing its count is what exposed two
-figure-deleting bugs in `flushTable` that fidelity, evals, validate and every trace check passed
-straight over. When you can count the input, count the input.
+`src/e2e/probes/apple-media.ts` does it for figures and `prose-coverage.ts` for sentences. Balancing
+those counts is what exposed three figure-deleting defects that fidelity, evals, validate and every
+trace check passed straight over. When you can count the input, count the input.
+
+Balance the count with *enumerated* exclusions, never a threshold. Each excuse must name a property
+of the source or the manifest ("declared skip_section", "page header art"), so that adding one is a
+visible claim someone can argue with. An excuse that quietly absorbs a defect is worse than no check:
+`prose-coverage.ts` shipped with a "figure caption" exemption that was hiding twelve lost captions,
+and it was only caught by deleting captions and watching the count move from *found* to *excused*
+while the check stayed green.
 
 So: when you add a check, add the defect alongside it. And when you claim a fix is guarded, test the
 claim the only way that settles it — revert the fix, run the check, watch it fail, restore. A

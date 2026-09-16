@@ -193,10 +193,10 @@ validation. They do not guarantee correct agent decisions:
   and required pages, tables and link dependencies are a third (S-3). It compares against
   `.cache/<id>/md`, so a loss introduced during *normalization* is invisible to it, and a source
   that is not built locally is skipped rather than passing.
-- **Counting the output only finds what someone looked for.** The Apple media probe counts every
-  occurrence in the raw corpus instead — 1,322 of 1,536 rendered, the remaining 214 enumerated by
-  reason — which is how two figure-deleting extractor bugs were found while every other check
-  passed.
+- **Counting the output only finds what someone looked for.** Two checks count the raw Apple corpus
+  instead: media (1,334 of 1,536 occurrences rendered, 202 enumerated by reason) and prose (12,531 of
+  12,807 sentences reaching the shipped text, 279 enumerated). That is how three figure-deleting
+  defects were found while every other check passed. WCAG has no raw-corpus equivalent yet.
 - **Requirement strength is inferred, per source.** For a source that does not declare normative
   status, MUST/SHOULD/MAY rank how firmly the source worded something and are the compiler's
   reading, not a claim the source made; the generated entry says so and asks for the source's own
@@ -207,7 +207,11 @@ validation. They do not guarantee correct agent decisions:
   reproduce the information in the image.
 - **Agent evaluation is preliminary.** The optional `bun run agenteval --runs 3` harness uses the
   Claude CLI and makes model calls. Its scorer measures seeded cues and citation mentions, not
-  whether every finding is supported. The skill arm also receives an explicit citation instruction.
+  whether every finding is supported, and it now resolves each cited id against the built skill so a
+  fabricated-but-well-formed citation earns no credit. The skill arm also receives an explicit
+  citation instruction. Three samples per arm is a small sample and the ranges overlap; see the
+  [resolution](docs/audits/resolution-2026-09-15.md) for the last recorded run and the two defects
+  running it exposed.
 
 The [output audit](docs/audits/generated-output-2026-09-15.md) compares what the compiler produces
 against the raw sources and against established hand-written design skills; its

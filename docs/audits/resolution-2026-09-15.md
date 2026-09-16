@@ -162,6 +162,57 @@ The agent scorer resolves citations against the built skill, so a fabricated but
 is reported as naming nothing rather than credited as evidence. The README's "preliminary"
 qualification stays.
 
+**Prose is now counted from the raw corpus too.** `fidelity` and `coverage` both start from the
+*normalized* markdown, so anything dropped on the way out of the raw DocC JSON moved the loss and
+the baseline together — which is precisely where A1's media loss hid.
+`src/e2e/probes/prose-coverage.ts` does for prose what the A1 check does for figures: every text node
+in the raw JSON, split into sentences, must reach the shipped reference or carry an enumerated
+reason. **12,531 of 12,807 reach it**; of the 279 excused, 276 are Change log and other declared
+`skip_sections` and 3 are on pages that produce no reference at all.
+
+Writing it removed the last excuse category it started with. A "figure caption" exemption was
+covering a real loss: a captioned figure above the first heading was dropped as decorative
+page-header art, so 12 captions that the source wrote as explanations — "The Digital Crown on Apple
+Vision Pro", "A confirmation snippet requires additional input to proceed." — existed nowhere in the
+output. Plain header art is still dropped, so the fix keeps 12 and discards 174. The media probe
+agrees independently: rendered occurrences rose 1,322 → 1,334 as header-art exclusions fell 186 →
+174.
+
+## Agent evaluation
+
+The audit's A4/A5 acceptance was met with executed fixtures, which test what the skill *instructs*.
+`bun run agenteval` was then run for real — 18 samples, 3 per task per arm, 0 failures — to test what
+an agent does with it. It is outside `bun run check` and costs model calls.
+
+| Task | Arm | Recall | False positives | Citations |
+| --- | --- | --- | --- | --- |
+| ios-buttons | no skill | 3–4/4 | 0–1 | 0 |
+| ios-buttons | skill | 4/4 | 0 | 28–35 |
+| wcag-form | no skill | 5–6/6 | 0 | 9–15 |
+| wcag-form | skill | 5–6/6 | 0 | 12–27 |
+| watchos-scope | no skill | 3–4/4 | 0 | 0 |
+| watchos-scope | skill | 4/4 | 0 | 25–33 |
+
+Three samples per arm is a small sample and these ranges overlap; the honest reading is that the
+skill arm is consistently at full recall and always cites, while the unaided arm is neither. No
+scope errors appeared in any arm, so that fixture did not discriminate here.
+
+Two defects surfaced from running it, both invisible to the fixtures:
+
+- **A term printed no rule id.** Every entry file tells the reader to quote the id, but `termLine`
+  emitted only a `src` link, so a term was uncitable on the skill's own terms. The citation scorer
+  resolves ids against the shipped text, so an agent quoting `apple-hig/accessibility/012`
+  ("Transcripts") — which it had genuinely read — was recorded as naming something that does not
+  exist, in three of three runs. Rescoring the same transcripts after the fix resolves all of them.
+- **A refused launch cost a sample.** Two of three runs exited non-zero within milliseconds having
+  written nothing to either stream, and the batch reported n=1 while the summary correctly refused to
+  compare the arms. Only an instant, entirely silent failure is retried now; a failure that produced
+  output or took real time is a result, not a flake.
+
+The scorer's fabrication check earned its place in the same run: one `wcag-form` sample cited 13 ids
+that do not exist (`wcag22/distinguishable/016` where the page ends at 013, `wcag22/adaptable/011`
+where it ends at 006). Before A7 that would have counted as 13 pieces of evidence.
+
 ## Evidence
 
 Every number below was observed, not projected.
@@ -169,11 +220,12 @@ Every number below was observed, not projected.
 | Check | Before | After |
 | --- | --- | --- |
 | `bun run check` | passing | passing |
-| Unit tests | 51 | 64 |
-| Trace requirements | 19 | 41 |
-| Trace negative probes | 22 | 57 |
+| Unit tests | 51 | 65 |
+| Trace requirements | 19 | 42 |
+| Trace negative probes | 22 | 59 |
 | Validate guards | 20 | 22 |
-| Apple media occurrences rendered | 0 block videos, 0 captions | 1,322/1,536, 214 enumerated |
+| Apple media occurrences rendered | 0 block videos, 0 captions | 1,334/1,536, 202 enumerated |
+| Apple prose sentences reaching the shipped text | not measured | 12,531/12,807, 279 enumerated |
 | WCAG sentences retained | 625 | 760 |
 | Apple sentences retained | 10,883 | 10,883 |
 | Apple rules reachable from their page's contents list | 28.7% | 94.1% |
@@ -196,14 +248,14 @@ independently proven, rather than being claimed as guarded.
 
 ## Still open
 
-- Verification is now broader, not complete. S-1 to S-3 establish that what IR holds is reachable and
-  correctly attached; they do not establish that IR holds everything the upstream source states. The
-  Apple media probe is the one check that starts from the raw corpus, and it covers media only.
+- Raw-corpus counting now covers Apple's media and prose. WCAG has no equivalent: its normalized
+  HTML is compared by `coverage`, not by a count of the raw document.
+- S-1 to S-3 establish that what IR holds is reachable and correctly attached. Combined with prose
+  and media coverage, the gap left is narrower than it was, but still real: nothing verifies that
+  the *crawl* fetched everything the upstream site publishes.
 - The numeric budgets `bun run budget` reports (entry ≤5k, page ≤15k, routing row ≤25k) are
   advisory and do not fail a build. Making them binding would mean dropping source material to meet
   a number, which is the wrong trade for this project.
 - WCAG extraction remains pinned to a repository commit while citations point at the published
   Recommendation. The audit's uncertainty about edition equivalence is unchanged.
-- No fresh model-based agent evaluation was run. `bun run agenteval` costs model calls and is outside
-  `bun run check`; the scorer was corrected and unit-tested, but the behavioural claims in A4 and A5
-  rest on executed fixtures rather than on sampled agent runs.
+- The agent evaluation is 3 samples per arm. Ranges overlap, and it is not a significance claim.
