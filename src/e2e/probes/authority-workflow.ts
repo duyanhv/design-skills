@@ -74,25 +74,61 @@ function reportsAsRequirement(doc: string, f: Fixture): boolean {
   return /\b(don['\u2019]t|do not|never|must not|must|cannot|can['\u2019]t|is required)\b/i.test(f.statement);
 }
 
-/** Review fixtures whose correct answer is "inspect the relationship", not "defect". */
+/**
+ * Does the workflow section demand a thing, whatever words it uses?
+ *
+ * Each concept is a set of alternatives, and a demand is met when every concept it names appears.
+ * The first version of this file matched the exact sentences that had just been written, which made
+ * it a fixture-text guard rather than a requirement guard: rewording
+ * "how this codebase already builds this kind of element" to "the conventions this codebase already
+ * uses for this kind of element" failed the check while satisfying the requirement entirely.
+ *
+ * These still cannot prove an *agent* behaves correctly — only the agent evaluation does that — but
+ * they do survive an edit that keeps the meaning, and they fail on one that drops it.
+ */
+const has = (doc: string, ...concepts: RegExp[][]): boolean =>
+  concepts.every((alts) => alts.some((re) => re.test(doc)));
+
+/** Only the authored section: a word elsewhere in the entry file does not satisfy a demand of it. */
+function workflow(doc: string): string {
+  const at = doc.search(/^## Working method$/m);
+  if (at < 0) return "";
+  const rest = doc.slice(at + 1);
+  const end = rest.search(/^## /m);
+  return end < 0 ? rest : rest.slice(0, end);
+}
+
+const TARGET = [/platform/i, /conformance target/i, /version it is for/i];
+const CODEBASE = [/this codebase/i, /existing (?:component|convention)/i, /already (?:builds|uses)/i];
+const SHARED = [/shared component/i, /theme/i, /local override/i];
+const IMPLEMENT = [/implement/i, /apply the (?:decision|rule)/i];
+const STATES = [/pressed/i, /focused/i, /disabled/i, /empty and error/i];
+const LOCATE = [/code or control/i, /which (?:file|component|control)/i, /name the (?:code|control|component)/i];
+const SCOPE = [/scope and exceptions/i, /rule's scope/i, /exceptions cover/i];
+const FIX = [/give the fix/i, /propose a fix/i, /the fix and the check/i];
+const UNVERIFIED = [/unverified/i, /could not run/i, /did not run/i];
+const RUNTIME = [/needs a run/i, /behaviour over time/i, /at runtime/i];
+
 const REVIEW_FIXTURES = [
   {
     name: "a 16pt glyph centred in a 44pt tappable frame",
     /** The entry must tell the reader that the drawn glyph is not the hit region. */
-    permitted: (doc: string) => /hit region larger than the glyph drawn inside it/.test(doc),
+    permitted: (doc: string) => has(workflow(doc), [/hit (?:region|target|area)/i], [/glyph/i, /icon/i, /drawn inside/i]),
   },
   {
     name: "a framework component whose focus behaviour is inherited, not written locally",
-    permitted: (doc: string) => /behaviour inherited from a standard component/.test(doc),
+    permitted: (doc: string) => has(workflow(doc), [/inherit/i], [/standard component/i, /framework/i, /system/i]),
   },
 ];
 
 /** Demands finding A5 makes of the authored workflow, each phrased as a question about the doc. */
 const WORKFLOW_DEMANDS: { demand: string; met: (doc: string) => boolean }[] = [
-  { demand: "identify platform/version, framework and existing conventions before deciding", met: (d) => /how this codebase already builds this kind of element/.test(d) },
-  { demand: "implement in context, then inspect the states the change reaches", met: (d) => /implement it in that existing context/.test(d) && /default, pressed\/focused, disabled/.test(d) },
-  { demand: "a review connects a defect to code, scope and exceptions, and proposes fix + check", met: (d) => /name the code or control that produces it/.test(d) && /Give the fix and the check/.test(d) },
-  { demand: "runtime-only checks are marked unverified when nothing was run", met: (d) => /Mark what you could not run as unverified/.test(d) },
+  // "the target" is platform-and-version for a platform source and the conformance level for WCAG,
+  // which is the composer's deliberate substitution — the demand is that the target is named at all.
+  { demand: "identify the target, framework and existing conventions before deciding", met: (d) => has(workflow(d), TARGET, [/framework/i], CODEBASE, SHARED) },
+  { demand: "implement in context, then inspect the states the change reaches", met: (d) => has(workflow(d), IMPLEMENT, STATES) },
+  { demand: "a review connects a defect to code, scope and exceptions, and proposes fix + check", met: (d) => has(workflow(d), LOCATE, SCOPE, FIX) },
+  { demand: "runtime-only checks are marked unverified when nothing was run", met: (d) => has(workflow(d), UNVERIFIED, RUNTIME) },
 ];
 
 export const CHECKS: Check[] = [
