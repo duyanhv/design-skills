@@ -69,14 +69,37 @@ describe it.
 
 ## 3. Publish one real worked example
 
-- [ ] Create an original example screen with representative, verifiable issues.
-- [ ] Include the starting code and a screenshot of its actual rendered state.
-- [ ] Review it using the public Apple skill and record supported findings.
-- [ ] Tie each finding to the affected element, source guidance, applicable scope, and proposed fix.
-- [ ] Implement the fixes and include the corrected code and rendered screenshot.
-- [ ] Record what was tested and which checks remain unverified.
-- [ ] Include a permitted pattern that the review correctly leaves unchanged.
-- [ ] Make the complete example browsable on GitHub without running the project.
+- [x] Create an original example screen with representative, verifiable issues.
+- [x] Include the starting code and a screenshot of its actual rendered state.
+- [x] Review it using the public Apple skill and record supported findings.
+- [x] Tie each finding to the affected element, source guidance, applicable scope, and proposed fix.
+- [x] Implement the fixes and include the corrected code and rendered screenshot.
+- [x] Record what was tested and which checks remain unverified.
+- [x] Include a permitted pattern that the review correctly leaves unchanged.
+- [x] Make the complete example browsable on GitHub without running the project.
+
+[`examples/apple-design-review/`](../examples/apple-design-review/). A SwiftUI share screen with 15
+planted defects, reviewed blind and then fixed, with real captures from iPhone 17 Pro / iOS 26.5 in
+light, dark, and AX5, and per-capture conditions recorded.
+
+**Protocol, which is the part that makes it evidence rather than a demo.** The defect list was
+written first and kept outside the repository; the screen carries no comments; a separate agent in
+an isolated directory received only the screen, the skill, and the screenshots, and was not told
+defects existed. Its review is published verbatim, including the corrections it made to its own
+figures.
+
+Result: 14 of 15 found, 0 fabricated rule IDs, 7 permitted patterns explicitly checked and left
+alone, and **6 real defects nobody planted** — the best of which, a toolbar button that silently
+toggles link sharing, I had written as filler without noticing.
+
+**One wrong dismissal, settled by measurement rather than by argument.** The review declined to file
+a target finding on the toolbar button, measuring its Liquid Glass container at 44 × 44 pt from the
+screenshot. A runtime hit test showed the region that actually receives a touch is 39.5 × 26.5 pt.
+The guide warns that a screenshot cannot settle a hit-target question; the review repeated that
+warning in its own limitations and then relied on a pixel measurement anyway. Published as the
+example's headline lesson rather than buried.
+
+Claims are scoped: one screen, one run, one platform, no control arm.
 
 ## 4. Lead the README with the outcome
 

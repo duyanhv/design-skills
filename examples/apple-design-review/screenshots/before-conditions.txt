@@ -1,0 +1,13 @@
+variant:     before
+device:      iPhone 17 Pro
+runtime:     iOS 26.5
+udid:        CBCEA03B-5526-4F36-867C-1327245D7671
+xcode:       Xcode 27.0 (Build version 27A266a)
+sdk:         iPhoneSimulator27.0.sdk
+swift:       Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+target:      arm64-apple-ios18.0-simulator
+captured:    2026-09-16T07:43:10Z
+shots:
+  before-light.png   appearance=light  content_size=medium
+  before-dark.png    appearance=dark   content_size=medium
+  before-xxxl.png    appearance=light  content_size=accessibility-extra-extra-extra-large

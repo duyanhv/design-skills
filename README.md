@@ -17,6 +17,28 @@ documented [further down](#how-the-skills-are-produced).
 [known limitations](#verification-and-limitations), the largest being that the published guides
 route an agent to guidance rather than carrying the guidance offline.
 
+## See it work on a real screen
+
+[**Worked example: reviewing an iOS share screen**](examples/apple-design-review/) — a SwiftUI
+screen reviewed with the `apple-design` skill, then fixed, with real simulator screenshots.
+
+| Before | After |
+| --- | --- |
+| ![before](examples/apple-design-review/screenshots/before-dark.png) | ![after](examples/apple-design-review/screenshots/after-dark.png) |
+
+Both captures are the same app in **dark appearance**. The before build ignores it: its light and
+dark captures differ in 0.45 % of pixels, and only where the *system* drew them. After, 99.78 %.
+
+The review was run blind. The defect list was written first and kept outside the repository; a
+separate agent got only the screen, the skill, and the screenshots, and was not told defects had
+been planted. It found 14 of 15, invented no rule IDs, reported 6 real defects nobody planted, and
+**wrongly dismissed one** — it measured the toolbar button's glass container at 44 × 44 pt from a
+screenshot and declined to file a target finding, but the region that actually receives a touch is
+39.5 × 26.5 pt. The [review](examples/apple-design-review/REVIEW.md) is published verbatim and the
+[scoring](examples/apple-design-review/scoring.md) says so plainly.
+
+One screen, one run, no control arm. It is a worked example, not a measurement of effectiveness.
+
 ## Browse the skills
 
 These bundles are committed, so you can read every file on GitHub before installing anything.
