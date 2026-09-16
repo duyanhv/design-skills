@@ -197,55 +197,42 @@ artifacts, 3 per task per arm, 0 failures, 18 distinct transcripts.
 | Task | Arm | Recall | False positives | Citations | Unresolvable |
 | --- | --- | --- | --- | --- | --- |
 | ios-buttons | no skill | 3–4/4 | 0 | 0 | 0 |
-| ios-buttons | skill | 4/4 | 0 | 32–45 | 0 |
-| wcag-form | no skill | 6/6 | 0 | 15–16 | 0 |
-| wcag-form | skill | 6/6 | 0 | 24–32 | 0 |
-| watchos-scope | no skill | 3–4/4 | 0 | 0 | 0 |
-| watchos-scope | skill | 4/4 | 0 | 26–42 | 0 |
+| ios-buttons | skill | 4/4 | 0 | 32–39 | 0 |
+| wcag-form | no skill | 6/6 | 0 | 11–16 | 0 |
+| wcag-form | skill | 6/6 | 0 | 23–40 | 0 |
+| watchos-scope | no skill | 4/4 | 0 | 0 | 0 |
+| watchos-scope | skill | 4/4 | 0 | 24–38 | 0 |
 
-Three samples per arm is small and the recall ranges overlap on `wcag-form`. The honest reading is
-that the skill arm is consistently at full recall and always cites resolvable rules, while the
-unaided arm reaches full recall only sometimes and cites nothing at all on the two Apple tasks. No
-scope errors appeared in any arm, so that fixture did not discriminate here.
+Totalled across the nine samples in each arm: **40 → 42** violations found, **0 → 0** false
+positives, **16 → 17** decoys explicitly dismissed, **40 → 286** citations. Three samples per arm is
+small and most ranges overlap, so the defensible reading is narrow: the skill arm is consistently at
+full recall and always cites resolvable rules, while the unaided arm reaches full recall only
+sometimes and cites nothing at all on the two Apple tasks. No scope errors appeared in any arm.
 
-**One result goes the wrong way and is reported rather than explained away.** Totalled across all
-nine samples per arm:
+**Zero unresolvable citations**, down from 13 in one sample and three-of-three runs on another.
 
-| | No skill | Skill |
-| --- | --- | --- |
-| Violations found | 38 | **42** |
-| False positives | 0 | 0 |
-| Decoys explicitly dismissed | **18** | 13 |
-
-A decoy is code that pattern-matches to a violation but is fine per the source; dismissing it means
-the review named it and said why it was acceptable. Neither arm ever flagged one as a defect, so
-this is not a correctness regression, and precision is identical. But the skill arm *discusses* them
-less often, which is the opposite of what the A5 workflow asks: it names "a hit region larger than
-the glyph drawn inside it" and "behaviour inherited from a standard component" — the two things
-these decoys are.
-
-The obvious explanation — that the skill arm spends its budget on citations and truncates the
-did-not-flag commentary — is measurably wrong. Skill transcripts are nearly twice as long (8,613 vs
-4,721 characters mean) and report slightly more findings (13.4 vs 12.2). So the output was not
-crowded out; the reviews simply discussed the acceptable cases less. The cause is unmeasured and
-this is recorded as an open question, not a win.
-
-**Zero unresolvable citations**, down from 13 in one sample and 3-of-3 runs on another. Both causes
-were defects this evaluation exposed, neither visible to the fixtures:
+Running this evaluation exposed four defects, none of them visible to the fixtures, and two of them
+in the measurement rather than the artifact:
 
 - **A term printed no rule id.** Every entry file tells the reader to quote the id, but `termLine`
   emitted only a `src` link, so a term was uncitable on the skill's own terms. An agent quoting
   `apple-hig/accessibility/012` ("Transcripts") — which it had genuinely read — was scored as
   fabricating it, in three of three runs.
 - **A refused launch cost a sample.** Two of three runs exited non-zero within milliseconds having
-  written nothing to either stream, and the batch reported n=1 while the summary correctly refused to
-  compare the arms. Only an instant, entirely silent failure is retried now.
-
-A third defect surfaced while checking these numbers rather than producing them: `--rescore` keeps
-the transcript it scored, so a replayed row describes the skill as it *was*, and prints identically
-to a fresh one. Twelve of the eighteen samples were replays of a pre-fix skill and were nearly
-quoted as current. The summary now names the stale task/arm pairs, which is how the remaining six
-were found and re-run.
+  written nothing to either stream, and the batch reported n=1. Only an instant, entirely silent
+  failure is retried now.
+- **Replayed transcripts printed as fresh.** `--rescore` keeps the transcript it scored, so a
+  replayed row describes the skill as it *was*. Twelve of eighteen samples were replays of a pre-fix
+  skill and were nearly quoted as current; the summary now names the stale task/arm pairs.
+- **The scorer under-counted correct dismissals.** An interim run appeared to show the skill
+  dismissing *fewer* decoys (13 vs 18), which would have been the opposite of what the A5 workflow
+  asks for. Investigating found two measurement faults, not a regression: the dismissal vocabulary
+  had no word for asserting or failing, so a section headed "Three comments in the file assert
+  failures that do not hold" never split; and one decoy required the reviewer to echo Apple's verb
+  "span", scoring a correct dismissal as none. With both fixed and every sample re-run, the
+  direction reverses to 17 vs 16. **Roughly half the apparent gap was scorer error and the rest was
+  sampling noise** — a reminder that a result which flatters or damns the work needs the same
+  scrutiny either way.
 
 ## Evidence
 
@@ -320,10 +307,9 @@ directions: it refuses credit for an unproven fix, and it notices when a fix bec
   a number, which is the wrong trade for this project.
 - WCAG extraction remains pinned to a repository commit while citations point at the published
   Recommendation. The audit's uncertainty about edition equivalence is unchanged.
-- The agent evaluation is 3 samples per arm and is not a significance claim. One measured result
-  goes against the skill: it dismisses fewer decoys (13 vs 18 across nine samples per arm) while
-  finding more violations (42 vs 38) with no false positives in either arm. The A5 workflow asks for
-  exactly that commentary, so this is unresolved rather than benign.
+- The agent evaluation is 3 samples per arm and is not a significance claim. Most ranges overlap;
+  what does not overlap is citation behaviour, which is also the thing the skill most directly
+  causes.
 - A5's checks assert that the authored workflow's sentences are present and marked as authored.
   That is text presence, not behaviour. A4's check is stronger: it derives what the entry file
   permits and tests a real prohibition independently of the severity classifier.
