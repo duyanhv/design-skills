@@ -55,9 +55,20 @@ const CASES: Case[] = [
     caught: false,
     note: "same reason as words above",
   },
+  // The fence exemption, tested as a *pair*. The first version of this case used
+  // `.frame(width: 44, height: 44)`, which the patterns miss outside a fence as well — so the case
+  // passed whether fence handling existed or not, and a review proved it by deleting the exemption
+  // and watching all ten cases still pass. A control case must differ from its partner in exactly
+  // the one variable under test, so both halves below carry text that is known to be caught.
   {
-    name: "a specification inside a fenced code block",
-    prose: "```swift\n.frame(width: 44, height: 44)\n```",
+    name: "a caught literal is still caught in ordinary prose (fence control)",
+    prose: "Targets must be 44pt.",
+    caught: true,
+    note: "the partner of the fenced case: identical text, no fence",
+  },
+  {
+    name: "the identical caught literal inside a fenced code block is missed",
+    prose: "```swift\nTargets must be 44pt.\n```",
     caught: false,
     note: "fences are skipped on purpose, since an example may name a real API constant",
   },
