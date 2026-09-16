@@ -5,7 +5,7 @@ self-contained, and reviewable.
 
 ```sh
 bun install
-bun run check     # typecheck · unit tests · end-to-end build · manifest validation
+bun run check     # typecheck · unit tests · end-to-end build · manifest and doc-link validation
 bun run example   # rebuild the committed synthetic example
 ```
 
@@ -29,9 +29,10 @@ rule that is silently wrong is not.
 ## Adding an original guide
 
 Use `kind: authored` for original workflow instructions, with redistributable MIT text. Put the
-entry file and linked Markdown references in `guidance/<source-id>/`; use the existing guides as
-examples. Declare `metadata.authorship: original`, link official sources, and distinguish your
-review method from upstream requirements. Do not paste a guideline corpus into this path.
+entry file and linked Markdown references in `guidance/<source-id>/`; [the guidance README](guidance/README.md)
+states what belongs there and what the build enforces. Declare `metadata.authorship: original`, link
+official sources, and distinguish your review method from upstream requirements. Do not paste a
+guideline corpus into this path.
 
 `bun run build <id>` validates the entry file and local reference graph, copies the Markdown,
 and records deterministic hashes and source URLs. There is no extraction or IR. Rebuild changed

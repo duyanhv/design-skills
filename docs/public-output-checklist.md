@@ -6,10 +6,19 @@ A visitor can understand the product, inspect a complete useful skill, and judge
 
 ## 1. Establish the public offering
 
-- [ ] Make the public skill bundles the main entry point for the repository.
-- [ ] Clearly distinguish authored public skills from locally extracted guideline corpora.
-- [ ] Keep the current redistribution policy for verbatim Apple HIG and WCAG output.
-- [ ] Explain what each public skill contains and which decisions require reading an external source.
+- [x] Make the public skill bundles the main entry point for the repository.
+- [x] Clearly distinguish authored public skills from locally extracted guideline corpora.
+- [x] Keep the current redistribution policy for verbatim Apple HIG and WCAG output.
+- [x] Explain what each public skill contains and which decisions require reading an external source.
+
+Done in the README's "Browse the skills" table and the two subsections under it, in the rewritten
+[`skills/README.md`](../skills/README.md), and in a new [`guidance/README.md`](../guidance/README.md)
+describing the input side. Section 3's worked example is what will make these claims demonstrable
+rather than merely stated.
+
+`bun run docs` (new, in `check` and CI) fails on a relative link to a missing path, to a git-ignored
+build product such as `skills/apple-hig/`, or to an absent heading anchor. All three were checked by
+reintroducing them. It found the two live links to audit documents deleted in `2903b24`.
 
 ## 2. Complete the Apple public skill first
 

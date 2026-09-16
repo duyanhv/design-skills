@@ -51,3 +51,7 @@ jobs:
         run: bun run src/e2e/trace-negative.ts
       - name: Manifests parse against the source schema
         run: bun run src/e2e/manifests.ts
+      # The README is how people arrive. Its relative links are checked by nothing else, and a link
+      # into a git-ignored build product (apple-hig, wcag22) resolves locally while 404ing on GitHub.
+      - name: Documentation links resolve to published paths
+        run: bun run src/e2e/docs.ts

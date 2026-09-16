@@ -1,86 +1,81 @@
 # design-skills
 
-**Turn design guidelines into skills your coding agent can read and apply.**
+**Design skills your coding agent can read before it writes UI code.**
 
 [![CI](https://github.com/duyanhv/design-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/duyanhv/design-skills/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 
-design-skills compiles sources such as Apple's Human Interface Guidelines and WCAG into
-[Agent Skills](https://agentskills.io): a short `SKILL.md`, topic references, and source provenance.
-An agent can find guidance for a task, read its platform scope and exceptions, and cite the rule
-behind a design decision or review finding.
+This repository publishes [Agent Skills](https://agentskills.io) that give a coding agent a working
+method for interface work: how to establish the platform and framework it is actually targeting,
+which official page answers the decision in front of it, and how to report a review finding with the
+source, platform scope, and exceptions attached instead of a stylistic opinion.
 
-The build uses source-specific parsers and versioned extraction rules. It makes no LLM calls and
-requires no model API key.
+It also contains the compiler that produces them. The skills come first below; the pipeline is
+documented [further down](#how-the-skills-are-produced).
 
-**Status: experimental.** The skills are usable for assisted design and review. Extraction and
-evaluation still have [known limitations](#verification-and-limitations).
+**Status: experimental.** The bundles are usable for assisted design and review. They have
+[known limitations](#verification-and-limitations), the largest being that the published guides
+route an agent to guidance rather than carrying the guidance offline.
 
-[Apple design skill](skills/apple-design/SKILL.md) · [Material Design 3 skill](skills/material-3/SKILL.md) · [Generated skills](skills/README.md) · [Contribute](CONTRIBUTING.md)
+## Browse the skills
 
-The repository also ships **original, authored guides** for Apple design and Google Material Design 3.
-These provide task workflows and official reference links. They require an agent that can read the
-linked documentation; they are not offline copies of the guidelines.
+These bundles are committed, so you can read every file on GitHub before installing anything.
+Install the whole folder: `SKILL.md` links to the references beside it.
 
-## Quick start
+| Skill | Use it for | What is in the bundle |
+| --- | --- | --- |
+| [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) build/change workflow, a [topic map](skills/apple-design/references/research/topics.md) from decision to official HIG page, an [evidence workflow](skills/apple-design/references/review/evidence.md) for reviews, `provenance.json` |
+| [**material-3**](skills/material-3/) | Google Material Design 3 work on Compose, Material Web, or another implementation: theming, component states, adaptive layout | [`SKILL.md`](skills/material-3/SKILL.md) implementation workflow, a [source map](skills/material-3/references/research/sources.md) with per-platform notes, an [evidence workflow](skills/material-3/references/review/evidence.md), `provenance.json` |
+| [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated `SKILL.md`, `index.md`, extracted reference pages with rule IDs and citations, `provenance.json` |
 
-Requires [Bun](https://bun.sh) 1.2 or later and Git. Building Apple HIG or WCAG also needs internet access.
+### What these skills decide, and what they send the agent to read
 
-```sh
-git clone https://github.com/duyanhv/design-skills.git
-cd design-skills
-bun install --frozen-lockfile
+`apple-design` and `material-3` are **original writing**, MIT licensed, published from
+[`guidance/`](guidance/). They carry the parts of a design task that do not change between releases:
+establishing platform, OS version and framework before choosing a component; separating what a
+native control supplies from what the app must implement; checking interaction bounds and states in
+code rather than in a screenshot; labelling a personal judgment as a judgment.
 
-# Rebuild the two public guides (no network or model calls).
-bun run build:public
-```
+They deliberately do **not** restate Apple's or Google's specifications. Anything version-specific
+stays upstream and has to be read at the linked source:
 
-The public folders `skills/apple-design/` and `skills/material-3/` are already included in the clone.
-The command rebuilds them from `guidance/`, validates local links and provenance, and runs smoke checks.
+- Numeric specifications — sizes, spacing, type scale, contrast and color values, and their units.
+- Whether a behavior is required, recommended, or permitted, and the exceptions that change it.
+- Platform and OS-version differences, and which component or API exists in the installed library.
+- Anything carried by an illustration: visual anatomy, geometry, or state. No images are bundled.
 
-To extract the larger guideline corpora for local use:
+So these two bundles need an agent that can open the linked documentation. Without that access the
+skill still applies, but it requires the agent to say which decisions stayed unverified, which the
+workflow asks for explicitly.
+
+### Guidelines that are not published here
+
+Apple's HIG and WCAG 2.2 are compiled into full extracted skills — rules carrying the source's own
+sentences, platform scope, and citations; the last local build produced 2,347 rules over 158 Apple
+pages and 86 success criteria from WCAG. That output is a derivative of text we have no
+redistribution license for, so it never enters this repository. `ir/apple-hig/`, `skills/apple-hig/`,
+`ir/wcag22/` and `skills/wcag22/` are git-ignored, and `validate` fails the build if they are not.
+Build them on your own machine, the same way you would read the guideline in a browser:
 
 ```sh
 bun run build apple-hig
 bun run build wcag22
 ```
 
-These builds fetch the source, extract its guidance, write the skill, and run validation and
-source-specific assertions. Their output stays local.
+[LICENSING.md](LICENSING.md) records the policy and why WCAG's document license is read this way.
 
-To try the pipeline without fetching an external guideline:
-
-```sh
-bun run example
-```
-
-This rebuilds [Lumen](skills/lumen-ds/SKILL.md), an invented design system used as a test fixture and
-readable example. It is not guidance for a real platform.
-
-## Available sources
-
-| Source | Build command | Generated output on GitHub |
-| --- | --- | --- |
-| Apple design — original workflow and HIG links | `bun run build apple-design` | [skills/apple-design/](skills/apple-design/) |
-| Google Material Design 3 — original workflow and official links | `bun run build material-3` | [skills/material-3/](skills/material-3/) |
-| [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/) | `bun run build apple-hig` | Local build only |
-| [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and glossary | `bun run build wcag22` | Local build only |
-| Lumen Design System — synthetic example | `bun run example` | [skills/lumen-ds/](skills/lumen-ds/) |
-
-The repository publishes the compiler and eligible generated skills. The current source manifests
-mark Apple HIG and WCAG as nonredistributable, so their generated text stays out of Git. See
-[source and output licensing](LICENSING.md) for the project's policy.
-
-Full Material Design 3 extraction and a generic HTML adapter remain planned. The public Material 3
-skill is an authored guide, distinct from an extraction adapter and from the MUI React library.
-
-## Use a generated skill
+## Install a skill
 
 Install the **whole skill folder**, including references and provenance. Copying only `SKILL.md`
 leaves the agent without the guidance it links to.
 
-Run the following from this repository's root to install the included public guides. The symlinks point to
-your local output, so rebuilding updates what the agent reads.
+The published bundles are committed, so cloning is enough to install them. The symlinks below point
+at your working copy, so a later `git pull` or rebuild updates what the agent reads.
+
+```sh
+git clone https://github.com/duyanhv/design-skills.git
+cd design-skills
+```
 
 ### Codex
 
@@ -111,13 +106,60 @@ If a destination already exists, inspect the existing installation before replac
 > Use the material-3 skill to plan this adaptive settings form. Check the official guidance and
 > our framework’s supported APIs before choosing components and theme roles.
 
+After a local `bun run build wcag22`, the same installation step works for the extracted WCAG bundle:
+
 > Use the wcag22 skill to review this form against Level AA. Explain which criteria apply and
 > which checks require testing the running interface.
 
 Other agents can use the generated Markdown when their runtime supports Agent Skills or provides
 a way to load the entry file and follow its local references.
 
-## What gets generated
+## How the skills are produced
+
+Everything below is about the compiler rather than about using a skill.
+
+The build uses source-specific parsers and versioned extraction rules. It makes no LLM calls and
+requires no model API key. Requires [Bun](https://bun.sh) 1.2 or later and Git; building Apple HIG
+or WCAG also needs internet access.
+
+```sh
+bun install --frozen-lockfile
+
+# Rebuild the two published guides from guidance/ (no network or model calls).
+bun run build:public
+
+# Extract the large corpora for local use only.
+bun run build apple-hig
+bun run build wcag22
+
+# Run the whole pipeline against a synthetic source, with no external fetch.
+bun run example
+```
+
+`build:public` rebuilds `skills/apple-design/` and `skills/material-3/` from `guidance/`, then
+validates local links and provenance. CI runs it and fails on any diff, so a published bundle cannot
+drift from its authored input. `bun run example` rebuilds [Lumen](skills/lumen-ds/SKILL.md).
+
+### Sources
+
+| Source | Kind | Build command | Output in this repository |
+| --- | --- | --- | --- |
+| Apple design — original workflow and HIG links | Authored | `bun run build apple-design` | [skills/apple-design/](skills/apple-design/) |
+| Google Material Design 3 — original workflow and official links | Authored | `bun run build material-3` | [skills/material-3/](skills/material-3/) |
+| [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/) | Extracted | `bun run build apple-hig` | None; local build only |
+| [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and glossary | Extracted | `bun run build wcag22` | None; local build only |
+| Lumen Design System — synthetic example | Extracted | `bun run example` | [skills/lumen-ds/](skills/lumen-ds/) |
+
+An **authored** source is original writing kept in `guidance/<id>/`; the build copies it into
+`skills/<name>/`, verifies its links and frontmatter, and records file hashes and official URLs in
+`provenance.json`. An **extracted** source is crawled, normalized, and split into rules with source
+text, platform scope, and citations; only sources whose manifest declares
+`license.redistributable: true` may be committed.
+
+Full Material Design 3 extraction and a generic HTML adapter remain planned. The published Material 3
+skill is an authored guide, distinct from an extraction adapter and from the MUI React library.
+
+### What gets generated
 
 Extracted skills contain the following artifacts. Authored guides contain `SKILL.md`, original
 reference notes, and file hashes plus official URLs in `provenance.json`; they have no extracted
@@ -146,7 +188,7 @@ Fetched and normalized content lives in the ignored `.cache/` directory. Changes
 inputs invalidate cached rules; complete builds reconcile removed pages. Incomplete crawls are
 refused by default. An explicit `--allow-partial` build carries an incomplete-build warning.
 
-## Publish Markdown to the Git tree
+### Publish Markdown to the Git tree
 
 From a clean working tree with a configured `origin` and push access:
 
@@ -171,7 +213,8 @@ Lumen example are eligible sources. [The publishing guide](skills/README.md) des
 ## Verification and limitations
 
 ```sh
-bun run check              # Typecheck, tests, synthetic e2e, validator probes, and manifest checks
+bun run check              # Typecheck, tests, synthetic e2e, validator probes, manifest and doc-link checks
+bun run docs               # Relative links in the repository's Markdown resolve to published paths
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references
@@ -209,17 +252,13 @@ validation. They do not guarantee correct agent decisions:
   reproduce the information in the image.
 - **Agent evaluation is preliminary.** The optional `bun run agenteval --runs 3` harness uses the
   Claude CLI and makes model calls. Its scorer measures seeded cues and citation mentions, not
-  whether every finding is supported, and it now resolves each cited id against the built skill so a
+  whether every finding is supported, and it resolves each cited id against the built skill so a
   fabricated-but-well-formed citation earns no credit. The skill arm also receives an explicit
-  citation instruction. Three samples per arm is a small sample and most ranges overlap; see the
-  [resolution](docs/audits/resolution-2026-09-15.md) for the last recorded run and the four defects
-  running it exposed, two of which were in the scorer rather than the skill.
+  citation instruction. Three samples per arm is a small sample and most ranges overlap, so its
+  numbers indicate a direction, not a measured improvement.
 
-The [output audit](docs/audits/generated-output-2026-09-15.md) compares what the compiler produces
-against the raw sources and against established hand-written design skills; its
-[resolution](docs/audits/resolution-2026-09-15.md) records the fixes, the evidence for each, the two
-extractor bugs the audit's own findings led to, and what was deliberately left as a judgement call.
-Earlier audit documents were removed from the repository in `fa7dca9`.
+Audit write-ups are not kept in the repository; the fixes they produced live in the checks above and
+in the commit history.
 
 ## Contributing
 
