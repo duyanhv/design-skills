@@ -244,3 +244,16 @@ export function comparability(rows: { task: string; arm: string }[]): {
   }
   return { lopsided, singleSample };
 }
+
+/**
+ * Whether a failed CLI invocation is worth another attempt.
+ *
+ * True only for a launch that was refused outright: a non-zero exit inside a few hundred
+ * milliseconds having written nothing to either stream. A run that produced output, or that lasted
+ * long enough to have done real work, failed for a reason retrying will not change, and retrying it
+ * would quietly replace a genuine result with another attempt at the same question.
+ *
+ * It lives here rather than in `run.ts` because this module is pure and importable from a test;
+ * importing `run.ts` starts the harness.
+ */
+export const isRefusedLaunch = (message: string): boolean => /after \d{1,3}ms: no output/.test(message);

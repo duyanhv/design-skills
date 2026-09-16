@@ -31,7 +31,7 @@ import { tmpdir } from "node:os";
 import { paths, ROOT, writeJson } from "../util/fs.ts";
 import { log } from "../util/log.ts";
 import { TASKS, knownCitations, type Task } from "./tasks.ts";
-import { comparability, score, type Score } from "./score.ts";
+import { comparability, isRefusedLaunch, score, type Score } from "./score.ts";
 
 const ARMS = ["none", "skill"] as const;
 type Arm = (typeof ARMS)[number];
@@ -54,11 +54,43 @@ async function runArm(task: Task, arm: Arm): Promise<{ transcript: string; ms: n
     );
     const [transcript, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;
-    if (code !== 0) throw new Error(`claude exited ${code}: ${err.slice(0, 400)}`);
+    // The CLI can exit non-zero with nothing on stderr, and "claude exited 1:" is not something a
+    // reader can act on. Say what was actually observed — whether anything reached stdout, and how
+    // long it lasted — because an instant empty failure (a refused launch) and a slow one (a model
+    // or network error mid-run) call for different responses.
+    if (code !== 0) {
+      const ms = Date.now() - started;
+      const detail = err.trim() || transcript.trim().slice(0, 400) || `no output on stdout or stderr after ${ms}ms`;
+      throw new Error(`claude exited ${code} after ${ms}ms: ${detail}`);
+    }
     return { transcript, ms: Date.now() - started };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * One sample, retried when the CLI refuses to launch.
+ *
+ * Consecutive invocations sometimes exit non-zero within milliseconds, having written nothing to
+ * either stream, while the identical command run on its own succeeds. That is the launch being
+ * refused, not the model declining the task, and spending a sample on it understates the arm: a
+ * three-run batch reported n=1 because two runs died this way.
+ */
+async function sampleArm(task: Task, arm: Arm, attempts = 3): Promise<{ transcript: string; ms: number }> {
+  let last: Error | undefined;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await runArm(task, arm);
+    } catch (e) {
+      last = e as Error;
+      if (!isRefusedLaunch(last.message) || i === attempts - 1) throw last;
+      const wait = 2000 * (i + 1);
+      console.log(`  – launch refused with no output; retrying in ${wait / 1000}s (${i + 1}/${attempts - 1})`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw last;
 }
 
 interface Row extends Score {
@@ -136,7 +168,7 @@ for (const task of tasks) {
       let transcript: string;
       let ms: number;
       try {
-        ({ transcript, ms } = cached ? { transcript: cached, ms: 0 } : await runArm(task, arm));
+        ({ transcript, ms } = cached ? { transcript: cached, ms: 0 } : await sampleArm(task, arm));
       } catch (e) {
         // One flaky CLI invocation is not a reason to discard the batch. Record the failure as a
         // sample that produced nothing, so the summary can say "8 of 9 scored" instead of silently

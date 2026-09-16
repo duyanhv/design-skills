@@ -281,3 +281,16 @@ test("findings the fixtures classify as nothing are counted, not silently ignore
   // A finding that matches a fixture item is classified, whichever kind it is.
   expect(score(task, "## Issues\n- 60x60 pt targets required.").unclassified).toBe(0);
 });
+
+test("only a refused launch is retried, not a run that actually produced something", async () => {
+  // Two of three samples once died instantly with empty stderr, and the batch reported n=1 as if
+  // only one had been asked for. Retrying those is right; retrying a real failure is not, because
+  // it would turn a genuine result into another attempt at the same answer.
+  const { isRefusedLaunch } = await import("../src/agenteval/score.ts");
+  expect(isRefusedLaunch("claude exited 1 after 4ms: no output on stdout or stderr after 4ms")).toBe(true);
+  expect(isRefusedLaunch("claude exited 1 after 118ms: no output on stdout or stderr after 118ms")).toBe(true);
+  // Produced output: the CLI ran and had something to say, so the failure is the answer.
+  expect(isRefusedLaunch("claude exited 1 after 12ms: Invalid API key")).toBe(false);
+  // Lasted long enough to have done work, so an empty result is a fact about the run.
+  expect(isRefusedLaunch("claude exited 1 after 9400ms: no output on stdout or stderr after 9400ms")).toBe(false);
+});
