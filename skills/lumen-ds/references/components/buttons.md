@@ -31,8 +31,8 @@ A button is recognisable when its target is large enough and its label names the
 
 A role changes both appearance and behaviour:
 
-- **Primary.** — The action the person is most likely to take. [src](https://example.invalid/design/lumen/buttons#Roles)
-- **Destructive.** — The action removes data and cannot be undone. [src](https://example.invalid/design/lumen/buttons#Roles)
+- **Primary.** — The action the person is most likely to take. [src](https://example.invalid/design/lumen/buttons#Roles) `lumen-ds/buttons/004`
+- **Destructive.** — The action removes data and cannot be undone. [src](https://example.invalid/design/lumen/buttons#Roles) `lumen-ds/buttons/005`
 - **MUST** Never give the destructive role to the primary button. [src](https://example.invalid/design/lumen/buttons#Roles) `lumen-ds/buttons/006`
   - Why: People activate a prominent button without reading it.
 

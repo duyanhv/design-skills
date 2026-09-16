@@ -140,7 +140,12 @@ function termLine(t: Rule, linker: Linker, category: string): string {
   // genuinely ends and something new begins.
   const continues = t.rationale ? /^[a-z\u2018\u2019'"(]/.test(t.rationale) : false;
   const body = t.rationale ? `${continues ? " " : " — "}${local(t.rationale)}` : "";
-  const head = `- **${t.statement}**${body} ${cite(t)}`.replace(/\s+/g, " ");
+  // A term carries its id for the same reason a rule does: the entry file tells the reader to quote
+  // the id so a finding can be checked against the source, and a term that prints only a `src` link
+  // cannot comply. Worse, the citation scorer resolves ids against the shipped text, so an agent
+  // citing a term it had genuinely read was recorded as naming something that does not exist —
+  // observed three times out of three on `apple-hig/accessibility/012` ("Transcripts").
+  const head = `- **${t.statement}**${body} ${cite(t)} \`${t.id}\``.replace(/\s+/g, " ");
   // Notes are indented rather than joined onto the head line, so a reader can see where the
   // definition ends. Joining them ran WCAG's "changes of context" list into one sentence with its
   // list markers inline (AUDIT-OUTPUT finding 8).
