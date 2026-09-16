@@ -190,46 +190,74 @@ agrees independently: rendered occurrences rose 1,322 → 1,334 as header-art ex
 ## Agent evaluation
 
 The audit's A4/A5 acceptance was met with executed fixtures, which test what the skill *instructs*.
-`bun run agenteval` was then run for real — 18 samples, 3 per task per arm, 0 failures — to test what
-an agent does with it. It is outside `bun run check` and costs model calls.
+`bun run agenteval` was then run for real, to test what an agent does with it. It is outside
+`bun run check` and costs model calls. All 18 samples below are fresh runs against the final
+artifacts, 3 per task per arm, 0 failures, 18 distinct transcripts.
 
-| Task | Arm | Recall | False positives | Citations |
-| --- | --- | --- | --- | --- |
-| ios-buttons | no skill | 3–4/4 | 0–1 | 0 |
-| ios-buttons | skill | 4/4 | 0 | 28–35 |
-| wcag-form | no skill | 5–6/6 | 0 | 9–15 |
-| wcag-form | skill | 5–6/6 | 0 | 12–27 |
-| watchos-scope | no skill | 3–4/4 | 0 | 0 |
-| watchos-scope | skill | 4/4 | 0 | 25–33 |
+| Task | Arm | Recall | False positives | Citations | Unresolvable |
+| --- | --- | --- | --- | --- | --- |
+| ios-buttons | no skill | 3–4/4 | 0 | 0 | 0 |
+| ios-buttons | skill | 4/4 | 0 | 32–45 | 0 |
+| wcag-form | no skill | 6/6 | 0 | 15–16 | 0 |
+| wcag-form | skill | 6/6 | 0 | 24–32 | 0 |
+| watchos-scope | no skill | 3–4/4 | 0 | 0 | 0 |
+| watchos-scope | skill | 4/4 | 0 | 26–42 | 0 |
 
-Three samples per arm is a small sample and these ranges overlap; the honest reading is that the
-skill arm is consistently at full recall and always cites, while the unaided arm is neither. No
-scope errors appeared in any arm, so that fixture did not discriminate here.
+Three samples per arm is small and the recall ranges overlap on `wcag-form`. The honest reading is
+that the skill arm is consistently at full recall and always cites resolvable rules, while the
+unaided arm reaches full recall only sometimes and cites nothing at all on the two Apple tasks. No
+scope errors appeared in any arm, so that fixture did not discriminate here. Decoy dismissal is
+noisier with the skill than without on two tasks, which is worth watching rather than explaining
+away.
 
-Two defects surfaced from running it, both invisible to the fixtures:
+**Zero unresolvable citations**, down from 13 in one sample and 3-of-3 runs on another. Both causes
+were defects this evaluation exposed, neither visible to the fixtures:
 
 - **A term printed no rule id.** Every entry file tells the reader to quote the id, but `termLine`
-  emitted only a `src` link, so a term was uncitable on the skill's own terms. The citation scorer
-  resolves ids against the shipped text, so an agent quoting `apple-hig/accessibility/012`
-  ("Transcripts") — which it had genuinely read — was recorded as naming something that does not
-  exist, in three of three runs. Rescoring the same transcripts after the fix resolves all of them.
+  emitted only a `src` link, so a term was uncitable on the skill's own terms. An agent quoting
+  `apple-hig/accessibility/012` ("Transcripts") — which it had genuinely read — was scored as
+  fabricating it, in three of three runs.
 - **A refused launch cost a sample.** Two of three runs exited non-zero within milliseconds having
   written nothing to either stream, and the batch reported n=1 while the summary correctly refused to
-  compare the arms. Only an instant, entirely silent failure is retried now; a failure that produced
-  output or took real time is a result, not a flake.
+  compare the arms. Only an instant, entirely silent failure is retried now.
 
-The scorer's fabrication check earned its place in the same run: one `wcag-form` sample cited 13 ids
-that do not exist (`wcag22/distinguishable/016` where the page ends at 013, `wcag22/adaptable/011`
-where it ends at 006). Before A7 that would have counted as 13 pieces of evidence.
+A third defect surfaced while checking these numbers rather than producing them: `--rescore` keeps
+the transcript it scored, so a replayed row describes the skill as it *was*, and prints identically
+to a fresh one. Twelve of the eighteen samples were replays of a pre-fix skill and were nearly
+quoted as current. The summary now names the stale task/arm pairs, which is how the remaining six
+were found and re-run.
 
 ## Evidence
 
 Every number below was observed, not projected.
 
+### Requirement to check
+
+Every finding maps to named checks over the shipped artifacts, and every one of those has at least
+one negative probe that was watched failing. Run `bun run trace` and `bun run trace:negative` to
+reproduce the right-hand columns.
+
+| Finding | Checks | Negative probes |
+| --- | --- | --- |
+| A1 media | 5 | 9 |
+| A2 normative/informative | 5 | 5 |
+| A3 dependencies | 5 | 5 |
+| A4 authority | 2 | 3 |
+| A5 workflow | 2 | 4 |
+| A7 raw-corpus coverage | 2 | 4 |
+| A7 structure (S-1/S-2/S-3) | 3 | 9 |
+
+A6 is excluded deliberately: `bun run budget` reports numbers and never fails a build, so it has no
+pass/fail assertion to probe. Its outcome is the threshold change, which is asserted by the
+contents-list figures above.
+
+Twelve older findings (numbered `1`–`8` and some `O-n`) still have checks without negative probes.
+They predate this work and are recorded here rather than claimed as guarded.
+
 | Check | Before | After |
 | --- | --- | --- |
 | `bun run check` | passing | passing |
-| Unit tests | 51 | 65 |
+| Unit tests | 51 | 71 |
 | Trace requirements | 19 | 43 |
 | Trace negative probes | 22 | 61 |
 | Validate guards | 20 | 22 |
@@ -272,4 +300,7 @@ directions: it refuses credit for an unproven fix, and it notices when a fix bec
   a number, which is the wrong trade for this project.
 - WCAG extraction remains pinned to a repository commit while citations point at the published
   Recommendation. The audit's uncertainty about edition equivalence is unchanged.
-- The agent evaluation is 3 samples per arm. Ranges overlap, and it is not a significance claim.
+- The agent evaluation is 3 samples per arm. Ranges overlap on `wcag-form` recall, and decoy
+  dismissal is noisier with the skill than without on two tasks. It is not a significance claim.
+- Twelve older findings (`1`–`8` and some `O-n`) have checks but no negative probe. They predate
+  this work; a check that has never been seen to fail is still a guess, whoever wrote it.
