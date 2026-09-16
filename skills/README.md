@@ -1,14 +1,15 @@
 # Published skills
 
 This is the Git-tracked output folder: what an agent installs. A bundle contains `SKILL.md`, its
-Markdown reference files, and `provenance.json`. Install the whole directory, because `SKILL.md`
+Markdown reference files, and `provenance.json`, plus a separate `index.md` once the corpus is large
+enough that the index would crowd the entry file. Install the whole directory, because `SKILL.md`
 links to the references beside it.
 
 | Skill | Kind | Where it comes from | What it gives the agent |
 | --- | --- | --- | --- |
 | [apple-design](apple-design/SKILL.md) | Authored | [`guidance/apple-design/`](../guidance/apple-design/) | Original MIT workflow and a decision-to-page map for the Apple HIG. Apple's specifications are read at the linked pages, not bundled. |
 | [material-3](material-3/SKILL.md) | Authored | [`guidance/material-3/`](../guidance/material-3/) | Original MIT workflow and per-platform source map for Material Design 3. Google's specifications are read at the linked pages, not bundled. |
-| [lumen-ds](lumen-ds/SKILL.md) | Extracted | Synthetic fixture in `src/e2e/` | A complete extracted bundle — rule IDs, source text, citations, `index.md` — for an invented design system. Readable example and regression fixture, not guidance for a real platform. |
+| [lumen-ds](lumen-ds/SKILL.md) | Extracted | Synthetic fixture in `src/e2e/` | A complete extracted bundle — rule IDs, source text, citations, and an inline index — for an invented design system. Readable example and regression fixture, not guidance for a real platform. |
 | `apple-hig/` | Extracted | Crawled from developer.apple.com | Not published. `bun run build apple-hig` writes it locally. |
 | `wcag22/` | Extracted | Crawled from w3.org | Not published. `bun run build wcag22` writes it locally. |
 

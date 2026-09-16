@@ -16,9 +16,13 @@ Done in the README's "Browse the skills" table and the two subsections under it,
 describing the input side. Section 3's worked example is what will make these claims demonstrable
 rather than merely stated.
 
-`bun run docs` (new, in `check` and CI) fails on a relative link to a missing path, to a git-ignored
-build product such as `skills/apple-hig/`, or to an absent heading anchor. All three were checked by
-reintroducing them. It found the two live links to audit documents deleted in `2903b24`.
+`bun run docs` (new, in `check` and CI) checks every relative link in the repository's Markdown for a
+target a GitHub visitor could open: the path exists, git actually publishes it, and the `#anchor`
+resolves in the *target* file. `bun run docs:negative` reintroduces each defect against a scratch git
+repository and asserts the matching case fails, with controls so that a checker rejecting everything
+would not pass. It found the two live links to audit documents deleted in `2903b24`, and a review of
+its first version found two gaps it could not see — cross-file anchors and untracked-but-present
+files — which is why the guards are now a suite rather than shell-history probes.
 
 ## 2. Complete the Apple public skill first
 

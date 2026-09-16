@@ -26,7 +26,7 @@ Install the whole folder: `SKILL.md` links to the references beside it.
 | --- | --- | --- |
 | [**apple-design**](skills/apple-design/) | iOS, iPadOS, macOS, watchOS, tvOS, and visionOS UI: component choice, navigation structure, platform-specific behavior, review of an existing screen | [`SKILL.md`](skills/apple-design/SKILL.md) build/change workflow, a [topic map](skills/apple-design/references/research/topics.md) from decision to official HIG page, an [evidence workflow](skills/apple-design/references/review/evidence.md) for reviews, `provenance.json` |
 | [**material-3**](skills/material-3/) | Google Material Design 3 work on Compose, Material Web, or another implementation: theming, component states, adaptive layout | [`SKILL.md`](skills/material-3/SKILL.md) implementation workflow, a [source map](skills/material-3/references/research/sources.md) with per-platform notes, an [evidence workflow](skills/material-3/references/review/evidence.md), `provenance.json` |
-| [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated `SKILL.md`, `index.md`, extracted reference pages with rule IDs and citations, `provenance.json` |
+| [lumen-ds](skills/lumen-ds/) | Reading what an extracted bundle looks like. Lumen is an invented design system used as a test fixture, not guidance for a real platform | Generated [`SKILL.md`](skills/lumen-ds/SKILL.md) with routing and an inline index, [extracted reference pages](skills/lumen-ds/references/) carrying rule IDs, source text and citations, `provenance.json`. A larger corpus splits the index into its own `index.md` |
 
 ### What these skills decide, and what they send the agent to read
 
@@ -214,7 +214,8 @@ Lumen example are eligible sources. [The publishing guide](skills/README.md) des
 
 ```sh
 bun run check              # Typecheck, tests, synthetic e2e, validator probes, manifest and doc-link checks
-bun run docs               # Relative links in the repository's Markdown resolve to published paths
+bun run docs               # Relative doc links: target exists, git publishes it, the anchor resolves
+bun run docs:negative      # Reintroduces each broken-link defect and asserts the matching case fails
 bun run eval apple-hig     # Assertions about selected rules and their rendered output
 bun run coverage           # Heuristic content-loss scan; needs local build caches
 bun run fidelity           # Per-sentence verbatim scan of source against shipped references

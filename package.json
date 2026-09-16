@@ -20,7 +20,7 @@
     "test": "bun test",
     "example": "bun run src/e2e/run.ts",
     "e2e": "bun run src/e2e/run.ts",
-    "check": "bun run typecheck && bun test && bun run build:public && bun run src/e2e/run.ts && bun run src/e2e/validate-negative.ts && bun run src/e2e/coverage.ts && bun run src/e2e/fidelity.ts && bun run src/e2e/trace-negative.ts && bun run src/e2e/manifests.ts && bun run src/e2e/docs.ts",
+    "check": "bun run typecheck && bun test && bun run build:public && bun run src/e2e/run.ts && bun run src/e2e/validate-negative.ts && bun run src/e2e/coverage.ts && bun run src/e2e/fidelity.ts && bun run src/e2e/trace-negative.ts && bun run src/e2e/manifests.ts && bun run src/e2e/docs.ts && bun run src/e2e/docs-negative.ts",
     "agenteval": "bun run src/agenteval/run.ts",
     "validate:negative": "bun run src/e2e/validate-negative.ts",
     "trace": "bun run src/e2e/trace.ts",
@@ -29,7 +29,8 @@
     "trace:negative": "bun run src/e2e/trace-negative.ts",
     "budget": "bun run src/e2e/budget.ts",
     "probe:structure": "bun run src/e2e/probes/structure.ts",
-    "docs": "bun run src/e2e/docs.ts"
+    "docs": "bun run src/e2e/docs.ts",
+    "docs:negative": "bun run src/e2e/docs-negative.ts"
   },
   "dependencies": {
     "node-html-parser": "^7.0.1",
