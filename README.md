@@ -113,6 +113,7 @@ cd design-skills
 mkdir -p ~/.agents/skills
 ln -s "$PWD/skills/apple-design" ~/.agents/skills/apple-design
 ln -s "$PWD/skills/material-3" ~/.agents/skills/material-3
+ln -s "$PWD/skills/accessibility-claims" ~/.agents/skills/accessibility-claims
 ```
 
 Codex supports symlinked skill folders in its user skill directory. See the
@@ -124,6 +125,7 @@ Codex supports symlinked skill folders in its user skill directory. See the
 mkdir -p ~/.claude/skills
 ln -s "$PWD/skills/apple-design" ~/.claude/skills/apple-design
 ln -s "$PWD/skills/material-3" ~/.claude/skills/material-3
+ln -s "$PWD/skills/accessibility-claims" ~/.claude/skills/accessibility-claims
 ```
 
 If a destination already exists, inspect the existing installation before replacing it.
@@ -135,6 +137,10 @@ If a destination already exists, inspect the existing installation before replac
 
 > Use the material-3 skill to plan this adaptive settings form. Check the official guidance and
 > our framework’s supported APIs before choosing components and theme roles.
+
+> Use the accessibility-claims skill to review this audit before we send it. For each finding, say
+> whether it cites a requirement or advice, whether the criterion's exceptions apply, and what the
+> evidence actually establishes.
 
 After a local `bun run build wcag22`, the same installation step works for the extracted WCAG bundle:
 

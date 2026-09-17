@@ -379,3 +379,74 @@ test("cutting a CLI's exit call is caught: docs.ts is the second instance of thi
     await rm(dir, { recursive: true, force: true });
   }
 }, 60_000);
+
+/*
+ * ---- The acceptance path itself ----
+ *
+ * An audit pointed out that every check in this repository inspects the repository, and none of
+ * them exercised how the result is actually used: installing a skill and loading it. That was not
+ * hypothetical — three defects were sitting in that path, and the reason none of them had been
+ * noticed is that the published-bundle list was written down in three places and drifted in two.
+ *
+ * These tests hold the two properties that keep the path honest: CI runs what `bun run check` runs,
+ * and the published skills install and load as the README says.
+ */
+test("CI runs every check that `bun run check` runs", async () => {
+  // A check that exists locally but not in CI protects nobody on a pull request. wcag-counts.ts was
+  // exactly that when this was written: added to `check`, never added to the workflow.
+  const pkg = JSON.parse(await readFile(join(REPO, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+
+  const scripts = (s: string) => new Set([...s.matchAll(/src\/e2e\/([a-z-]+)\.ts/g)].map((m) => m[1]!));
+  const inCheck = scripts(pkg.scripts.check ?? "");
+  const inCi = scripts(workflow);
+
+  expect(inCheck.size).toBeGreaterThan(5);
+  const missing = [...inCheck].filter((s) => !inCi.has(s));
+  expect(missing).toEqual([]);
+});
+
+test("every published skill is built, drift-guarded, and documented as installable", async () => {
+  // The same list in three places: build:public, the workflow's git diff guard, and the README's
+  // install instructions. accessibility-claims was missing from all three.
+  const pkg = JSON.parse(await readFile(join(REPO, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+  const readme = await readFile(join(REPO, "README.md"), "utf8");
+
+  // Derived from what is actually committed, so adding a bundle cannot quietly skip these.
+  const proc = Bun.spawn(["git", "ls-files", "skills/*/SKILL.md"], { cwd: REPO, stdout: "pipe" });
+  const tracked = (await new Response(proc.stdout).text()).trim().split("\n").filter(Boolean);
+  await proc.exited;
+  const FIXTURES = new Set(["lumen-ds"]);
+  const publishedSkills = tracked
+    .map((p) => p.split("/")[1]!)
+    .filter((s) => !FIXTURES.has(s));
+
+  expect(publishedSkills.length).toBeGreaterThan(0);
+  for (const skill of publishedSkills) {
+    expect(pkg.scripts["build:public"]).toContain(skill);
+    expect(workflow).toContain(`skills/${skill}`);
+    expect(readme).toContain(`skills/${skill}"`);
+  }
+});
+
+test("install.ts fails when a published bundle is missing a file it links to", async () => {
+  // The packaging failure this check exists for: guidance builds fine, the shipped bundle is
+  // incomplete. Nothing upstream of the install path can see it.
+  const dir = await sandbox();
+  try {
+    const control = await runTool(dir, "install");
+    expect(control.code).toBe(0);
+
+    await rm(join(dir, "skills", "accessibility-claims", "references", "tasks", "reporting.md"));
+    const defect = await runTool(dir, "install");
+    expect(defect.code).not.toBe(0);
+    expect(defect.output).toContain("does not resolve from the install location");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60_000);

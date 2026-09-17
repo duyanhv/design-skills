@@ -18,7 +18,7 @@ jobs:
       - name: Build public authored guides
         run: bun run build:public
       - name: Published guides match their inputs
-        run: git diff --exit-code -- skills/apple-design skills/material-3
+        run: git diff --exit-code -- skills/apple-design skills/material-3 skills/accessibility-claims
       # An end-to-end build over a synthetic source: no network, no proprietary text, but it
       # exercises normalize → extract → compose → validate → eval exactly as a real source does.
       # This is what catches a pipeline break that unit tests alone would not.
@@ -58,6 +58,12 @@ jobs:
         run: bun run src/e2e/docs.ts
       - name: Documentation link guards fire on reintroduced defects
         run: bun run src/e2e/docs-negative.ts
+      # The accessibility bundle publishes counts about WCAG's own structure ("118 notes are
+      # normative"). specs.ts catches dimensions, ratios and colour literals, and could not see a
+      # count, so this recounts each one against the local WCAG build. Skips when wcag22 is not
+      # built, like coverage and fidelity, so it is silent here and meaningful locally.
+      - name: Published counts about WCAG match the source
+        run: bun run src/e2e/wcag-counts.ts
       # The authored guides promise they carry no specifications. A copied number is wrong the next
       # time the source revises it, is usually platform-specific, and is not ours to redistribute.
       # A pattern scan over prose: it catches the accidental literal, not every possible one.
@@ -71,6 +77,13 @@ jobs:
       # is the check that would have caught a 200-with-{} being counted as a verified page.
       - name: Link-verifier guards fire on reintroduced defects
         run: bun run src/e2e/links-negative.ts
+      # Everything else here inspects the repository. This follows the README's own install
+      # instructions into a temp directory and loads each skill through the resulting symlink,
+      # which is the path a user actually takes and the one nothing else exercised. It found three
+      # defects when it was written: build:public skipped a published bundle, this workflow's drift
+      # guard named two of three, and the README's install section named two of three.
+      - name: Published skills install and load as documented
+        run: bun run src/e2e/install.ts
       # The worked example's published numbers are prose, and prose drifts. Three audits found
       # figures that disagreed with the artifacts they summarised; these invariants are the fix.
       - name: The worked example's claims match its artifacts
