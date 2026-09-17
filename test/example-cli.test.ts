@@ -305,6 +305,22 @@ for (const item of TOOL_CASES) {
   }, 60_000);
 }
 
+test("an uncommitted rewrite of a pre-registered artifact fails the CLI", async () => {
+  // The sandbox copies tracked files and points .git at the real repository, so `git diff HEAD`
+  // inside it compares the copy against the real commit — which is exactly the comparison this
+  // check needs, and what makes the sandbox a faithful stand-in here.
+  //
+  // Found by sweeping the checks: counting commits passes a file that was rewritten but not
+  // committed, and REVIEW.md's whole evidential value is that it has not changed.
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/apple-design-review/REVIEW.md",
+         (t) => `${t}\nThis finding was actually about something else entirely.\n`));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("REVIEW.md differs from its committed content");
+}, 60_000);
+
 test("cutting a CLI's exit call is caught: docs.ts is the second instance of this seam", async () => {
   const dir = await sandbox();
   try {

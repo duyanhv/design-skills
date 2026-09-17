@@ -134,19 +134,46 @@ if (!(await exists(rnResults))) {
 }
 
 // 4. The pre-registered artifacts must not have been edited after the review was scored.
+//
+// Two different questions, and the first version only asked one of them. Counting commits catches
+// a rewrite that was committed; it says nothing about the file on disk right now. A sweep of the
+// checks found that REVIEW.md could be rewritten entirely — new findings, different conclusions —
+// and this reported "1 commit(s) touching it" and passed. The whole evidential value of a
+// pre-registered artifact is that it has not changed since it was registered, so the content has
+// to be compared against what was committed, not just the commit counted.
 for (const file of ["REVIEW.md", "planted-defects.md"]) {
-  const proc = Bun.spawn(["git", "log", "--format=%h %s", "--", `examples/apple-design-review/${file}`], {
+  const path = `examples/apple-design-review/${file}`;
+
+  const logProc = Bun.spawn(["git", "log", "--format=%h %s", "--", path], {
     cwd: ROOT, stdout: "pipe", stderr: "ignore",
   });
-  const out = (await new Response(proc.stdout).text()).trim().split("\n").filter(Boolean);
-  await proc.exited;
+  const commits = (await new Response(logProc.stdout).text()).trim().split("\n").filter(Boolean);
+  await logProc.exited;
+
   // One commit introduces it. planted-defects.md legitimately gains appended corrections, which are
   // additions after the fact and are labelled as such; REVIEW.md must never change at all.
-  if (file === "REVIEW.md" && out.length > 1) {
-    fail(`REVIEW.md has ${out.length} commits; it must be published verbatim and never edited`,
-         out.map((l) => `      ${l}`).join("\n"));
+  if (file === "REVIEW.md" && commits.length > 1) {
+    fail(`REVIEW.md has ${commits.length} commits; it must be published verbatim and never edited`,
+         commits.map((l) => `      ${l}`).join("\n"));
   } else {
-    pass(`${file}: ${out.length} commit(s) touching it`);
+    pass(`${file}: ${commits.length} commit(s) touching it`);
+  }
+
+  // And the working copy must match what git holds. An uncommitted rewrite is exactly the edit
+  // this check exists to prevent, and it is the one a commit count cannot see.
+  const diffProc = Bun.spawn(["git", "diff", "HEAD", "--", path], {
+    cwd: ROOT, stdout: "pipe", stderr: "ignore",
+  });
+  const diff = (await new Response(diffProc.stdout).text()).trim();
+  const diffCode = await diffProc.exited;
+  if (diffCode !== 0) {
+    log.warn(`git unavailable: ${file} was not checked against its committed content`);
+  } else if (diff) {
+    const changed = diff.split("\n").filter((l) => /^[+-][^+-]/.test(l)).length;
+    fail(`${file} differs from its committed content (${changed} changed line(s))`,
+         "a pre-registered artifact is evidence only while it is unchanged; commit the edit or revert it");
+  } else {
+    pass(`${file} matches its committed content`);
   }
 }
 
