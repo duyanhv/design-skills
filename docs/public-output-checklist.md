@@ -203,15 +203,58 @@ measurement drifting from its probe.
 
 ## 6. Extend the proven structure
 
-- [ ] Apply the same task-oriented structure to the public Material 3 skill.
-- [ ] Add a Material worked example using a documented implementation and version.
-- [ ] Create an authored public accessibility skill with explicit scope and conformance limitations.
-- [ ] Add an accessibility example that distinguishes normative conditions from informative advice.
-- [ ] Add these bundles and examples to the README once they are complete and verified.
+- [x] Apply the same task-oriented structure to the public Material 3 skill.
+      Five task guides — theming, components, layout, typography, accessibility — routed from
+      `SKILL.md`, each with an eval verified by deleting the requirement it asserts. Before this,
+      `links.ts` reported 0 of 4 of the bundle's official links as verified ("no verifier for this
+      host"); there are now verifiers for developer.android.com, github.com and m3.material.io,
+      each declaring whether it establishes identity or only existence.
+- [x] Add a Material worked example using a documented implementation and version.
+      Two, against `@material/web@2.5.0` with the traps read out of the published tarball:
+      a [blind review](../examples/material-3-review/) (12 of 12 planted defects reached) and a
+      [blind build](../examples/material-3-build/) (7 of 7 traps handled, and both of my
+      pre-registered predictions wrong).
+- [x] Create an authored public accessibility skill with explicit scope and conformance
+      limitations. [`accessibility-claims`](../guidance/accessibility-claims/) is about the claim,
+      not the criteria, because `wcag22` already ships those and a second copy would be worse than
+      nothing. Its `SKILL.md` opens with what it is not. The counts it publishes about WCAG's
+      structure are recounted against the local build by `bun run src/e2e/wcag-counts.ts`.
+- [x] Add an accessibility example that distinguishes normative conditions from informative advice.
+      [A blind review of a draft audit](../examples/accessibility-claims-review/): 10 of 10 planted
+      defects found, 0 false positives, including contrast findings raised against a disabled
+      control and a logotype, and a Level AAA criterion reported as failing an AA target.
+- [x] Add these bundles and examples to the README once they are complete and verified.
 
 ## Completion check
 
-- [ ] A first-time visitor can identify the product without reading compiler documentation.
-- [ ] A visitor can open a complete useful skill in one click.
-- [ ] A visitor can inspect the input, supported findings, and corrected result without cloning.
-- [ ] Public claims accurately describe the checked-in output and demonstrated behavior.
+- [x] A first-time visitor can identify the product without reading compiler documentation.
+      The README opens with what the skills are and who they are for; the compiler is a link
+      further down.
+- [x] A visitor can open a complete useful skill in one click.
+      Three authored bundles are committed whole: `apple-design` (13 files), `material-3` (8),
+      `accessibility-claims` (5), each with a `SKILL.md` and `provenance.json`.
+- [x] A visitor can inspect the input, supported findings, and corrected result without cloning.
+      Five worked examples are tracked in full — the code or report under review, the review or
+      build exactly as produced, the pre-registered expectations, and the scoring.
+- [x] Public claims accurately describe the checked-in output and demonstrated behavior.
+      Enforced rather than asserted, which took six audit rounds to get right: `example.ts` ties
+      every published score to its pre-registered list and the RN percentages to the harness that
+      produced them, `specs.ts` refuses a measurement with no record, `records.ts` binds each
+      record to a clause of its source, `wcag-counts.ts` recounts what the accessibility bundle
+      says about WCAG, `links.ts` verifies official links per host, and `test/example-cli.test.ts`
+      runs the real CLIs so a check that stops failing is itself caught.
+
+### What is still not established
+
+Stated here because the checklist's own standard is that public claims match demonstrated
+behaviour, and these are the gaps behind the numbers above:
+
+- **No control arm anywhere.** Every example shows what one agent did *with* a bundle. No run
+  without one was performed, so none of this establishes the bundles caused the result.
+- **VoiceOver has never been run**, in any exercise. Every accessibility finding in every example
+  is from source or from a rendered image.
+- **The Material examples were never rendered in a browser.** No screenshots, no dark-mode
+  captures, no contrast measured against a real theme.
+- **The React Native pilot is one version, one OS, simulator only.**
+- **`specs.ts` is a prose pattern scan** with four recorded holes; it catches dimensions, ratios and
+  colour literals, and nothing else. `wcag-counts.ts` exists because it could not see a count.
