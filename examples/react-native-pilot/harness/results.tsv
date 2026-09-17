@@ -1,0 +1,8 @@
+variant	pixels_differing_vs_A	note
+A-uncapped	-	baseline
+B-max-multiplier	0.00%	IDENTICAL to baseline: this variant changed nothing
+C-inline-cap	52.38%	
+CONTROL-edited-text	50.39%	
+D-no-scaling	48.90%	
+E-dynamic-type-ramp	50.63%	
+F-platform-color	50.62%	

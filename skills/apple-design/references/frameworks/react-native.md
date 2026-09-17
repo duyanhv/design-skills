@@ -2,91 +2,151 @@
 
 The Apple guidance in this bundle is written against Apple's own frameworks. Most of it transfers to
 React Native, but the *mechanisms* do not: SwiftUI supplies behaviour that RN makes the app's
-responsibility. This file covers the gap, and every claim in it was verified on a running RN app.
+responsibility. This file covers the gap.
 
-**Verified on:** React Native 0.76.5, New Architecture (Fabric, bridgeless), iPhone 17 Pro,
-iOS 26.5. Behaviour differs between RN versions more than it differs between iOS versions, so check
-your own version rather than trusting this.
+**Pinned to:** React Native 0.76.5, New Architecture (Fabric, bridgeless), iPhone 17 Pro simulator,
+iOS 26.5, Xcode 27.0. RN's text behaviour changes between minor versions more than between iOS
+versions, so check your own version rather than trusting this.
 
-## Text scaling is the big one
+Claims here are labelled by how they were established, because they are not equally strong. The
+harness that produces both kinds lives in the design-skills repository, not in this bundle:
 
-iOS Dynamic Type has no direct RN equivalent. `Text` scales with the system setting by default, but
-nothing caps it per text style the way Apple's semantic styles do. At the largest accessibility size
-this screen measured `fontScale = 3.571`, which turns a 34pt title into roughly 121pt and wraps it
-mid-word (`measured.rn-fontscale`).
-
-Three ways to handle a display-sized string, two of which do not work:
-
-| Approach | Result on RN 0.76.5 / Fabric |
+| Label | Means |
 | --- | --- |
-| `maxFontSizeMultiplier={n}` | **No effect.** The prop is declared in `TextProps.js`, but no native implementation reads it on this version. It fails silently. |
-| Inline `fontSize: base * fontScale` capped with `Math.min` | **Makes it worse.** RN scales the resulting `fontSize` again, so the cap compounds. |
-| `allowFontScaling={false}` plus a size you choose | **Works.** Scaling is off for that one `Text`, so the size is exactly what you set. |
+| **[source]** | Read from the pinned `node_modules`. Re-derive with `examples/react-native-pilot/harness/inspect-source.sh` in this repository. |
+| **[measured]** | Observed on the running simulator build. Re-run with `examples/react-native-pilot/harness/run-variants.sh` in this repository. |
+| **[untested]** | Believed from documentation or reading, never exercised here. Treat as a lead. |
 
-Turning scaling off is a real accessibility cost, so confine it to display text that has a
-deliberate size, and leave body text scalable. `useWindowDimensions().fontScale` is the signal to
-branch on for layout.
+An earlier version of this file said "every claim in it was verified on a running app". That was
+not true, and it was contradicted two screens later by its own list of things it had not tested.
 
-`ViewThatFits` does not exist. The RN equivalent is to read `fontScale` and switch layout yourself:
+## Text scaling
+
+iOS Dynamic Type has no single RN equivalent, and the options differ sharply in whether they work.
+At the largest accessibility size this device reports `fontScale = 3.571`, so an uncapped 34 pt
+title renders near 121 pt and wraps mid-word to "Notific / ations" (`measured.rn-fontscale`).
+
+Measured across one clean build per variant at that text size (`measured.rn-variant-diffs`):
+
+| Approach | Pixels differing from uncapped | Verdict |
+| --- | --- | --- |
+| `dynamicTypeRamp="largeTitle"` | 50.63% | **Works, and keeps scaling on.** Start here. |
+| `allowFontScaling={false}` + explicit size | 48.90% | Works, at the cost of never scaling. |
+| `maxFontSizeMultiplier={1.4}` | **0.00%** | **No effect.** Byte-identical to no cap. |
+| Inline `Math.min(34 * fontScale, ...)` | 52.38% | Worse. RN scales the size you computed. |
+| *(control)* change the title's text | 50.39% | Proves edits reach the build. |
+
+### Prefer `dynamicTypeRamp`
+
+**[source]** Fabric routes it through `UIFontMetrics metricsForTextStyle:`, which is the same
+mechanism Apple's own semantic text styles use. **[measured]** The title stops wrapping and text
+still scales for users who need it.
+
+```tsx
+<Text style={styles.title} dynamicTypeRamp="largeTitle">Notifications</Text>
+```
+
+This is the closest thing RN has to `.font(.largeTitle)`, and the first pass of this pilot missed it
+entirely, recommending that scaling be switched off instead. Reach for `allowFontScaling={false}`
+only when you need an exact size, confine it to display text, and never apply it to body text.
+
+### `maxFontSizeMultiplier` silently does nothing on Fabric
+
+**[measured]** The capture with the prop is byte-identical to the capture without it: 0.00% of
+pixels differ. The control variant, which changes only the title string, differs in 50.39%, so the
+build pipeline was picking up edits.
+
+**[source]** The precise scope, which an audit corrected:
+
+- `Libraries/Text/RCTTextAttributes.mm:249` **does** implement it: `fminf(maxFontSizeMultiplier,
+  fontSizeMultiplier)`. That is the **legacy (Paper)** iOS renderer.
+- `Libraries/Text/BaseText/RCTBaseTextViewManager.mm:40` wires it as a shadow property, also legacy.
+- In `ReactCommon` the name appears only under **Android** `TextInput`. Fabric's iOS paragraph view,
+  `RCTParagraphComponentView.mm`, does not mention it at all.
+
+So it is not that "no native implementation reads it" — the earlier wording here, and too broad. It
+is implemented for the old renderer and **absent from the Fabric iOS text path**, which means an app
+on the New Architecture gets no cap from it. An accessibility prop that is accepted and ignored is
+worse than one that does not exist, because nothing tells you.
+
+### Layout
+
+`ViewThatFits` does not exist. Read `fontScale` and switch layout yourself:
 
 ```tsx
 const {fontScale} = useWindowDimensions();
-const stacked = fontScale >= 1.5;
-// then: stacked && styles.rowStacked  ->  flexDirection: 'column'
+const stacked = fontScale >= 1.5;   // then: stacked ? styles.rowStacked : styles.row
 ```
 
-A label beside a fixed-width control (a `Switch`, a button) is the pattern that breaks first,
-because the label has nowhere to grow. Stack them.
+A label beside a fixed-width control is the pattern that breaks first, because the label has nowhere
+to grow. Stack them.
+
+## Colour: semantic colours exist, use them
+
+**[source]** RN 0.76.5 exports `PlatformColor` and `DynamicColorIOS` from the package root, and
+`React/Base/RCTConvert.mm` maps 33 iOS semantic colour names natively, `labelColor` among them.
+
+**[measured]** A variant whose palette is built entirely from `PlatformColor`, declaring no colours
+of its own, differs between light and dark by 99.75% of pixels
+(`measured.rn-platformcolor-appearance`). The system colours are doing the work.
+
+```tsx
+backgroundColor: PlatformColor('systemGroupedBackgroundColor'),
+color: PlatformColor('labelColor'),
+// and for a brand colour that must adapt:
+tintColor: DynamicColorIOS({light: '#0A84FF', dark: '#409CFF'}),
+```
+
+This corrects the earlier claim here that "there are no semantic system colours: you maintain the
+palette". A hand-maintained palette is a **choice**, and usually the worse one: semantic colours also
+track increased-contrast and other accessibility settings that a hex literal cannot.
+
+`useColorScheme()` still returns `'light' | 'dark' | null` when you need to branch in JS, and
+`Appearance.addChangeListener` exists for use outside a component. Prefer letting the colour adapt
+over branching on the scheme.
 
 ## Interaction bounds
 
-RN has no `contentShape`. A `Pressable`'s touch region is its layout box plus `hitSlop`:
+**[untested]** RN has no `contentShape`. A `Pressable`'s touch region is its layout box plus
+`hitSlop`:
 
 ```tsx
-<Pressable hitSlop={8} ...>   // grows the touch region without changing layout
+<Pressable hitSlop={8} style={{minHeight: 44, minWidth: 44}} ... />
 ```
 
-This matters for the same reason it does on Apple platforms: the visible glyph is not the target.
-See [control-sizing.md](../tasks/control-sizing.md) for the values and for why a screenshot cannot
-settle the question. `hitSlop` is the mechanism that lets a visually small control still meet them.
-
-`minHeight`/`minWidth` on the style is the other half, and is what makes the box itself big enough.
+See [control-sizing.md](../tasks/control-sizing.md) for the values and why a screenshot cannot settle
+the question. Marked untested because nothing here tapped anything: the simulator was driven by
+script, and `hitSlop` was verified as layout, not as ergonomics.
 
 ## Accessibility semantics are hand-built
 
-SwiftUI infers a great deal from the control you chose. RN infers almost nothing, so the semantics
-are props you write:
+SwiftUI infers a great deal from the control you chose. RN infers almost nothing.
 
-| Need | RN |
-| --- | --- |
-| Role | `accessibilityRole="button" \| "radio" \| "header" \| "radiogroup"` |
-| Label | `accessibilityLabel` — required on anything whose text is not self-explanatory |
-| State | `accessibilityState={{selected, disabled, busy}}` |
-| Grouping | `accessibilityRole="radiogroup"` on the container, `radio` on each option |
-| Announcing a change | `AccessibilityInfo.announceForAccessibility(...)` |
-| Live region | `accessibilityLiveRegion="polite"` on the element that changes |
+| Need | RN | Note |
+| --- | --- | --- |
+| Role | `accessibilityRole="button" \| "radio" \| "header" \| "radiogroup"` | **[untested]** in speech |
+| Label | `accessibilityLabel` | **[untested]** in speech |
+| State | `accessibilityState={{selected, disabled, busy}}` | **[untested]** in speech |
+| Grouping | `accessibilityRole="radiogroup"` + `radio` on each option | **[untested]** in speech |
+| Announcing a change on **iOS** | `AccessibilityInfo.announceForAccessibility(...)` | **[source]** iOS-supported |
+| `accessibilityLiveRegion` | **Android only** | **[source]** `@platform android` in `ViewPropTypes.js` |
 
-There is no built-in segmented control. A row of `Pressable`s needs the radiogroup semantics
-supplied by hand, and an option's `accessibilityLabel` should say what it means ("Quiet, delivered
-silently"), not just repeat the visible word.
+The last row is a correction. This file previously listed `accessibilityLiveRegion="polite"` as the
+way to announce a validation error, on a screen that runs on iOS. RN declares it
+`@platform android`, so that recommendation was a no-op on the platform the example targets. Use
+`AccessibilityInfo.announceForAccessibility()` on iOS.
 
-## Dark mode
-
-`useColorScheme()` returns `'light' | 'dark' | null`, and there are no semantic system colours: you
-maintain the palette. That makes the hard-coded-colour failure from
-[appearance.md](../tasks/appearance.md) much easier to commit, because there is no adaptive default
-to fall back on.
-
-Measured on this screen: light and dark captures differ in **99.78%** of pixels, which confirms the
-palette is actually switching rather than a few system-drawn elements moving. A near-zero figure
-would mean the app is ignoring the setting.
-
-`Appearance.addChangeListener` exists if you need to react outside a component.
+There is no built-in segmented control. A row of `Pressable`s needs radiogroup semantics supplied by
+hand, and an option's `accessibilityLabel` should say what it means ("Quiet, delivered silently"),
+not repeat the visible word.
 
 ## What this pilot did not establish
 
-- **VoiceOver was not run.** Roles and labels are present in the code and unverified in speech.
-- **No Android pass.** `accessibilityRole` maps differently there, and `hitSlop` semantics differ.
-- **One RN version.** 0.76.5 with the New Architecture. The `maxFontSizeMultiplier` finding in
-  particular is version-specific and may be fixed in a later release; re-test rather than assume.
-- **No real device.** Simulator only, so touch behaviour is inferred from layout rather than tapped.
+- **VoiceOver was never run.** Every role and label above is unverified in speech. This is the
+  largest gap, and the accessibility semantics table is the part of this file to trust least.
+- **No touch testing.** Simulator, scripted. `hitSlop` is inferred from layout.
+- **iOS only.** Not built for Android, where several of these props behave differently by design.
+- **One RN version, one OS version, one device.** The `maxFontSizeMultiplier` result is specific to
+  0.76.5 on Fabric and may change; `harness/inspect-source.sh` re-answers it for another version in
+  seconds.
+- **Pixel percentages are change detectors, not quality measures.** Only the 0.00% is load-bearing.

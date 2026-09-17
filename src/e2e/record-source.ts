@@ -142,6 +142,52 @@ export function findTable(page: PageData, anchor: string, column: string): Sourc
   return null;
 }
 
+/**
+ * A condition predicate, parsed from a source cell into something that can be evaluated.
+ *
+ * Contrast's rows are conditions written as English: "Up to 17 pts", "18 pts", "All". Comparing a
+ * record's declared predicate to the cell *as a string* only works for exact restatements, which is
+ * why an audit could change `text_size_max_pt: 17` to `99` and have it pass: nothing evaluated it.
+ */
+export type Predicate =
+  | { kind: "any" }
+  | { kind: "max"; value: number; unit: string }   // "Up to 17 pts" -> value <= 17
+  | { kind: "exact"; value: number; unit: string } // "18 pts"       -> value === 18
+  | { kind: "literal"; text: string };             // "Bold"         -> a named category
+
+export function parsePredicate(cell: string): Predicate {
+  const text = cell.trim();
+  if (/^all$/i.test(text)) return { kind: "any" };
+  const upTo = /^up to\s+(\d+(?:\.\d+)?)\s*(pts?|points?|px)$/i.exec(text);
+  if (upTo) return { kind: "max", value: Number(upTo[1]), unit: upTo[2]!.toLowerCase() };
+  const exact = /^(\d+(?:\.\d+)?)\s*(pts?|points?|px)$/i.exec(text);
+  if (exact) return { kind: "exact", value: Number(exact[1]), unit: exact[2]!.toLowerCase() };
+  return { kind: "literal", text: text.toLowerCase() };
+}
+
+/** Does a predicate admit a given numeric value? Used for boundary and intersection tests. */
+export function admits(p: Predicate, value: number): boolean {
+  switch (p.kind) {
+    case "any": return true;
+    case "max": return value <= p.value;
+    case "exact": return value === p.value;
+    case "literal": return false;
+  }
+}
+
+/** Can two predicates be satisfied at once? An overlap claim is exactly this question. */
+export function intersects(a: Predicate, b: Predicate): boolean {
+  if (a.kind === "any" || b.kind === "any") return true;
+  if (a.kind === "literal" || b.kind === "literal") {
+    return a.kind === "literal" && b.kind === "literal" && a.text === b.text;
+  }
+  // Both numeric: test the boundaries each one admits.
+  const candidates = new Set<number>();
+  for (const p of [a, b]) candidates.add(p.value);
+  for (const v of candidates) if (admits(a, v) && admits(b, v)) return true;
+  return false;
+}
+
 /** The prose under one section, for records whose value is stated in a sentence. */
 export function sectionText(page: PageData, anchor: string): string | null {
   return page.prose.get(anchor) ?? null;

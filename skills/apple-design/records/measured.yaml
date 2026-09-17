@@ -72,3 +72,56 @@ records:
       RN-specific and version-specific. This is not an Apple value and says nothing about Dynamic
       Type on Apple's own frameworks; it describes how RN scales text on one version.
     source_kind: measured
+
+  # Variant sweep. Re-measured with the committed harness after an audit found the first pass
+  # unreproducible and two of its conclusions wrong. Every figure below comes from
+  # examples/react-native-pilot/harness/results.tsv, regenerable with ./run-variants.sh.
+  - id: measured.rn-variant-diffs
+    platform: [iOS]
+    values:
+      max_font_size_multiplier: "0.00 %"
+      inline_cap: "52.38 %"
+      control_edited_text: "50.39 %"
+      allow_font_scaling_false: "48.90 %"
+      dynamic_type_ramp: "50.63 %"
+      platform_color: "50.62 %"
+    meaning:
+      max_font_size_multiplier: >-
+        Share of pixels differing from the uncapped baseline when maxFontSizeMultiplier={1.4} is
+        added. Zero: the capture is byte-identical, so the prop changed nothing.
+      inline_cap: "Same measure for a hand-computed fontSize capped with Math.min."
+      control_edited_text: >-
+        Same measure for a variant that changes only the title STRING. The control: a non-zero
+        value proves edits reach the built app, so B's zero cannot be blamed on a stale build.
+      allow_font_scaling_false: "Same measure for allowFontScaling={false} with an explicit size."
+      dynamic_type_ramp: >-
+        Same measure for dynamicTypeRamp="largeTitle". Non-zero, and the title stops wrapping
+        while text scaling stays ON. The first pass missed this option entirely.
+      platform_color: "Same measure for a palette built from PlatformColor instead of hex literals."
+    conditions: >-
+      React Native 0.76.5 New Architecture, iPhone 17 Pro simulator, iOS 26.5, Xcode 27.0,
+      content size UICTContentSizeCategoryAccessibilityXXXL, light appearance, Release
+      configuration, one clean build per variant. Metric: share of pixels differing in any RGB
+      channel by more than zero, via harness/pixel-diff.swift.
+    exceptions: >-
+      A pixel-difference share is a sensitive detector of "did anything change", not a perceptual
+      or quality measure. 50.63 vs 48.90 does not rank E above D. Only the zero is load-bearing.
+      Simulator only; one version.
+    source_kind: measured
+
+  - id: measured.rn-platformcolor-appearance
+    platform: [iOS]
+    values:
+      light_vs_dark: "99.75 %"
+    meaning:
+      light_vs_dark: >-
+        Share of pixels differing between light and dark captures of the PlatformColor variant,
+        which declares no palette of its own. Confirms RN's semantic colours resolve to real
+        UIColors that adapt to appearance.
+    conditions: >-
+      Same build and device as measured.rn-variant-diffs; appearance switched with
+      `xcrun simctl ui <udid> appearance dark`, app relaunched, recaptured.
+    exceptions: >-
+      Shows that appearance switching works, not that the resulting colours are correct or
+      contrast-conformant. Increased-contrast and reduce-transparency settings were not tested.
+    source_kind: measured

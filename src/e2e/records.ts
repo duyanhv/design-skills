@@ -34,12 +34,17 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { ROOT, exists } from "../util/fs.ts";
 import { log } from "../util/log.ts";
-import { fetchPage, resolveTableCell, findTable, sectionText, type PageData } from "./record-source.ts";
+import {
+  fetchPage, resolveTableCell, findTable, sectionText, parsePredicate, intersects,
+  type PageData, type Predicate,
+} from "./record-source.ts";
 
 const quiet = process.argv.includes("--quiet");
 
 export interface MeasurementRecord {
   id: string;
+  /** For local_ir records: the rule id in the IR build whose text must contain the value. */
+  rule?: string;
   /** Checked against the row label, not trusted: the row is what selects the values. */
   platform?: string[];
   values?: { [k: string]: string };
@@ -67,6 +72,9 @@ export interface MeasurementRecord {
 }
 
 export interface RecordDoc {
+  /** "local_ir" marks a file verified against a local IR build instead of Apple's DocC. */
+  source_kind?: string;
+  source_build?: string;
   topic: string;
   source_page?: string;
   source_url?: string;
@@ -100,6 +108,62 @@ export interface RecordDoc {
  *
  * `recordsDir` is where a relative `snapshot:` path resolves from.
  */
+/**
+ * Strip the comparison/unit suffix so two records' predicates for the same dimension can be
+ * compared. `text_size_max_pt` and `text_size_exact_pt` both constrain text size; keying on the
+ * raw names made an overlap claim between them silently skip instead of being evaluated.
+ */
+function conditionDimension(key: string): string {
+  return key.replace(/_(max|min|exact|eq)(_[a-z]+)?$/, "").replace(/_(pt|pts|px|point|points)$/, "");
+}
+/**
+ * Load rule id -> full text from a local IR build, so a record citing a rule can be checked
+ * against what that rule actually says rather than against our summary of it.
+ */
+async function loadIrRules(build: string): Promise<Map<string, string> | undefined> {
+  const dir = join(ROOT, build, "pages");
+  if (!build || !(await exists(dir))) return undefined;
+  const rules = new Map<string, string>();
+  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".json"))) {
+    const page = JSON.parse(await readFile(join(dir, file), "utf8")) as {
+      rules?: { id: string; statement?: string; rationale?: string; notes?: string[] }[];
+    };
+    for (const rule of page.rules ?? []) {
+      rules.set(rule.id, [rule.statement, rule.rationale, ...(rule.notes ?? [])].filter(Boolean).join(" "));
+    }
+  }
+  return rules;
+}
+
+
+/** Rebuild a record's predicate for one condition dimension, so overlap claims can be evaluated. */
+function predicateFor(record: MeasurementRecord, dimension: string): Predicate | undefined {
+  const entry = Object.entries(record.conditions_match ?? {}).find(
+    ([k]) => conditionDimension(k) === dimension,
+  );
+  if (!entry) return undefined;
+  const [key, raw] = entry;
+  if (raw === undefined) return undefined;
+  if (norm(String(raw)) === "any") return { kind: "any" };
+  const n = Number(raw);
+  if (Number.isFinite(n)) {
+    return key.includes("_max")
+      ? { kind: "max", value: n, unit: "pt" }
+      : { kind: "exact", value: n, unit: "pt" };
+  }
+  return { kind: "literal", text: norm(String(raw)) };
+}
+
+function describePredicate(p: Predicate): string {
+  switch (p.kind) {
+    case "any": return "any";
+    case "max": return `<= ${p.value}${p.unit}`;
+    case "exact": return `= ${p.value}${p.unit}`;
+    case "literal": return p.text;
+  }
+}
+
+
 export async function validateProvenance(
   pageName: string,
   prov: { url?: string; retrieved?: string; sha256?: string; snapshot?: string } | undefined,
@@ -216,28 +280,84 @@ export function verifyRecord(
       );
     }
 
-    // A conditional record must have its predicate agree with the row and the other condition
-    // columns. Contrast selects by size AND weight, so a record can name the right cell and still
-    // describe the wrong combination.
-    if (record.conditions_match && table) {
+    // A conditional record must have a predicate for EVERY condition column, and each predicate
+    // must evaluate the same way its source cell does.
+    //
+    // This check used to compare strings and skip column 0, which made it decorative. An audit
+    // changed `text_size_max_pt: 17` to `99`, deleted `text_weight`, and deleted `conditions_match`
+    // outright; all three passed. A record could name the right cell and still describe the wrong
+    // combination, which is the one thing conditions exist to prevent.
+    if (table && record.row) {
       const rowCells = table.rows.find((r) => r.length && norm(r[0]!) === norm(record.row!));
       if (rowCells) {
+        const declaredAll = record.conditions_match ?? {};
         for (const [index, header] of table.header.entries()) {
-          if (index === 0) continue;
-          const declared = record.conditions_match[norm(header).replace(/\s+/g, "_")];
-          if (declared === undefined) continue;
-          const cell = norm(rowCells[index] ?? "");
-          if (cell === "all" && norm(String(declared)) !== "any") {
+          // Skip value columns; those are checked against `values` further down.
+          if (record.columns && Object.values(record.columns).some((c) => norm(c) === norm(header))) continue;
+          // Skip a platform column: the platform branch above already verifies it against the row,
+          // so requiring a second predicate would be asking for the same fact twice.
+          if (norm(header) === "platform") continue;
+          const key = norm(header).replace(/\s+/g, "_");
+          const cell = rowCells[index] ?? "";
+          const predicate = parsePredicate(cell);
+
+          // Keys may carry a comparison/unit suffix (text_size -> text_size_max_pt), so match on
+          // prefix in both directions rather than requiring an exact name.
+          const entry = Object.entries(declaredAll).find(
+            ([k]) => k === key || k.startsWith(`${key}_`) || key.startsWith(k),
+          );
+          if (!entry) {
             report(
               record.id,
-              `condition "${header}" says "${declared}", but the row's cell is "All"; use \`any\``,
+              `names row "${record.row}" but declares no condition for column "${header}" ` +
+                `(cell: "${cell}"); a record missing a predicate cannot be matched against a real case`,
             );
-          } else if (cell !== "all" && cell !== norm(String(declared))) {
-            report(record.id, `condition "${header}"="${declared}" disagrees with the row's cell "${rowCells[index]}"`);
+            continue;
+          }
+          const [declaredKey, declaredValue] = entry;
+          const declaredText = String(declaredValue);
+
+          if (predicate.kind === "any") {
+            if (norm(declaredText) !== "any") {
+              report(record.id, `condition "${header}" says "${declaredText}", but the cell is "${cell}"; use \`any\``);
+            }
+          } else if (predicate.kind === "literal") {
+            if (norm(declaredText) !== norm(predicate.text)) {
+              report(record.id, `condition "${header}"="${declaredText}" disagrees with the cell "${cell}"`);
+            }
+          } else {
+            const declaredNum = Number(declaredText);
+            if (!Number.isFinite(declaredNum)) {
+              report(record.id, `condition "${declaredKey}"="${declaredText}" is not numeric, but the cell "${cell}" is`);
+              continue;
+            }
+            const wantsMax = declaredKey.includes("_max");
+            const wantsExact = declaredKey.includes("_exact") || declaredKey.includes("_eq");
+            if (predicate.kind === "max" && !wantsMax) {
+              report(
+                record.id,
+                `cell "${cell}" is an upper bound, but "${declaredKey}" does not say so; ` +
+                  `name it \`..._max_${predicate.unit.replace(/s$/, "")}\``,
+              );
+            }
+            if (predicate.kind === "exact" && (wantsMax || !wantsExact)) {
+              report(
+                record.id,
+                `cell "${cell}" names one exact size, but "${declaredKey}" does not declare an exact match; ` +
+                  `the row does not read "${predicate.value} or larger"`,
+              );
+            }
+            if (declaredNum !== predicate.value) {
+              report(
+                record.id,
+                `condition "${declaredKey}"=${declaredNum} does not match the cell "${cell}" (${predicate.value})`,
+              );
+            }
           }
         }
       }
     }
+
 
     for (const [key, value] of Object.entries(record.values)) {
       const column = record.columns?.[key];
@@ -352,6 +472,43 @@ if (import.meta.main) {
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort()) {
     const doc = parse(await readFile(join(dir, file), "utf8")) as RecordDoc;
 
+    // Records taken from a local IR build (WCAG) rather than Apple's live DocC. Verified, but
+    // against a different source: the value must appear in the text of the rule it names. Without
+    // this branch the file would be trusted, and a file that is merely trusted is a claim.
+    if (doc.source_kind === "local_ir") {
+      if (!quiet) console.log(`\n== ${file} (${doc.records?.length ?? 0} records from ${doc.source_build})`);
+      const rules = await loadIrRules(doc.source_build ?? "");
+      if (!rules) {
+        fail(file, `source_build "${doc.source_build}" is not a readable IR build`);
+        continue;
+      }
+      for (const record of doc.records ?? []) {
+        if (!record.rule) {
+          fail(record.id, "a local_ir record must name the `rule` its value comes from");
+          continue;
+        }
+        const body = rules.get(record.rule);
+        if (body === undefined) {
+          fail(record.id, `names rule "${record.rule}", which does not exist in ${doc.source_build}`);
+          continue;
+        }
+        if (!record.attribution?.trim()) {
+          fail(record.id, "a local_ir record must carry `attribution`: these are another body's values");
+        }
+        for (const [key, value] of Object.entries(record.values ?? {})) {
+          // The value must be findable in the rule's own text, allowing for spacing.
+          const needle = norm(String(value)).replace(/\s+/g, "\\s*");
+          if (!new RegExp(needle, "i").test(norm(body))) {
+            fail(record.id, `value "${key}"="${value}" does not appear in the text of ${record.rule}`);
+          } else {
+            verified += 1;
+            if (!quiet) console.log(`  ✓ ${record.id}: "${value}" found in ${record.rule}`);
+          }
+        }
+      }
+      continue;
+    }
+
     if (doc.origin) {
       if (!quiet) {
         console.log(`\n== ${file} (${doc.records?.length ?? 0} measured records)`);
@@ -422,6 +579,25 @@ if (import.meta.main) {
         fail(`${file}:overlaps`, `names record(s) that do not exist: ${missing.join(", ")}`);
         continue;
       }
+      // An overlap is a claim that one real case matches both rows. Differing values are not
+      // enough: "Up to 17 pts" and "18 pts" disagree on ratio but cannot both apply to any size,
+      // so calling them an overlap would invent an ambiguity the source does not have.
+      // Verified by evaluating the predicates, not by comparing their text.
+      const conditionKeys = new Set(
+        found.flatMap((r) => Object.keys(r!.conditions_match ?? {}).map(conditionDimension)),
+      );
+      for (const key of conditionKeys) {
+        const preds = found.map((r) => predicateFor(r!, key));
+        if (preds.some((x) => x === undefined)) continue;
+        if (!preds.slice(1).every((x) => intersects(preds[0]!, x!))) {
+          fail(
+            `${file}:overlaps`,
+            `claims ${ids.join(" and ")} overlap, but their "${key}" conditions cannot both hold ` +
+              `(${preds.map((x) => describePredicate(x!)).join(" vs ")}); no case matches both rows`,
+          );
+        }
+      }
+
       const values = found.map((r) => Object.values(r!.values ?? {})[0] ?? "");
       const unique = new Set(values.map(norm));
       if (unique.size < 2) {

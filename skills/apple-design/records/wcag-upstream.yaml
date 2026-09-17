@@ -1,0 +1,113 @@
+# Measurement records: WCAG's own thresholds, which Apple's contrast table summarises.
+#
+# Why this file exists, separately from contrast.yaml:
+#
+# Apple's accessibility page reproduces contrast ratios and says outright that it "uses the
+# following values from WCAG Level AA as guidance". contrast.yaml records what Apple's *table*
+# says. This file records what *WCAG* says, because the two are not the same conditions and an
+# audit caught this bundle claiming otherwise.
+#
+# The claim that was wrong: that WCAG "defines large scale in its own terms rather than in points".
+# It does not. The glossary names 18 point and 14 point bold explicitly. The real differences are
+# shape (WCAG states a lower bound, Apple's row names one size), how bold is handled (folded into
+# WCAG's threshold at 14 pt, a separate wildcard row for Apple), and unit (CSS points in a
+# resizable document versus native layout points under Dynamic Type).
+#
+# Verified against the local wcag22 IR build rather than the live spec: w3.org serves a bot-check
+# page to this environment, so a live fetch would prove nothing. The build's own provenance is
+# recorded below and `source_kind: local_ir` tells the verifier to check these strings against that
+# build's extracted rule text instead of Apple's DocC JSON.
+
+topic: wcag-upstream
+
+attribution: |
+  These are W3C's thresholds, not Apple's and not ours. Text (c) W3C (World Wide Web Consortium),
+  Web Content Accessibility Guidelines 2.2, https://www.w3.org/TR/WCAG22/, W3C Document License.
+  Cite WCAG for conformance; this bundle is not a conformance standard.
+
+source_kind: local_ir
+source_build: ir/wcag22
+source_url: https://www.w3.org/TR/WCAG22/#glossary
+
+provenance:
+  wcag22:
+    build: ir/wcag22
+    source_version: "2026-08-17"
+    revision: 13c6f9e64157d0732d3253ee522ca6ae6996dc34
+    extractor: wcag-sc@6
+    fetched_at: "2026-09-15T09:07:23.765Z"
+    glossary_source_hash: eae548d8aab5db97
+    live_check: >-
+      Not attempted from here. w3.org returns a bot-check page to this environment, so a 200 would
+      not have meant the document. Re-verify against the live spec before relying on these for a
+      conformance claim.
+
+records:
+  - id: wcag.large-scale-regular
+    rule: wcag22/glossary/041
+    values:
+      min_size: "18 point"
+    meaning:
+      min_size: >-
+        The lower bound at which non-bold text counts as "large scale (text)" under WCAG 2.2, and
+        so qualifies for the 3:1 ratio rather than 4.5:1. A lower bound, not a single size: text
+        above it also qualifies.
+    conditions: >-
+      CSS points, measured at the size the content is delivered. WCAG's own note: font size "is the
+      size when the content is delivered. It does not include resizing that may be done by a user."
+      This is materially different from a native platform point under Dynamic Type.
+    exceptions: >-
+      CJK fonts use "font size that would yield equivalent size" rather than this number. WCAG also
+      notes that fonts with extraordinarily thin strokes are harder to read at low contrast
+      regardless of size.
+    attribution: W3C, WCAG 2.2 glossary, "large scale (text)"
+
+  - id: wcag.large-scale-bold
+    rule: wcag22/glossary/041
+    values:
+      min_size: "14 point"
+    meaning:
+      min_size: >-
+        The lower bound at which BOLD text counts as "large scale (text)" under WCAG 2.2. This is
+        where WCAG and Apple's table diverge most: WCAG gives bold a lower size threshold, while
+        Apple's table gives bold its own row with no size condition at all.
+    conditions: >-
+      CSS points, bold weight, measured at delivery size. Same unit caveat as
+      wcag.large-scale-regular.
+    exceptions: >-
+      CJK equivalents as above. WCAG's note derives the pair from print convention: "The 18 and 14
+      point sizes for roman texts are taken from the minimum size for large print (14pt) and the
+      larger standard font size (18pt)."
+    attribution: W3C, WCAG 2.2 glossary, "large scale (text)"
+
+  - id: wcag.large-scale-ratio
+    rule: wcag22/distinguishable/003
+    values:
+      minimum_ratio: "3:1"
+    meaning:
+      minimum_ratio: >-
+        The minimum contrast ratio WCAG 2.2 SC 1.4.3 (Level AA) requires for large-scale text.
+        Numerically equal to the ratio in Apple's 18 pts and Bold rows, but reached by a different
+        condition, which is why it is recorded separately rather than cross-referenced.
+    conditions: "Large-scale text and images of large-scale text, as defined by the glossary entry above."
+    exceptions: >-
+      Incidental text (inactive components, pure decoration, invisible, or part of a picture with
+      significant other visual content) and logotypes carry no contrast requirement. Apple's table
+      reproduces neither exception.
+    attribution: W3C, WCAG 2.2 SC 1.4.3 Contrast (Minimum), Level AA
+
+# Where this file and contrast.yaml disagree, stated as data. Neither is wrong; they are different
+# documents, and a reader who assumes they are interchangeable will get 14 pt bold wrong.
+divergence_from_apple:
+  - dimension: bold text
+    wcag: "large scale from 14 point bold upward, so 3:1 applies at 14 pt and above"
+    apple_table: "a wildcard row: bold at ANY size gets 3:1, including well below 14 pt"
+    consequence: >-
+      Apple's table is more permissive for small bold text. A 10 pt bold label meets Apple's table
+      at 3:1 and fails WCAG, which requires 4.5:1 there.
+  - dimension: non-bold text at and above 18 pt
+    wcag: "a lower bound: 18 point and larger is large scale"
+    apple_table: 'names "18 pts" alone, with no "or larger"'
+    consequence: >-
+      Read literally, Apple's table says nothing about 24 pt text. WCAG covers it. This is the gap
+      contrast.yaml records in `undefined_between`.

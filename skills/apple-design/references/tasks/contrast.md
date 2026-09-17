@@ -31,22 +31,55 @@ neither should you, silently.
 **Overlap.** Bold text at or below 17 pt (`contrast.small-text`) matches row 1 (all weights, 4.5:1,
 `contrast.small-text`) and row 3 (all sizes when bold, 3:1, `contrast.bold`) at once. The rows disagree. Nothing on the page states a precedence.
 
-**Gap.** Row 1 ends at 17 pts (`contrast.small-text`). Row 2 names 18 pts (`contrast.large-text`) —
-not "18 pts or larger". Text between those
-sizes matches no row, and larger text is not addressed by the table at all.
+**Gap, for non-bold text.** Row 1 ends at 17 pts (`contrast.small-text`). Row 2 names 18 pts
+(`contrast.large-text`) — not "18 pts or larger". Non-bold text between those sizes matches no row,
+and non-bold text above 18 pt is not addressed by the table at all.
+
+The weight qualifier matters and an earlier version of this page left it out. Bold text in that band
+is *not* uncovered: bold text of any size matches row 3 (`contrast.bold`, all sizes when bold →
+3:1), including sizes inside the gap and sizes above it. The gap is real but narrower than "nothing
+covers it".
 
 If a finding turns on either, say which reading you applied. Measuring against the stricter value
 (4.5:1 from `contrast.small-text`) and saying so is defensible; quietly taking the looser one is not.
 
+
+## Apple's rows and WCAG's thresholds are not the same conditions
+
+They share numbers, which makes it tempting to treat them as interchangeable. They are not, and an
+earlier version of this page got the difference wrong in a way worth stating plainly: it claimed
+WCAG "defines large scale in its own terms rather than in points". That is false. WCAG 2.2's
+glossary defines **large scale (text)** as "at least 18 point or 14 point bold or font size that
+would yield equivalent size for Chinese, Japanese and Korean (CJK) fonts" (`wcag.large-scale-regular`,
+`wcag.large-scale-bold`). Points, explicitly.
+
+The actual differences are these:
+
+| | WCAG 2.2 large scale | Apple's table |
+| --- | --- | --- |
+| Shape | lower bound: **18 point** and up (`wcag.large-scale-regular`), or **14 point** bold and up (`wcag.large-scale-bold`) | names **18 pts** (`contrast.large-text`); bold gets a separate wildcard row (`contrast.bold`) |
+| Bold | folded into the threshold at 14 point (`wcag.large-scale-bold`) | its own row, at any size (`contrast.bold`) |
+| Unit | CSS points, in a document the user may resize | native layout points, under Dynamic Type |
+| Sizing note | size "when the content is delivered", excluding user resizing | Dynamic Type resizing is the norm |
+
+WCAG's own thresholds are recorded separately, in
+[wcag-upstream.yaml](../../records/wcag-upstream.yaml), and verified against the local WCAG build
+rather than against Apple's page. Keeping them in their own file is the point: they are W3C's
+values, and a record in `contrast.yaml` would inherit Apple's provenance for something Apple did not
+author.
+
+So WCAG sets its bold threshold at 14 point (`wcag.large-scale-bold`) and requires 3:1 above it
+(`wcag.large-scale-ratio`), while Apple's table gives bold 3:1 at every size (`contrast.bold`) —
+more permissive below that threshold. And WCAG covers all text from 18 point upward
+(`wcag.large-scale-regular`) where Apple's row names 18 pts alone (`contrast.large-text`). Conformance claims must be checked against
+[WCAG](https://www.w3.org/TR/WCAG22/#distinguishable) directly. This bundle is not a conformance
+standard, and Apple's table is a summary that its own page attributes to WCAG "as guidance".
 ## Apple's table drops WCAG's exceptions
 
 The upstream criterion is [WCAG 2.2 SC 1.4.3 Contrast (Minimum)](https://www.w3.org/TR/WCAG22/#distinguishable),
 Level AA, and it carries exceptions Apple's three rows do not reproduce:
 
-- **Large text** has a lower threshold, which is what Apple's size rows are approximating. WCAG
-  defines "large scale" in its own terms rather than in points, so Apple's size rows
-  (`contrast.small-text`, `contrast.large-text`) are a platform rendering of that idea rather than a
-  quotation of it.
+- **Large text** has a lower threshold, which is what Apple's size rows are approximating.
 - **Incidental** text — part of an inactive component, pure decoration, invisible, or part of a
   picture with significant other visual content — has no contrast requirement.
 - **Logotypes** — text that is part of a logo or brand name — has no contrast requirement.

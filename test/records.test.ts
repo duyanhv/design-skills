@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parsePage, resolveTableCell, sectionText } from "../src/e2e/record-source.ts";
+import { parsePage, resolveTableCell, sectionText, parsePredicate, admits, intersects } from "../src/e2e/record-source.ts";
 import { verifyRecord, validateProvenance, type MeasurementRecord, type RecordDoc } from "../src/e2e/records.ts";
 
 /**
@@ -457,7 +457,50 @@ test("a condition that disagrees with its row's cell fails", () => {
   // The row's weight cell is "All"; claiming bold narrows it to something the row does not say.
   record.conditions_match = { text_size_max_pt: 17, text_weight: "bold" };
   const { problems } = checkContrast(record);
-  expect(problems.join()).toContain('the row\'s cell is "All"');
+  expect(problems.join()).toContain('the cell is "All"');
+});
+
+/*
+ * The three mutations below defeated this verifier in an audit. Each passed silently because the
+ * condition check compared strings, skipped the first column, and treated a missing predicate as
+ * nothing to check. They are tests now so that removing the guard fails the suite rather than
+ * quietly restoring the hole.
+ */
+test("a bound that does not match its cell fails (audit: 17 changed to 99, and it passed)", () => {
+  const record = smallText();
+  record.conditions_match = { text_size_max_pt: 99, text_weight: "any" };
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain('does not match the cell "Up to 17 pts"');
+});
+
+test("a missing predicate fails (audit: text_weight deleted, and it passed)", () => {
+  const record = smallText();
+  record.conditions_match = { text_size_max_pt: 17 };
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain('no condition for column "Text weight"');
+});
+
+test("no conditions at all fails (audit: conditions_match deleted, and it passed)", () => {
+  const record = smallText();
+  delete record.conditions_match;
+  const { problems } = checkContrast(record);
+  // Every condition column must be accounted for, so dropping the block reports each one.
+  expect(problems.join()).toContain('no condition for column "Text size"');
+  expect(problems.join()).toContain('no condition for column "Text weight"');
+});
+
+test("an upper bound declared as an exact match fails, and the reverse too", () => {
+  const upper = smallText();
+  // "Up to 17 pts" is a maximum; a key that does not say so would read as "exactly 17".
+  upper.conditions_match = { text_size_exact_pt: 17, text_weight: "any" };
+  expect(checkContrast(upper).problems.join()).toContain("is an upper bound");
+
+  const exact = smallText();
+  exact.id = "contrast.large-text";
+  exact.row = "18 pts";
+  exact.values = { minimum_ratio: "3:1" };
+  exact.conditions_match = { text_size_max_pt: 18, text_weight: "any" };
+  expect(checkContrast(exact).problems.join()).toContain("names one exact size");
 });
 
 test("a record attributing values to nobody fails when the source attributes them elsewhere", () => {
@@ -475,14 +518,48 @@ test("claiming a platform on a non-platform row fails", () => {
 });
 
 // Boundary behaviour. The table's own rows are the authority on what is and is not covered.
-test("boundaries: 17 pt is covered, 18 pt is covered, the band between them is not", () => {
-  const rows = contrastPage.tables[0]!.rows.map((r) => r[0]!);
-  expect(rows).toContain("Up to 17 pts");
-  expect(rows).toContain("18 pts");
-  // Nothing in the table names a size strictly between 17 and 18, which is why the record file
-  // carries `undefined_between` rather than inventing a rule.
-  const covers17point5 = rows.some((r) => /17\.5|between/i.test(r));
-  expect(covers17point5).toBe(false);
-  // And row 2 names 18 exactly rather than "18 or larger", so it cannot be read as a floor.
-  expect(rows.some((r) => /18\s*pts?\s*(or larger|and above|\+)/i.test(r))).toBe(false);
+test("boundaries are evaluated, not read: 17 covered, 18 covered, 17.5 not", () => {
+  // The previous version of this test asserted on the row *strings* in the fixture, which proves
+  // the fixture contains the text we wrote and nothing about how a record behaves. An audit called
+  // that out. This runs the predicates the records actually carry.
+  const upTo17 = parsePredicate("Up to 17 pts");
+  const exactly18 = parsePredicate("18 pts");
+  const allSizes = parsePredicate("All");
+
+  expect(upTo17).toEqual({ kind: "max", value: 17, unit: "pts" });
+  expect(exactly18).toEqual({ kind: "exact", value: 18, unit: "pts" });
+  expect(allSizes).toEqual({ kind: "any" });
+
+  // Row 1 covers everything at or below 17, inclusive.
+  expect(admits(upTo17, 17)).toBe(true);
+  expect(admits(upTo17, 16.9)).toBe(true);
+  expect(admits(upTo17, 17.5)).toBe(false);
+
+  // Row 2 names one size. It is not a floor, so it admits neither 17.5 nor 24.
+  expect(admits(exactly18, 18)).toBe(true);
+  expect(admits(exactly18, 17.5)).toBe(false);
+  expect(admits(exactly18, 24)).toBe(false);
+
+  // Hence the gap, and hence `undefined_between` in the record file.
+  expect(admits(upTo17, 17.5) || admits(exactly18, 17.5)).toBe(false);
+
+  // But the gap is only total for non-bold text: the wildcard row still admits 17.5 pt bold.
+  expect(admits(allSizes, 17.5)).toBe(true);
+});
+
+test("an overlap claim is checked by intersecting conditions, not by comparing values", () => {
+  const upTo17 = parsePredicate("Up to 17 pts");
+  const exactly18 = parsePredicate("18 pts");
+  const allSizes = parsePredicate("All");
+
+  // The real overlap: bold text at or below 17 matches row 1 and the bold wildcard at once.
+  expect(intersects(upTo17, allSizes)).toBe(true);
+
+  // The false one an audit planted: these rows give different ratios but no size satisfies both,
+  // so calling them an overlap invents an ambiguity the source does not have.
+  expect(intersects(upTo17, exactly18)).toBe(false);
+
+  // Named categories intersect only with themselves or a wildcard.
+  expect(intersects(parsePredicate("Bold"), parsePredicate("All"))).toBe(true);
+  expect(intersects(parsePredicate("Bold"), parsePredicate("Regular"))).toBe(false);
 });

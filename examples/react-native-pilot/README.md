@@ -8,57 +8,87 @@ reference written without running anything would be exactly the kind of unverifi
 this repository refuses to publish.
 
 **Environment:** React Native 0.76.5, New Architecture (Fabric, bridgeless), built with
-`xcodebuild`, run on iPhone 17 Pro / iOS 26.5.
+`xcodebuild` (Xcode 27.0), run on iPhone 17 Pro simulator / iOS 26.5.
+
+Everything below is regenerable: see [`harness/`](harness/) for the pinned scaffold, the variants,
+the build-and-capture runner, and the measurement tool.
+
+## This pilot was audited, and it was wrong twice
+
+The first pass published two conclusions that an audit overturned, both by missing an API that the
+pinned release already had:
+
+| First pass said | Actually |
+| --- | --- |
+| "no semantic system colours: you maintain the palette" | `PlatformColor` and `DynamicColorIOS` exist and map 33 native colour names |
+| use `allowFontScaling={false}` for the title | `dynamicTypeRamp` works, routes through `UIFontMetrics`, and keeps scaling on |
+| "no native implementation reads `maxFontSizeMultiplier`" | legacy iOS **does** implement it; the Fabric iOS text path does not |
+| `accessibilityLiveRegion` to announce a change | `@platform android`; a no-op on the iOS screen it was recommended for |
+
+It also could not be re-run: the app directory was outside the repo and the percentages were
+assertions. That is what `harness/` fixes.
+
+The lesson is not subtle. Testing three ways to solve a problem tells you which of the three works,
+not whether the right answer was among them. Searching the framework's own source first would have
+found `dynamicTypeRamp` in about a minute.
 
 ## What it found
 
 The screen was written to *follow* the guidance: semantic roles, stacked layout at large text sizes,
-`hitSlop` on small controls, a hand-maintained dark palette. Then it was run, and the largest
-accessibility text size broke it anyway.
+`hitSlop` on small controls. Then it was run at the largest accessibility size, and broke anyway.
 
-| | Before | After |
+| | Uncapped | Fixed with `dynamicTypeRamp` |
 | --- | --- | --- |
-| Largest accessibility size | ![before](screenshots/before-xxxl.png) | ![after](screenshots/after-xxxl.png) |
+| Largest accessibility size | ![before](screenshots/variants/A-uncapped.png) | ![after](screenshots/variants/E-dynamic-type-ramp.png) |
 
-The title reads "Notific / ations" in the before capture. At AX5 this device reports
-`fontScale = 3.571`, so an uncapped 34pt title renders at roughly 121pt.
+At AX5 this device reports `fontScale = 3.571`, so an uncapped 34 pt title renders near 121 pt and
+wraps to "Notific / ations". OCR of the captures confirms the wrap and confirms all variants ran at
+the same `fontScale`.
 
-**Three fixes were tried. Two failed silently, which is the finding worth having:**
+### Six variants, one clean build each
 
-| Approach | Result |
-| --- | --- |
-| `maxFontSizeMultiplier={1.4}` | **No effect at all.** Pixel-identical to uncapped. |
-| Inline `fontSize: Math.min(34 * fontScale, 34 * 1.4)` | **Worse.** RN scales the computed size again, so the cap compounds. |
-| `allowFontScaling={false}` + an explicit size | **Works.** 58% of pixels changed. |
+From [`harness/results.tsv`](harness/results.tsv), regenerable with `./run-variants.sh`:
 
-The `maxFontSizeMultiplier` result was confirmed at the source: the prop is declared in RN's
-`TextProps.js`, and no native implementation in the installed Pods reads it. It fails quietly, which
-is the worst way for an accessibility prop to fail.
+| Variant | Pixels differing vs uncapped | Result |
+| --- | --- | --- |
+| `dynamicTypeRamp="largeTitle"` | 50.63% | **Works, scaling stays on.** |
+| `allowFontScaling={false}` + size | 48.90% | Works, never scales again. |
+| `maxFontSizeMultiplier={1.4}` | **0.00%** | **Byte-identical. Did nothing.** |
+| inline `Math.min` cap | 52.38% | Worse; RN re-scales the computed size. |
+| `PlatformColor` palette | 50.62% | Works; 99.75% light-vs-dark with no palette of its own. |
+| **control:** edited title text | 50.39% | Edits reach the build. |
 
-A control test ruled out the obvious explanation: editing the title's *text* changed 42.63% of
-pixels, so edits were reaching the app. The prop genuinely does nothing.
+The control matters. "The screenshot did not change" has a boring explanation (the build never
+picked up the edit) and an interesting one (the prop does nothing). The control rules out the boring
+one on every run, so the 0.00% means what it says.
 
-## Light and dark
+### Why `maxFontSizeMultiplier` does nothing here
 
-| Light | Dark |
-| --- | --- |
-| ![light](screenshots/after-light.png) | ![dark](screenshots/after-dark.png) |
+Narrower than the first pass claimed, and reproducible with
+[`harness/inspect-source.sh`](harness/inspect-source.sh):
 
-Light and dark differ in **99.78%** of pixels, which confirms the hand-maintained palette is
-switching. RN has no semantic system colours, so this is entirely the app's work, and a near-zero
-figure would have meant the setting was being ignored.
+- `Libraries/Text/RCTTextAttributes.mm:249` caps it with `fminf(...)` — the **legacy** renderer.
+- In `ReactCommon`, the prop name appears only under **Android TextInput**.
+- `RCTParagraphComponentView.mm`, Fabric's iOS text view: **zero** occurrences.
+
+Implemented for the old renderer, absent from the new one. An app on the New Architecture gets no
+cap, and nothing warns you.
 
 ## The reference this produced
 
 [`frameworks/react-native.md`](../../guidance/apple-design/references/frameworks/react-native.md),
-covering the four areas where RN makes the app do what SwiftUI does for you: text scaling,
-interaction bounds (`hitSlop` instead of `contentShape`), hand-built accessibility semantics, and a
-manual dark palette.
+covering where RN makes the app do what SwiftUI does for you: text scaling, colour, interaction
+bounds, and hand-built accessibility semantics. Every claim in it is now labelled **[source]**,
+**[measured]**, or **[untested]**, because those are different kinds of evidence and the first
+version presented them as one.
 
 ## Not established
 
-- **VoiceOver was not run.** Roles and labels are in the code, unheard.
+- **VoiceOver was not run.** Roles and labels are in the code, unheard. This is the biggest gap.
 - **iOS only, simulator only.** No Android, no device, so touch behaviour is inferred from layout.
-- **One RN version.** The `maxFontSizeMultiplier` finding is specific to 0.76.5 and may be fixed
-  later; the reference says to re-test rather than trust it.
-- One screen, one framework version, no control arm.
+- **One RN version, one OS, one device.** The `maxFontSizeMultiplier` result is specific to 0.76.5
+  on Fabric; `inspect-source.sh` re-answers it for another version in seconds.
+- **Pixel percentages detect change, they do not rank quality.** 50.63% vs 48.90% says nothing about
+  which screen is better. Only the 0.00% carries weight.
+- One screen. No control arm on the guidance itself: this pilot shows what RN does, not whether the
+  guidance improved anyone's outcome.

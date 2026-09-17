@@ -67,10 +67,20 @@ upstream_standard:
     - "Large Text — large-scale text and images of large-scale text have a contrast ratio of at least 3:1."
     - "Incidental — text that is part of an inactive component, pure decoration, invisible, or part of a picture containing significant other visual content has no contrast requirement."
     - "Logotypes — text that is part of a logo or brand name has no contrast requirement."
+  large_scale_definition: >-
+    WCAG 2.2 glossary, "large scale (text)": "at least 18 point or 14 point bold or font size that
+    would yield equivalent size for Chinese, Japanese and Korean (CJK) fonts". Recorded from the
+    local wcag22 build (wcag22/glossary/041).
   note: >-
-    WCAG defines "large scale" in its own terms rather than in points, so Apple's 17/18 pt rows are
-    a platform-specific rendering of that idea, not a quotation of it. Check WCAG directly before
-    asserting conformance; this bundle is not a conformance standard.
+    An earlier version of this file claimed WCAG defines large scale "in its own terms rather than
+    in points". That was false, and an audit caught it. WCAG states point thresholds explicitly.
+    The real distinction is narrower and about units: WCAG's points are CSS points in a document
+    that the user may resize, and its own note says font size "is the size when the content is
+    delivered ... does not include resizing", whereas Apple's pts are native layout points under
+    Dynamic Type. The two also differ in *shape*: WCAG's large scale is a lower bound
+    (>= 18 pt, or >= 14 pt bold) with a single 3:1 ratio, while Apple's table names 18 pts alone
+    and gives bold its own wildcard row. Same numbers, different conditions. Check WCAG directly
+    before asserting conformance; this bundle is not a conformance standard.
 
 records:
   - id: contrast.small-text
@@ -103,7 +113,7 @@ records:
     meaning:
       minimum_ratio: "The Minimum contrast ratio for this size and weight combination."
     conditions_match:
-      text_size_pt: 18            # the row names exactly 18, not "18 or larger"
+      text_size_exact_pt: 18      # exactly 18: the row does not read "18 or larger"
       text_weight: any
     boundary: "18 pts"
     conditions: >-
@@ -141,5 +151,9 @@ overlaps:
     source_resolves: false
 
 undefined_between:
-  - description: "text larger than 17 pt and smaller than 18 pt"
-    reason: "row 1 ends at 17 pts inclusive; row 2 names 18 pts exactly"
+  - description: "non-bold text larger than 17 pt and smaller than 18 pt"
+    reason: >-
+      Row 1 ends at 17 pts inclusive; row 2 names 18 pts exactly. Qualified by weight because the
+      gap is not total: bold text in that band still matches the "All / Bold" wildcard row and gets
+      3:1. An audit caught the earlier unqualified wording, which wrongly implied 17.5 pt bold
+      matched nothing.
