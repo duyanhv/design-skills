@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePage, resolveTableCell, sectionText, parsePredicate, admits, intersects } from "../src/e2e/record-source.ts";
 import {
-  verifyRecord, validateProvenance, verifyIrRecords,
+  verifyRecord, validateProvenance, verifyIrRecords, deriveConditions,
   type MeasurementRecord, type RecordDoc, type IrRule,
 } from "../src/e2e/records.ts";
 
@@ -644,6 +644,7 @@ const regular = (): MeasurementRecord => ({
   values: { min_size: "18 point" },
   clauses: { min_size: "rationale" },
   context: { min_size: "at least 18 point" },
+  conditions_match: { text_weight: "any", text_scale: "large" },
   authority: { min_size: "normative" },
   conditions: "CSS points at delivery size",
   attribution: 'W3C, WCAG 2.2 glossary, "large scale (text)"',
@@ -655,6 +656,7 @@ const bold = (): MeasurementRecord => ({
   values: { min_size: "14 point" },
   clauses: { min_size: "rationale" },
   context: { min_size: "14 point bold" },
+  conditions_match: { text_weight: "bold", text_scale: "large" },
   authority: { min_size: "normative" },
   conditions: "CSS points at delivery size, bold",
   attribution: 'W3C, WCAG 2.2 glossary, "large scale (text)"',
@@ -666,6 +668,7 @@ const largeRatio = (): MeasurementRecord => ({
   values: { minimum_ratio: "3:1" },
   clauses: { minimum_ratio: "note:0" },
   context: { minimum_ratio: "contrast ratio of at least 3:1" },
+  conditions_match: { text_weight: "any", text_scale: "large" },
   authority: { minimum_ratio: "normative" },
   conditions: "large-scale text",
   attribution: "W3C, WCAG 2.2 SC 1.4.3",
@@ -712,11 +715,23 @@ test("a context naming both thresholds is rejected as ambiguous", () => {
 
 test("a context that would be equally true of a sibling's value is rejected", () => {
   // "14 point bold" pins the bold case. Weakened to "14 point" it still contains its own value and
-  // still appears in the clause, but says nothing about weight: substituting the sibling's 18
-  // point also matches, so the context does not discriminate.
+  // still appears in the clause, but says nothing about weight.
+  //
+  // Two independent guards now reject this, and the condition check reaches it first: a context
+  // with no "bold" in it derives text_weight=any, contradicting the record. Assert that, then
+  // isolate the discrimination guard by removing the condition it would otherwise fail on.
   const weak = bold();
   weak.context = { min_size: "14 point" };
-  expect(checkIr([weak, regular()]).problems.join()).toContain("would be equally true of 18 point");
+  expect(checkIr([weak, regular()]).problems.join()).toContain("expresses text_weight=any");
+
+  // With conditions that match the weakened phrase, the sibling substitution is what is left to
+  // catch it: "18 point" put into "14 point" also appears in the clause, so the phrase cannot tell
+  // the two cases apart.
+  const weakButConsistent = bold();
+  weakButConsistent.context = { min_size: "14 point" };
+  weakButConsistent.conditions_match = { text_weight: "any", text_scale: "large" };
+  expect(checkIr([weakButConsistent, regular()]).problems.join())
+    .toContain("would be equally true of 18 point");
 });
 
 test("citing the wrong clause fails even when the value is real", () => {
@@ -753,4 +768,89 @@ test("a local_ir record without attribution fails: these are another body's valu
   const r = regular();
   delete r.attribution;
   expect(checkIr([r]).problems.join()).toContain("must carry `attribution`");
+});
+
+/*
+ * Conditions must be DERIVED from the source, not asserted beside it.
+ *
+ * A second audit swapped two records' values and their context phrases together, leaving each
+ * record's stated meaning and conditions untouched. Both passed: every phrase was real and pinned
+ * its own number, so the checker had nothing to object to. It proved the phrase existed and never
+ * proved the phrase was about the case the record claimed.
+ */
+test("swapping two records' values AND contexts together is caught by their conditions", () => {
+  const r = regular();
+  r.values = { min_size: "14 point" };
+  r.context = { min_size: "14 point bold" };       // a real phrase, containing its own value
+  // conditions_match still says the non-bold case, which the phrase does not support.
+  const problems = checkIr([r, bold()]).problems.join();
+  expect(problems).toContain("declares text_weight=any");
+  expect(problems).toContain("expresses text_weight=bold");
+
+  const b = bold();
+  b.values = { min_size: "18 point" };
+  b.context = { min_size: "at least 18 point" };
+  const reverse = checkIr([b]).problems.join();
+  expect(reverse).toContain("declares text_weight=bold");
+  expect(reverse).toContain("expresses text_weight=any");
+});
+
+test("taking another clause's value while keeping this record's conditions is caught", () => {
+  // The general 4.5:1 is real, in the statement, and pinned by its phrase. What it is not is the
+  // large-text case, and this record still claims to be.
+  const r = largeRatio();
+  r.values = { minimum_ratio: "4.5:1" };
+  r.clauses = { minimum_ratio: "statement" };
+  r.context = { minimum_ratio: "contrast ratio of at least 4.5:1" };
+  const problems = checkIr([r]).problems.join();
+  expect(problems).toContain("declares text_scale=large");
+  expect(problems).toContain("expresses text_scale=any");
+});
+
+test("a record with no conditions_match fails, and an unreadable dimension fails", () => {
+  const none = regular();
+  delete none.conditions_match;
+  expect(checkIr([none]).problems.join()).toContain("declares no `conditions_match`");
+
+  const unknown = regular();
+  unknown.conditions_match = { ...unknown.conditions_match, colour_space: "srgb" };
+  expect(checkIr([unknown]).problems.join()).toContain("cannot read from the source");
+});
+
+test("omitting one dimension fails: silence is not agreement", () => {
+  // Declaring some conditions and not others would let a record dodge the dimension that would
+  // have caught it. Every dimension the lexicon can read has to be answered.
+  const partial = regular();
+  partial.conditions_match = { text_scale: "large" };   // text_weight omitted
+  const problems = checkIr([partial]).problems.join();
+  expect(problems).toContain('declares no "text_weight"');
+  expect(problems).toContain("implies text_weight=any");
+
+  const other = regular();
+  other.conditions_match = { text_weight: "any" };      // text_scale omitted
+  expect(checkIr([other]).problems.join()).toContain('declares no "text_scale"');
+});
+
+test("weight is read from the phrase but scale from the whole entry", () => {
+  // One clause holds both thresholds, so weight has to come from the pinned phrase: reading it
+  // from the clause would make "at least 18 point" look bold because "bold" appears later in the
+  // sentence. Scale is the opposite: neither phrase says "large", and the term being defined does.
+  expect(deriveConditions("at least 18 point", "with at least 18 point or 14 point bold", "large scale (text)"))
+    .toEqual(new Map([["text_weight", "any"], ["text_scale", "large"]]));
+  expect(deriveConditions("14 point bold", "with at least 18 point or 14 point bold", "large scale (text)"))
+    .toEqual(new Map([["text_weight", "bold"], ["text_scale", "large"]]));
+
+  // A criterion's general statement is not about large text, even though its exceptions are.
+  expect(deriveConditions(
+    "contrast ratio of at least 4.5:1",
+    "The visual presentation of text has a contrast ratio of at least 4.5:1, except for the following:",
+    "",
+  )).toEqual(new Map([["text_weight", "any"], ["text_scale", "any"]]));
+
+  // The Large Text exception is.
+  expect(deriveConditions(
+    "contrast ratio of at least 3:1",
+    "- Large Text — Large-scale text and images of large-scale text have a contrast ratio of at least 3:1;",
+    "",
+  )).toEqual(new Map([["text_weight", "any"], ["text_scale", "large"]]));
 });

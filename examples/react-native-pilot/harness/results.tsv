@@ -1,8 +1,8 @@
-variant	pixels_differing_vs_A	note
-A-uncapped	-	baseline
-B-max-multiplier	0.00%	IDENTICAL to baseline: this variant changed nothing
-C-inline-cap	55.26%	
-CONTROL-edited-text	53.15%	
-D-no-scaling	51.58%	
-E-dynamic-type-ramp	53.41%	
-F-platform-color	53.41%	
+variant	pixels_differing_vs_A	note	differing_px	total_px
+A-uncapped	-	baseline	-	-
+B-max-multiplier	0.00%	IDENTICAL to baseline: this variant changed nothing	0	2993292
+C-inline-cap	55.26%		1654081	2993292
+CONTROL-edited-text	53.15%		1590972	2993292
+D-no-scaling	51.58%		1544067	2993292
+E-dynamic-type-ramp	53.41%		1598633	2993292
+F-platform-color	53.41%		1598633	2993292

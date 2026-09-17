@@ -57,6 +57,11 @@ records:
     # ambiguous context for exactly that reason.
     context:
       min_size: "at least 18 point"
+    # Checked against the phrase, not just declared beside it: "at least 18 point" says nothing
+    # about weight, so text_weight must be `any` here. Claiming bold is rejected.
+    conditions_match:
+      text_weight: any
+      text_scale: large
     authority:
       min_size: normative
     meaning:
@@ -84,6 +89,10 @@ records:
     # threshold is only "14 point bold", never "14 point" alone.
     context:
       min_size: "14 point bold"
+    # The phrase itself carries the weight, so this record may claim it and the regular one may not.
+    conditions_match:
+      text_weight: bold
+      text_scale: large
     authority:
       min_size: normative
     meaning:
@@ -111,6 +120,11 @@ records:
       minimum_ratio: statement
     context:
       minimum_ratio: "contrast ratio of at least 4.5:1"
+    # The criterion's general statement, which is not the Large Text exception: text_scale must be
+    # `any` here, and claiming `large` is what an audit did and this now rejects.
+    conditions_match:
+      text_weight: any
+      text_scale: any
     authority:
       minimum_ratio: normative
     meaning:
@@ -134,6 +148,11 @@ records:
       minimum_ratio: "note:0"
     context:
       minimum_ratio: "contrast ratio of at least 3:1"
+    # Read from the Large Text exception, so `large` is supported here. The exception says nothing
+    # about weight; WCAG folds bold into the size threshold instead.
+    conditions_match:
+      text_weight: any
+      text_scale: large
     authority:
       minimum_ratio: normative
     meaning:

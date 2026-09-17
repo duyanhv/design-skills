@@ -91,8 +91,10 @@ to grow. Stack them.
 `React/Base/RCTConvert.mm` maps 33 iOS semantic colour names natively, `labelColor` among them.
 
 **[measured]** A variant whose palette is built entirely from `PlatformColor`, declaring no colours
-of its own, differs between light and dark by 99.78% of pixels
-(`measured.rn-platformcolor-appearance`). The system colours are doing the work.
+of its own, renders (53.41% of pixels differ from the uncapped baseline, which uses hard-coded hex)
+and adapts: light versus dark differs by 99.78% of pixels
+(`measured.rn-variant-diffs`, `measured.rn-platformcolor-appearance`). The system colours are
+doing the work.
 
 ```tsx
 backgroundColor: PlatformColor('systemGroupedBackgroundColor'),

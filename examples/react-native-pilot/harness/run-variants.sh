@@ -41,7 +41,7 @@ echo "device: $DEVICE_NAME ($UDID)"
 rm -rf captures logs
 mkdir -p captures logs
 LOGDIR="$PWD/logs"
-echo -e "variant\tpixels_differing_vs_A\tnote" > results.tsv
+echo -e "variant\tpixels_differing_vs_A\tnote\tdiffering_px\ttotal_px" > results.tsv
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
@@ -95,13 +95,16 @@ for variant in variants/[A-Z]*.tsx; do
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 
   if [[ "$name" == "A-uncapped" ]]; then
-    echo -e "$name\t-\tbaseline" >> results.tsv
+    echo -e "$name\t-\tbaseline\t-\t-" >> results.tsv
   else
-    pct=$(./pixel-diff.sh captures/A-uncapped.png "captures/$name.png")
+    read -r pct differing total < <(./pixel-diff.sh captures/A-uncapped.png "captures/$name.png")
     note=""
-    [[ "$pct" == "0.00" ]] && note="IDENTICAL to baseline: this variant changed nothing"
-    echo -e "$name\t$pct%\t$note" >> results.tsv
-    echo "  differs from A in $pct% of pixels $note"
+    # Keyed on the exact count, not on the rounded percentage. A single differing pixel rounds to
+    # "0.00", and this line is where the pilot's central claim is made, so it cannot rest on a
+    # rounding artefact.
+    [[ "$differing" -eq 0 ]] && note="IDENTICAL to baseline: this variant changed nothing"
+    echo -e "$name\t$pct%\t$note\t$differing\t$total" >> results.tsv
+    echo "  differs from A in $pct% of pixels ($differing of $total) $note"
   fi
 done
 

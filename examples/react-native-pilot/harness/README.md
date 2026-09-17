@@ -84,8 +84,14 @@ Percentages in the README come from this, not from looking:
 
 ```sh
 ./pixel-diff.sh captures/A-uncapped.png captures/B-max-multiplier.png
-# -> 0.00   (identical)
+# -> 0.00 0 2993292        percent, differing pixels, total pixels
 ```
+
+**Equality is decided on the count, never the percentage.** One differing pixel in this frame is
+0.00004%, which prints as `0.00`, and an audit built exactly that fixture to show the guard could
+not tell it from identity. The percentage is for reading; `results.tsv` carries the count, and the
+repository check asserts that B-max-multiplier differs by exactly zero pixels rather than by
+"0.00%".
 
 It counts pixels differing in any RGB channel, over the total, so "53%" means 53% of pixels are not
 identical, at any magnitude. A large number means the screens differ; it does not say they differ

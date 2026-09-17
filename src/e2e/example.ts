@@ -111,6 +111,20 @@ if (!(await exists(probeResult))) {
   }
 }
 
+/**
+ * How each variant is named in prose, so its percentage can be checked against the line that
+ * names it rather than against the whole document.
+ */
+const VARIANT_MARKERS: Record<string, RegExp> = {
+  "A-uncapped": /uncapped|baseline/i,
+  "B-max-multiplier": /maxFontSizeMultiplier/,
+  "C-inline-cap": /Math\.min/,
+  "CONTROL-edited-text": /control/i,
+  "D-no-scaling": /allowFontScaling=\{false\}/,
+  "E-dynamic-type-ramp": /dynamicTypeRamp/,
+  "F-platform-color": /PlatformColor/,
+};
+
 // 3b. The React Native pilot's percentages must match its harness output.
 //
 // Same rule as the probe above, added after an audit found the RN numbers were assertions: the app
@@ -129,27 +143,73 @@ if (!(await exists(rnResults))) {
     join(ROOT, "guidance", "apple-design", "references", "frameworks", "react-native.md"), "utf8");
 
   if (!rows.length) fail("results.tsv has no measured rows");
+
+  // The full variant set, named here rather than derived from the file. Deriving it would let a
+  // deleted row silently shrink what gets checked: an audit removed C-inline-cap from results.tsv
+  // and everything still passed, because a check over "whatever rows exist" cannot notice a
+  // missing one. These seven are the experiment.
+  const EXPECTED_VARIANTS = [
+    "A-uncapped", "B-max-multiplier", "C-inline-cap",
+    "CONTROL-edited-text", "D-no-scaling", "E-dynamic-type-ramp", "F-platform-color",
+  ];
+  const present = new Set([...rows.map(([v]) => v), "A-uncapped"]);
+  const missing = EXPECTED_VARIANTS.filter((v) => !present.has(v));
+  if (missing.length) {
+    fail(`results.tsv is missing variant(s): ${missing.join(", ")}`,
+         "a partial run that looks complete is worse than no run");
+  } else pass(`results.tsv carries all ${EXPECTED_VARIANTS.length} variants`);
+
   for (const [variant, value] of rows) {
     const figure = (value ?? "").trim();
     for (const [name, text] of [["pilot README", rnReadme], ["framework reference", rnReference]] as const) {
-      // Every variant is named in both documents, so each figure must appear in both.
-      if (!text.includes(figure)) {
-        fail(`${name} does not quote ${variant}'s measured ${figure}`,
-             "a published percentage that no longer matches the harness is a stale claim");
+      // The figure must appear ON THE LINE THAT NAMES THIS VARIANT, not anywhere in the document.
+      //
+      // Searching the whole file was the same class of mistake this repository keeps making: an
+      // audit swapped the published dynamicTypeRamp and no-scaling percentages, and both numbers
+      // were still somewhere in both documents, so it passed while telling readers the wrong thing
+      // about both. A number attached to the wrong variant is exactly the defect that matters.
+      const marker = VARIANT_MARKERS[variant!];
+      if (!marker) {
+        fail(`no prose marker registered for variant ${variant}`,
+             "without one, its percentage can only be checked by searching the whole file");
+        continue;
+      }
+      // The unit is the paragraph (or table row): prose wraps, so a figure and the variant that
+      // owns it routinely sit on different physical lines. A table row is its own paragraph here
+      // because rows are single lines, which keeps the comparison table strict.
+      const units = text.split(/\n\s*\n/).flatMap((block) =>
+        block.trimStart().startsWith("|") ? block.split("\n") : [block]);
+      const naming = units.filter((unit) => marker.test(unit));
+      if (!naming.length) {
+        fail(`${name} never mentions ${variant} (looked for ${marker})`);
+      } else if (!naming.some((unit) => unit.includes(figure))) {
+        fail(`${name} does not give ${variant} its measured ${figure}`,
+             `the passage(s) naming it say: ${naming.map((l) => l.trim().replace(/\s+/g, " ")).join(" | ").slice(0, 200)}`);
       } else {
-        pass(`${name} quotes ${variant} = ${figure}`);
+        pass(`${name} gives ${variant} = ${figure} in the passage that names it`);
       }
     }
   }
 
-  // The zero is the pilot's load-bearing result, so assert it specifically rather than trusting
-  // that a "0.00%" somewhere in the file is the right one.
+  // The zero is the pilot's load-bearing result, so assert the EXACT PIXEL COUNT rather than the
+  // rounded percentage. A single differing pixel in this frame is 0.00004%, which prints as
+  // "0.00%": an audit built that fixture and showed the guard could not tell it from identity.
+  // The reference says the prop has no effect; that claim needs zero, not nearly zero.
   const capRow = rows.find(([v]) => v === "B-max-multiplier");
-  if (!capRow) fail("results.tsv has no B-max-multiplier row; the cap experiment is the pilot's finding");
-  else if (capRow[1]?.trim() !== "0.00%") {
-    fail(`B-max-multiplier now measures ${capRow[1]}, not 0.00%`,
-         "the reference says the prop has no effect; that claim rests on this being exactly zero");
-  } else pass("B-max-multiplier is exactly 0.00%, as the reference claims");
+  if (!capRow) {
+    fail("results.tsv has no B-max-multiplier row; the cap experiment is the pilot's finding");
+  } else {
+    const differing = (capRow[3] ?? "").trim();
+    if (!/^\d+$/.test(differing)) {
+      fail(`B-max-multiplier has no differing-pixel count (got "${capRow[3]}")`,
+           "equality cannot be decided from a rounded percentage; re-run the harness");
+    } else if (differing !== "0") {
+      fail(`B-max-multiplier differs from the baseline by ${differing} pixel(s)`,
+           `it reports ${capRow[1]}, but the reference's claim that the prop does nothing needs exactly zero`);
+    } else {
+      pass(`B-max-multiplier differs by exactly 0 of ${capRow[4]} pixels`);
+    }
+  }
 }
 
 // 4. The pre-registered artifacts must not have been edited after the review was scored.

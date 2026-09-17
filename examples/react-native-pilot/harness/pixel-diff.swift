@@ -67,4 +67,9 @@ for y in firstRow..<ah {
         }
     }
 }
-print(String(format: "%.2f", Double(differing) / Double(total) * 100))
+// Print the COUNT alongside the percentage, because the percentage is rounded and equality is not
+// a rounding question. One differing pixel in a 1206x2482 frame is 0.00004%, which prints as
+// "0.00" and would be read as identical. The runner keys its IDENTICAL claim on the count.
+//
+// Format: "<percent> <differing> <total>". Callers wanting only the percentage take field 1.
+print(String(format: "%.2f %d %d", Double(differing) / Double(total) * 100, differing, total))

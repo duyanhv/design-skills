@@ -536,6 +536,59 @@ export function verifyRecord(
 }
 
 /**
+ * Condition markers this checker can read out of a source's own prose.
+ *
+ * These are OUR classifications applied to W3C's words, not W3C's taxonomy, and that distinction
+ * matters: the lexicon is how a record's declared condition gets checked against the text instead
+ * of merely sitting beside it. An audit swapped two records' values AND their context phrases
+ * together, leaving each record's stated meaning untouched, and everything passed. The checker
+ * proved the phrase existed; nothing proved the phrase supported the condition the record claimed.
+ *
+ * `from` says which scope the marker is read from, and the two are not interchangeable:
+ *
+ *   context - a property of the pinned phrase itself. Weight is per-threshold: one clause names
+ *             both "18 point" and "14 point bold", so reading weight from the whole clause would
+ *             make every threshold in it look bold.
+ *   clause  - the case the clause as a whole is about.
+ *   entry   - the clause plus the rule's own heading. Needed for glossary terms, where the
+ *             defining phrase is the statement ("large scale (text)") and the clause holding the
+ *             numbers is its rationale. Reading scale from the rationale alone would make the
+ *             definition of large scale look like it was not about large scale. Still narrower
+ *             than the whole rule: informative notes are excluded, so a note that merely mentions
+ *             a term cannot license a condition.
+ */
+const CONDITION_LEXICON: {
+  dimension: string;
+  term: string;
+  from: "context" | "clause" | "entry";
+  pattern: RegExp;
+}[] = [
+  { dimension: "text_weight", term: "bold", from: "context", pattern: /\bbold\b/i },
+  { dimension: "text_scale", term: "large", from: "entry", pattern: /\blarge[- ]?scale\b|\blarge text\b/i },
+];
+
+/** Every dimension the lexicon knows about, in declaration order. */
+const CONDITION_DIMENSIONS = [...new Set(CONDITION_LEXICON.map((m) => m.dimension))];
+
+/**
+ * Read the conditions a source's own words express.
+ *
+ * A dimension with no marker present is "any": the source did not narrow that axis. That default
+ * is what makes the swap detectable — "at least 18 point" says nothing about weight, so it cannot
+ * support a record claiming the bold case.
+ */
+export function deriveConditions(context: string, clause: string, heading = ""): Map<string, string> {
+  const derived = new Map<string, string>();
+  for (const dimension of CONDITION_DIMENSIONS) derived.set(dimension, "any");
+  for (const marker of CONDITION_LEXICON) {
+    const text =
+      marker.from === "context" ? context : marker.from === "clause" ? clause : `${heading} ${clause}`;
+    if (marker.pattern.test(norm(text))) derived.set(marker.dimension, marker.term);
+  }
+  return derived;
+}
+
+/**
  * Verify one file of local_ir records against a loaded IR build. Exported so the swaps an audit
  * used can be committed as tests rather than re-run by hand.
  */
@@ -615,6 +668,64 @@ export function verifyIrRecords(
         );
         continue;
       }
+
+      // The record's declared conditions must be the ones the source's own words express.
+      //
+      // Everything above proves the phrase exists and pins the value. None of it proves the phrase
+      // is about the case the record says it is. An audit swapped the regular and bold records'
+      // values AND contexts together and both passed: each still cited a real phrase containing
+      // its number, while the meaning and conditions still described the other case. It also gave
+      // the large-text record the general ratio's value, context and clause while keeping its
+      // large-text conditions, and that passed too.
+      //
+      // So derive the conditions from the source and require agreement. "at least 18 point" is
+      // silent about weight, so it cannot support text_weight: bold; the criterion's general
+      // statement is not the Large Text exception, so it cannot support text_scale: large.
+      // The heading is the rule's own statement, and is only consulted for `entry` markers. For a
+      // criterion the statement IS a clause, so passing it changes nothing there; for a glossary
+      // term it is the term being defined.
+      const derived = deriveConditions(context, clause, rule.statement ?? "");
+      const declaredConditions = record.conditions_match ?? {};
+      if (!Object.keys(declaredConditions).length) {
+        report(
+          record.id,
+          `value "${key}" declares no \`conditions_match\`; a phrase can be real and still be about ` +
+            `another case, so the conditions must be checked against the source rather than asserted`,
+        );
+        continue;
+      }
+      let conditionMismatch = false;
+      for (const [dimension, expected] of derived) {
+        const declared = declaredConditions[dimension];
+        if (declared === undefined) {
+          report(
+            record.id,
+            `value "${key}" declares no "${dimension}"; the source phrase implies ${dimension}=${expected}, ` +
+              `and an undeclared dimension cannot be checked`,
+          );
+          conditionMismatch = true;
+          continue;
+        }
+        if (norm(String(declared)) !== expected) {
+          report(
+            record.id,
+            `value "${key}" declares ${dimension}=${declared}, but "${context}" in ${record.rule} ` +
+              `(${clauseName}) expresses ${dimension}=${expected}`,
+          );
+          conditionMismatch = true;
+        }
+      }
+      for (const dimension of Object.keys(declaredConditions)) {
+        if (!derived.has(dimension)) {
+          report(
+            record.id,
+            `value "${key}" declares "${dimension}", which this checker cannot read from the source; ` +
+              `add it to CONDITION_LEXICON or the condition is unverified`,
+          );
+          conditionMismatch = true;
+        }
+      }
+      if (conditionMismatch) continue;
 
       // Discrimination: the context must not be satisfiable by a SIBLING record's value.
       //
