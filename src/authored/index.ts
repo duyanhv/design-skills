@@ -7,7 +7,15 @@ import type { Finding } from "../validate/index.ts";
 import { ROOT, paths } from "../util/fs.ts";
 import { shortHash } from "../util/hash.ts";
 
-const Frontmatter = z.object({
+/**
+ * Strict: an unknown key in a bundle's frontmatter is a mistake, not a comment.
+ *
+ * Same reasoning as SourceSchema. A misspelled optional key parses, falls back to its default or
+ * to nothing, and takes its constraint with it silently. `compatibility` is the live example — it
+ * is declared here and the real bundles carry it under `metadata`, so a typo at either level had
+ * no way to announce itself.
+ */
+const Frontmatter = z.strictObject({
   name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64),
   description: z.string().min(1).max(1024),
   license: z.literal("MIT"),
@@ -45,7 +53,15 @@ export function inspectAuthored(files: Record<string, string>, source: Source): 
     if (data.name !== source.skill.name) errors.push("SKILL.md name differs from the manifest");
     if (data.metadata.authorship !== "original") errors.push("metadata.authorship must be original");
     if (data.description !== source.skill.description) errors.push("description differs from the manifest");
-  } catch { errors.push("Invalid authored SKILL.md frontmatter"); }
+  } catch (error) {
+    // Report what zod objected to. "Invalid frontmatter" tells an author to go hunting; naming the
+    // unrecognised or malformed key tells them what to fix, which matters most for the typo case
+    // this strictness exists to catch.
+    const detail = error instanceof z.ZodError
+      ? error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
+      : String(error);
+    errors.push(`Invalid authored SKILL.md frontmatter — ${detail}`);
+  }
   if (entry.split("\n").length > source.skill.max_skill_lines || entry.length > 20000) errors.push("Entry file exceeds its size budget");
   const reachable = new Set(["SKILL.md"]);
   const queue = ["SKILL.md"];

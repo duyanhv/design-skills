@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const LicenseSchema = z.object({
+export const LicenseSchema = z.strictObject({
   spdx: z.string(),
   /**
    * Whether the guideline's text may be redistributed. When false, `ir/<id>` and `skills/<name>`
@@ -10,7 +10,19 @@ export const LicenseSchema = z.object({
   attribution: z.string(),
 });
 
-export const SourceSchema = z.object({
+/**
+ * Strict on purpose: an unknown key is an error, not something to ignore.
+ *
+ * Zod objects pass unknown keys through by default, and that default hid a real defect. Typing
+ * `max_skill_line` instead of `max_skill_lines` parsed cleanly, silently fell back to the default
+ * of 300, and doubled the entry-file budget. A 161-line SKILL.md that the real limit rejects then
+ * built without complaint. One character, no diagnostic, a constraint quietly gone.
+ *
+ * Every misspelling of an optional key is that same bug. Strict parsing turns the whole class into
+ * a parse error naming the key, which is the difference between a setting you can rely on and one
+ * that happens to work.
+ */
+export const SourceSchema = z.strictObject({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string(),
   /** docc: Apple DocC · wcag: W3C source tree · html: generic (todo) · authored: original local Markdown */
@@ -38,7 +50,7 @@ export const SourceSchema = z.object({
   categories: z.array(z.string()).default([]),
   /** Section headings whose content is navigation/meta, not guidance. */
   skip_sections: z.array(z.string()).default([]),
-  skill: z.object({
+  skill: z.strictObject({
     name: z.string(),
     description: z.string(),
     max_skill_lines: z.number().int().positive().default(300),
@@ -68,7 +80,7 @@ export const SourceSchema = z.object({
     /** "pages": one index row per page. "rules": one row per rule (good for small sources like WCAG). */
     index: z.enum(["pages", "rules"]).default("pages"),
     /** Curated routing hints: task keywords → pages to read. Rendered as a "Where to look" table. */
-    routing: z.array(z.object({ when: z.string(), read: z.array(z.string()) })).default([]),
+    routing: z.array(z.strictObject({ when: z.string(), read: z.array(z.string()) })).default([]),
     /** Free-form markdown appended to the "How to use" section (e.g. how severities map to levels). */
     notes: z.string().optional(),
     /** Tables larger than this (chars) are moved to <page>.tables.md so the rulebook stays small. */

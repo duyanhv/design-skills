@@ -66,3 +66,70 @@ test("real authored builds are deterministic, reject tampering, and reconcile re
   expect((await run(cwd, "validate")).code).toBe(1);
   expect((await run(cwd, "build")).code).not.toBe(0);
 });
+
+/*
+ * Unknown keys are typos, and a typo must not silently take a constraint with it.
+ *
+ * Found by sweeping the other e2e checks with the protocol six audit rounds used on the record
+ * checks: introduce the defect each check claims to catch, and see whether it is caught.
+ * `manifests` accepted an unrecognised key in a source manifest, which is not cosmetic —
+ * `max_skill_line` instead of `max_skill_lines` parsed clean, fell back to the default of 300, and
+ * a 161-line SKILL.md that the real 150 limit rejects then built without complaint. One character,
+ * no diagnostic, the budget doubled.
+ */
+test("an unknown key in a source manifest is rejected, naming the key", () => {
+  const withTypo = {
+    id: "original-guide", name: "Original Guide", kind: "authored", entry: "/",
+    base_url: "https://example.invalid/guide",
+    license: { spdx: "MIT", redistributable: true, attribution: "Original writing" },
+    // The real defect: one character, and the 150 below becomes the default 300.
+    skill: { name: "original-guide", description: "Original review workflow", max_skill_line: 150 },
+  };
+  const result = SourceSchema.safeParse(withTypo);
+  expect(result.success).toBe(false);
+  expect(JSON.stringify(result.error?.issues)).toContain("max_skill_line");
+
+  // The control: spelled correctly, it parses and the budget is the one that was written.
+  const correct = SourceSchema.safeParse({
+    ...withTypo,
+    skill: { name: "original-guide", description: "Original review workflow", max_skill_lines: 150 },
+  });
+  expect(correct.success).toBe(true);
+  expect(correct.data?.skill.max_skill_lines).toBe(150);
+});
+
+test("an unknown key at the top level of a manifest is rejected", () => {
+  const result = SourceSchema.safeParse({
+    id: "original-guide", name: "Original Guide", kind: "authored", entry: "/",
+    base_url: "https://example.invalid/guide",
+    licence: { spdx: "MIT", redistributable: true, attribution: "x" },   // British spelling
+    license: { spdx: "MIT", redistributable: true, attribution: "Original writing" },
+    skill: { name: "original-guide", description: "Original review workflow" },
+  });
+  expect(result.success).toBe(false);
+  expect(JSON.stringify(result.error?.issues)).toContain("licence");
+});
+
+test("an unknown key in SKILL.md frontmatter is rejected, naming the key", () => {
+  const withUnknown = entry.replace("license: MIT", "license: MIT\nunknown_field: whatever");
+  const errors = inspectAuthored({ ...files, "SKILL.md": withUnknown }, source);
+  expect(errors.join()).toContain("unknown_field");
+
+  // Control: the same bundle without the stray key has no frontmatter complaint.
+  expect(inspectAuthored(files, source).join()).not.toContain("frontmatter");
+});
+
+test("a budget written in the manifest is the budget enforced", () => {
+  // The consequence the typo hid: 161 lines against a 150 limit must fail.
+  const tight = SourceSchema.parse({
+    id: "original-guide", name: "Original Guide", kind: "authored", entry: "/",
+    base_url: "https://example.invalid/guide",
+    license: { spdx: "MIT", redistributable: true, attribution: "Original writing" },
+    skill: { name: "original-guide", description: "Original review workflow", max_skill_lines: 150 },
+  });
+  const padded = entry + "\n" + Array.from({ length: 160 }, (_, i) => `<!-- ${i} -->`).join("\n");
+  expect(inspectAuthored({ ...files, "SKILL.md": padded }, tight).join()).toContain("size budget");
+
+  // And under the limit it passes, so the check is not simply rejecting everything.
+  expect(inspectAuthored(files, tight).join()).not.toContain("size budget");
+});
