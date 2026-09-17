@@ -1,0 +1,63 @@
+{
+  "note": [
+    "Digests of artifacts whose evidential value depends on being the one that was produced: a",
+    "blind review, a build's notes, and the expectations registered before each run.",
+    "",
+    "This exists because comparing a file to HEAD only catches an UNCOMMITTED rewrite, and makes a",
+    "committed one the new reference. An audit demonstrated it: replacing a review, committing the",
+    "replacement, and re-running the check gave a clean pass. A normal CI checkout is already",
+    "committed, so the guard did not protect the evidence at the point the repository publishes it.",
+    "",
+    "A digest recorded here has to be updated in the same commit as the file, which makes replacing",
+    "one a visible, reviewable act rather than an invisible one. That is the whole mechanism: it",
+    "cannot stop a determined rewrite, and it stops a silent one.",
+    "",
+    "Appending a correction to a preserved artifact is legitimate (planted-defects.md gains labelled",
+    "corrections). Do it by adding to the file, updating the digest, and saying so in the commit \u2014",
+    "never by editing what was produced. Errata for reviewer output go in a sibling ERRATA.md.",
+    "",
+    "Regenerate: bun run src/e2e/example.ts --update-digests"
+  ],
+  "artifacts": {
+    "examples/apple-design-review/REVIEW.md": {
+      "sha256": "5e2dca5f80c568a14a82bdf9d8109ddb59b838dfa183ebf9a98da737ae03ac89",
+      "bytes": 37001
+    },
+    "examples/apple-design-review/planted-defects.md": {
+      "sha256": "162f8cb8a7f4bc0601460c5e62ff1acb25718463b9a49a2b40cb2a33b89bef50",
+      "bytes": 7968
+    },
+    "examples/apple-design-build/NOTES.md": {
+      "sha256": "0a5f4950098100eb86b999d1cb4258badeb938698a0489e3936f590b99200011",
+      "bytes": 15085
+    },
+    "examples/apple-design-build/expectations.md": {
+      "sha256": "858ff48c36a33892cb21aee159ffff96875a73843139237b907c43888c6e2356",
+      "bytes": 3170
+    },
+    "examples/material-3-review/REVIEW.md": {
+      "sha256": "e65e71f0b90923df4cc71b5f97b0dccd68c564c40987327055eebbcf3aa0369b",
+      "bytes": 21827
+    },
+    "examples/material-3-review/planted-defects.md": {
+      "sha256": "172bdfe43b870733b4da1685c837e3535483a9d0ac472145ef917e95eb70dc98",
+      "bytes": 4997
+    },
+    "examples/material-3-build/NOTES.md": {
+      "sha256": "d7b69e790497bd69a3c54b0bc132fa557d7eda557f6bcb5be03e454aac80dcd3",
+      "bytes": 15474
+    },
+    "examples/material-3-build/expectations.md": {
+      "sha256": "5035fdafa85095852aaf5370d1890942f890586d694f1763dd1ee57f16a5be48",
+      "bytes": 4920
+    },
+    "examples/accessibility-claims-review/REVIEW.md": {
+      "sha256": "c2c5a75304bdd48d875237d918ad587386385e517941323ff5c76f38bb7be6f2",
+      "bytes": 13576
+    },
+    "examples/accessibility-claims-review/planted-defects.md": {
+      "sha256": "6860914bdb14d3a9b20d10776fd558b2de031283b408d042a706ecda789972d4",
+      "bytes": 5837
+    }
+  }
+}

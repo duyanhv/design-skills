@@ -42,7 +42,7 @@ may be an alternative that lets an implementation off, or commentary that binds 
 > and 181 informative notes", counted from this repository's own extraction. Those counts are real
 > but the label was not: the extractor keeps everything after a criterion's first paragraph in one
 > `notes` field, and marks each block normative or informative. Of the 118 blocks it marks
-> normative, **none is a Note** — 94 are bulleted alternatives, 6 are exceptions, 18 are other
+> normative, **none is a Note** — 94 are bulleted alternatives, 5 are exceptions, 19 are other
 > normative text. Publishing them as "normative notes" gave an internal representation the source's
 > vocabulary, and contradicted what WCAG says about its own notes. An audit caught it.
 

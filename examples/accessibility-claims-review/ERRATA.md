@@ -7,6 +7,15 @@ correcting it in place would destroy that.
 Found by audit, not by me. Each is checked against the WCAG 2.2 text as built locally by this
 repository (source version 2026-08-17).
 
+<!-- Structured so a checker can verify the correction rather than the mere mention of a criterion.
+     An audit replaced this file with "SC 2.4.7 is Level A. The review is correct." and the check
+     passed, because it only asked whether the number appeared. Each record below is resolved
+     against the local WCAG build: `corrected` must be the level the source gives, and `cited` must
+     be what the review actually says.
+
+     erratum: criterion=2.4.7 cited=A corrected=AA
+-->
+
 ## E1 — SC 2.4.7 Focus Visible is Level AA, not Level A
 
 In its handling of finding 5, the review writes:

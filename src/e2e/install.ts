@@ -66,6 +66,28 @@ for (const line of readme.split("\n")) {
 
 const advertised = [...new Set(commands.map((c) => c.source))];
 
+/**
+ * Where an agent actually looks for skills.
+ *
+ * Following the README's commands literally proves they are internally consistent, and an audit
+ * showed that is not the same as correct: changing EVERY `~/.agents/skills` to `~/.agents/skils`
+ * left mkdir and ln agreeing on the same wrong directory, so traversal succeeded outside any
+ * directory an agent reads.
+ *
+ * These roots are the documented ones for the agents the README names. They are hard-coded on
+ * purpose: the whole point is an external expectation the README cannot redefine by being edited.
+ * A new agent means adding a root here deliberately.
+ */
+const SUPPORTED_ROOTS = ["~/.agents/skills", "~/.claude/skills"];
+
+for (const root of [...new Set(commands.map((c) => c.parent))]) {
+  if (root === undefined) continue;
+  if (!SUPPORTED_ROOTS.includes(root)) {
+    fail(`the README installs into ${root}, which is not a directory any supported agent reads`,
+         `supported: ${SUPPORTED_ROOTS.join(", ")} — a typo here is invisible to a consistency check`);
+  }
+}
+
 // The destination has to sit inside a directory the instructions created, and has to be named for
 // the bundle it links. Both are checkable from the text, and a reader following the steps in order
 // would hit either mistake immediately.
@@ -206,4 +228,11 @@ if (failed) {
   log.warn(`${failed} problem(s) installing the published skills as documented`);
   process.exit(1);
 }
-log.info(`all ${published.length} published skill(s) install and load as the README describes`);
+// Scoped deliberately: this exercises the documented commands, the install root, and reference
+// traversal from the entry file. It does NOT exercise agent discovery or invocation — no agent is
+// started here — and saying "installs and works" would overstate it.
+log.info(
+  `all ${published.length} published skill(s): the README's commands create them under a supported ` +
+    `root and every reference resolves from there (symlink creation and traversal only; no agent ` +
+    `discovery or invocation was tested)`,
+);

@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
 
+# One entry point. CI runs `bun run check`, which is the same command a contributor runs locally,
+# so the two cannot drift.
+#
+# This replaced a workflow that listed every check as its own step. An audit showed why that shape
+# was unfixable: the parity test compared a regex over the YAML against a regex over the package
+# script, and a step could be neutered three ways it could not see — replaced with `echo`, disabled
+# with `if: false`, or simply omitted (typecheck was, and the test did not notice because it only
+# looked for `src/e2e/*.ts`). Each fix widened the parser; the parser was the problem.
+#
+# The per-step commentary that used to live here — why each check exists and what it caught — is in
+# the head of each `src/e2e/*.ts` file, where it stays next to the code it explains.
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -11,90 +22,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - name: Typecheck
-        run: bun run typecheck
-      - name: Unit tests
-        run: bun test
-      - name: Build public authored guides
-        run: bun run build:public
-      - name: Published guides match their inputs
-        run: git diff --exit-code -- skills/apple-design skills/material-3 skills/accessibility-claims
-      # An end-to-end build over a synthetic source: no network, no proprietary text, but it
-      # exercises normalize → extract → compose → validate → eval exactly as a real source does.
-      # This is what catches a pipeline break that unit tests alone would not.
-      - name: End-to-end build (synthetic source)
-        run: bun run src/e2e/run.ts
-      # The example skill is committed so people can read real output without a local build.
-      # If a compiler change alters it, the example has to be regenerated in the same PR.
-      - name: Committed example matches a fresh build
+
+      # Everything a contributor runs before pushing: typecheck, unit tests, the public build, the
+      # synthetic end-to-end build, and every e2e guard. Defined once, in package.json.
+      - name: check
+        run: bun run check
+
+      # Published bundles are committed so they can be read on GitHub without a local build. If a
+      # compiler or guidance change alters them, the regenerated output has to be committed in the
+      # same PR. `check` runs build:public above, so a diff here means exactly that.
+      - name: Published skills match their inputs
         run: |
-          git diff --exit-code -- ir/lumen-ds skills/lumen-ds || {
-            echo "::error::examples drifted — run 'bun run example' and commit the result"
+          git diff --exit-code -- skills/ ir/lumen-ds || {
+            echo "::error::published output drifted — run 'bun run build:public && bun run example' and commit the result"
             exit 1
           }
-      # Every validate guard must be *seen* to fire. A check that has never failed is a guess: a
-      # regex that stopped matching would look exactly like a clean build.
-      - name: Validate guards fire on corrupted builds
-        run: bun run src/e2e/validate-negative.ts
-      # The complement of the targeted checks: does anything the source said fail to reach the
-      # shipped skill? Skips sources that are not built, so it is meaningful without a network crawl.
-      - name: No unexplained content loss
-        run: bun run src/e2e/coverage.ts
-      # Sentence-level, verbatim. `coverage` compares vocabulary per line and is satisfied when the
-      # words appear anywhere on the page, so it could not see a paragraph that a stale render had
-      # dropped or that the extractor had attached to the wrong item. Same skip-if-not-built rule.
-      - name: Source sentences survive into the shipped references
-        run: bun run src/e2e/fidelity.ts
-      # The same argument as the validate probes, applied to trace: a check that has never been seen
-      # to fail is a guess. Skips itself when the proprietary sources are not built locally.
-      - name: Trace checks fire on reintroduced defects
-        run: bun run src/e2e/trace-negative.ts
-      - name: Manifests parse against the source schema
-        run: bun run src/e2e/manifests.ts
-      # The README is how people arrive. Its relative links are checked by nothing else, and three
-      # ways a link passes locally while 404ing on GitHub: a missing path, a path git does not track
-      # (including the local-only apple-hig/wcag22 output), and a renamed heading behind an anchor.
-      - name: Documentation links resolve to published paths
-        run: bun run src/e2e/docs.ts
-      - name: Documentation link guards fire on reintroduced defects
-        run: bun run src/e2e/docs-negative.ts
-      # The accessibility bundle publishes counts about WCAG's own structure ("118 notes are
-      # normative"). specs.ts catches dimensions, ratios and colour literals, and could not see a
-      # count, so this recounts each one against the local WCAG build. Skips when wcag22 is not
-      # built, like coverage and fidelity, so it is silent here and meaningful locally.
-      - name: Published counts about WCAG match the source
-        run: bun run src/e2e/wcag-counts.ts
-      # The authored guides promise they carry no specifications. A copied number is wrong the next
-      # time the source revises it, is usually platform-specific, and is not ours to redistribute.
-      # A pattern scan over prose: it catches the accidental literal, not every possible one.
-      - name: No known specification patterns in authored guidance prose
-        run: bun run src/e2e/specs.ts
-      # Pins what that scan catches *and* what it knowingly misses, so the documented caveat cannot
-      # quietly become false in either direction.
-      - name: Specification scan catches and misses exactly what is documented
-        run: bun run src/e2e/specs-negative.ts
-      # `links` itself needs the network, so CI runs its guards against a local stub instead. This
-      # is the check that would have caught a 200-with-{} being counted as a verified page.
-      - name: Link-verifier guards fire on reintroduced defects
-        run: bun run src/e2e/links-negative.ts
-      # Everything else here inspects the repository. This follows the README's own install
-      # instructions into a temp directory and loads each skill through the resulting symlink,
-      # which is the path a user actually takes and the one nothing else exercised. It found three
-      # defects when it was written: build:public skipped a published bundle, this workflow's drift
-      # guard named two of three, and the README's install section named two of three.
-      - name: Published skills install and load as documented
-        run: bun run src/e2e/install.ts
-      # The checklist is where this project records what it delivered, and every tick is a public
-      # claim. Nothing verified them: adding "- [x] Ship a fully verified Flutter skill" passed the
-      # whole suite. This resolves the artifacts a tick names, and reports how many ticks assert
-      # work rather than naming it, which no script can settle.
-      - name: Completed checklist items name artifacts that exist
-        run: bun run src/e2e/checklist.ts
-      # The worked example's published numbers are prose, and prose drifts. Three audits found
-      # figures that disagreed with the artifacts they summarised; these invariants are the fix.
-      - name: The worked example's claims match its artifacts
-        run: bun run src/e2e/example.ts
-      # Ignore rules answer "is this path excluded?", not "did the text get in another way?".
-      # Skips itself when the proprietary sources are not built, so it is silent here.
+
+      # CI-only, and deliberately so: leak.ts scans tracked files against the *complete* text of the
+      # proprietary corpora, which are built locally and never committed. It skips itself when they
+      # are absent, so it is silent here and meaningful on a machine that has built them.
       - name: No bulk source text in tracked files
         run: bun run src/e2e/leak.ts

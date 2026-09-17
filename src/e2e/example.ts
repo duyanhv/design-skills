@@ -23,7 +23,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { ROOT, exists } from "../util/fs.ts";
 import { log } from "../util/log.ts";
-import { checkPilotClaims } from "./pilot-claims.ts";
+import { checkPilotClaims, markdownTables } from "./pilot-claims.ts";
 
 const EXAMPLE = join(ROOT, "examples", "apple-design-review");
 
@@ -174,19 +174,40 @@ for (const [name, dir, expectations] of [
   const scoringPath = join(ROOT, "examples", dir, "scoring.md");
   const scoring = ((await exists(scoringPath)) ? await readFile(scoringPath, "utf8") : "") + "\n" + readme;
 
-  /** id -> the outcome its scoring row records. */
+  /**
+   * id -> the outcome its scoring row records, read from the column the table header names.
+   *
+   * The first version scanned every cell after the id for a bolded phrase, which an audit defeated
+   * by putting "**Found**" in the *Defect* column while the Outcome column said "**Missed**". That
+   * is the same wrong-cell mistake the RN pixel table had, reproduced in a new scorer, so this
+   * resolves the column by header exactly as the RN check does.
+   */
   const adjudicated = new Map<string, string>();
-  for (const row of scoring.split("\n")) {
-    const cells = row.trim().startsWith("|") ? row.split("|").map((c) => c.trim()) : [];
-    if (cells.length < 4) continue;
-    const id = /^\*{0,2}([MTA]\d+)\*{0,2}$/.exec(cells[1] ?? "")?.[1];
-    if (!id) continue;
-    // The outcome is the first bolded verdict after the id: column 3 in the review tables (which
-    // carry a "where" column) and column 2 in the build's trap table. Scanning the rest of the row
-    // rather than a fixed index keeps both formats working without a per-example special case.
-    const rest = cells.slice(2).join(" | ");
-    const outcome = /\*\*([A-Za-z][A-Za-z ,-]*)[.\*]/.exec(rest)?.[1]?.trim().toLowerCase();
-    if (outcome) adjudicated.set(id, outcome);
+  const ALLOWED = ["found", "handled", "avoided", "partial", "missed", "not flagged", "half-flagged"];
+  const CREDITED = ["found", "handled", "avoided"];
+
+  for (const table of markdownTables(scoring)) {
+    const idColumn = table.header.findIndex((h) => /^#$|\bid\b/i.test(h));
+    const outcomeColumn = table.header.findIndex((h) => /outcome|result|verdict/i.test(h));
+    if (idColumn < 0 || outcomeColumn < 0) continue;
+
+    for (const cells of table.rows) {
+      const id = /^\*{0,2}([MTA]\d+)\*{0,2}$/.exec((cells[idColumn] ?? "").trim())?.[1];
+      if (!id) continue;
+      const cell = (cells[outcomeColumn] ?? "").replace(/[*_`]/g, "").trim().toLowerCase();
+      const outcome = ALLOWED.find((a) => cell.startsWith(a));
+      if (!outcome) {
+        fail(`${name}: ${id}'s ${table.header[outcomeColumn]} cell reads "${(cells[outcomeColumn] ?? "").trim().slice(0, 40)}"`,
+             `an outcome has to be one of: ${ALLOWED.join(", ")}`);
+        continue;
+      }
+      // Two rows adjudicating one item is ambiguous, and silently overwriting hid it.
+      if (adjudicated.has(id)) {
+        fail(`${name}: ${id} is adjudicated more than once (${adjudicated.get(id)}, then ${outcome})`);
+        continue;
+      }
+      adjudicated.set(id, outcome);
+    }
   }
 
   const unadjudicated = [...planted].filter((id) => !adjudicated.has(id));
@@ -201,10 +222,17 @@ for (const [name, dir, expectations] of [
 
   // Outcomes that count toward a "found"/"handled" headline. Anything else — partial, missed —
   // does not, which is what makes the derived numerator meaningful.
-  const CREDITED = ["found", "handled", "avoided"];
   const credited = [...adjudicated.values()].filter((o) => CREDITED.some((c) => o.startsWith(c))).length;
 
-  for (const claim of readme.matchAll(/\*\*(\d+) of (\d+)/g)) {
+  // Bold or plain: an audit replaced the bolded headline with the same sentence unbolded, and the
+  // loop simply found nothing and printed that the README agreed. A README carrying no parseable
+  // headline is now a failure, not a silent pass.
+  const headlines = [...readme.matchAll(/(?:\*\*)?(\d+) of (\d+)(?:\*\*)?\s+(?:planted|credited|traps|handled|found|reached)/g)];
+  if (!headlines.length) {
+    fail(`${name}/README.md states no parseable "N of M" headline`,
+         "the score has to be checkable against the adjudications, so it has to be findable");
+  }
+  for (const claim of headlines) {
     const [numerator, denominator] = [Number(claim[1]), Number(claim[2])];
     if (denominator !== planted.size) {
       fail(`${name}/README.md claims "${claim[0]}", but ${expectations} pre-registers ${planted.size}`,
@@ -220,26 +248,11 @@ for (const [name, dir, expectations] of [
   }
   pass(`${name}: ${credited} credited outcome(s) across ${planted.size} pre-registered item(s), and the README agrees`);
 
-  // Every review in this repository is published verbatim; that is its whole evidential value.
-  // The Apple example's REVIEW.md was protected and the newer ones were not.
-  for (const artifact of ["REVIEW.md", "NOTES.md"]) {
-    const path = join(ROOT, "examples", dir, artifact);
-    if (!(await exists(path))) continue;
-    const diffProc = Bun.spawn(["git", "diff", "HEAD", "--", `examples/${dir}/${artifact}`], {
-      cwd: ROOT, stdout: "pipe", stderr: "ignore",
-    });
-    const diff = (await new Response(diffProc.stdout).text()).trim();
-    if ((await diffProc.exited) !== 0) continue;
-    if (diff) {
-      const changed = diff.split("\n").filter((l) => /^[+-][^+-]/.test(l)).length;
-      fail(`${name}/${artifact} differs from its committed content (${changed} changed line(s))`,
-           "a produced artifact is evidence only while it is the one that was produced");
-    } else {
-      pass(`${name}/${artifact} matches its committed content`);
-    }
-  }
-
-  // The review example's before/ screen has to still run: a straw man that throws tests nothing.
+  // The review example's before/ screen has to still run: a straw man that throws on load tests
+  // nothing, because any reviewer would find "it does not run" and stop.
+  //
+  // This was deleted by accident while replacing the HEAD-diff preservation block, and its own
+  // committed test caught that — which is the argument for the tests existing, applied to me.
   if (dir === "material-3-review") {
     const proc = Bun.spawn(["node", join(ROOT, "examples", dir, "before", "renders.mjs")], {
       cwd: ROOT, stdout: "pipe", stderr: "pipe",
@@ -253,6 +266,61 @@ for (const [name, dir, expectations] of [
       pass("the review example's before/ screen still renders");
     }
   }
+}
+
+// 3c-bis. Preserved artifacts must match their recorded digests.
+//
+// Comparing against HEAD was not preservation: it catches an uncommitted rewrite and makes a
+// committed one the new reference. An audit replaced a review, committed it, and got a clean pass —
+// and a CI checkout is always already committed, so the guard was absent exactly where the
+// repository publishes the evidence.
+//
+// examples/preserved.json pins a digest per artifact. Replacing one now requires updating that file
+// in the same commit, which makes it a reviewable act instead of an invisible one. It cannot stop a
+// determined rewrite; it stops a silent one, and that is the honest claim.
+const preservedPath = join(ROOT, "examples", "preserved.json");
+if (!(await exists(preservedPath))) {
+  fail("examples/preserved.json is missing", "nothing pins the artifacts whose value is being unchanged");
+} else {
+  const preserved = JSON.parse(await readFile(preservedPath, "utf8")) as {
+    artifacts: Record<string, { sha256: string; bytes: number }>;
+  };
+  const entries = Object.entries(preserved.artifacts ?? {});
+  if (!entries.length) fail("examples/preserved.json pins no artifacts");
+
+  for (const [relative, expected] of entries) {
+    const path = join(ROOT, relative);
+    if (!(await exists(path))) {
+      fail(`${relative} is pinned but missing`, "a deleted artifact is not a passing one");
+      continue;
+    }
+    const bytes = await Bun.file(path).arrayBuffer();
+    const actual = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+    if (actual !== expected.sha256) {
+      fail(`${relative} does not match its recorded digest`,
+           `expected ${expected.sha256.slice(0, 16)}… (${expected.bytes} bytes), ` +
+             `found ${actual.slice(0, 16)}… (${bytes.byteLength} bytes). ` +
+             `If the change is a deliberate appended correction, update examples/preserved.json in ` +
+             `the same commit and say so; never edit what a run produced.`);
+    }
+  }
+
+  // Every produced-or-pre-registered artifact must be pinned. An unpinned one is unprotected, and
+  // the previous guard covered reviewer output while leaving the pre-registration files out.
+  const REQUIRED = ["REVIEW.md", "NOTES.md", "planted-defects.md", "expectations.md"];
+  for (const example of await readdir(join(ROOT, "examples"))) {
+    const dir = join(ROOT, "examples", example);
+    if (!(await exists(join(dir, "README.md")))) continue;
+    for (const artifact of REQUIRED) {
+      if (!(await exists(join(dir, artifact)))) continue;
+      const key = `examples/${example}/${artifact}`;
+      if (!preserved.artifacts?.[key]) {
+        fail(`${key} exists but is not pinned in examples/preserved.json`,
+             "an unpinned produced artifact can be rewritten without trace");
+      }
+    }
+  }
+  pass(`${entries.length} preserved artifact(s) match their recorded digests`);
 }
 
 // 3d. Levels cited in a preserved review must match WCAG.
@@ -292,17 +360,46 @@ if (await exists(wcagPages)) {
       if (actual !== claimed) wrong.push(`SC ${number} cited as Level ${claimed}, actually ${actual}`);
     }
 
+    /**
+     * Structured erratum records: `erratum: criterion=2.4.7 cited=A corrected=AA`.
+     *
+     * Presence of the criterion number was not enough. An audit replaced the whole erratum with a
+     * sentence asserting the review was right, and the check accepted it as the correction — so a
+     * document reinforcing the error qualified as fixing it. The record now has to state the level
+     * the review cited AND the level the source gives, and both are verified.
+     */
+    const corrections = new Map<string, { cited: string; corrected: string }>();
+    for (const record of errata.matchAll(/erratum:\s*criterion=(\S+)\s+cited=(\S+)\s+corrected=(\S+)/g)) {
+      corrections.set(record[1]!, { cited: record[2]!, corrected: record[3]! });
+    }
+
     for (const problem of wrong) {
-      // A known error stays published so long as the erratum records it. An unrecorded one is a
-      // claim the repository is still making.
       const number = /SC (\d+\.\d+\.\d+)/.exec(problem)![1]!;
-      if (errata.includes(number)) {
-        pass(`${dir}: ${problem} — recorded in ERRATA.md`);
-      } else {
+      const claimed = /Level (A{1,3})/.exec(problem)![1]!;
+      const actual = levels.get(number)!;
+      const correction = corrections.get(number);
+
+      if (!correction) {
         fail(`${dir}/REVIEW.md: ${problem}`,
-             "preserve the review and record the correction in ERRATA.md rather than editing it");
+             `preserve the review and add to ERRATA.md: \`erratum: criterion=${number} cited=${claimed} corrected=${actual}\``);
+      } else if (correction.cited !== claimed) {
+        fail(`${dir}/ERRATA.md says the review cited Level ${correction.cited} for SC ${number}, but it cites ${claimed}`);
+      } else if (correction.corrected !== actual) {
+        fail(`${dir}/ERRATA.md corrects SC ${number} to Level ${correction.corrected}; the WCAG build gives ${actual}`,
+             "an erratum that restates the error is not a correction");
+      } else {
+        pass(`${dir}: ${problem} — corrected in ERRATA.md to Level ${actual}`);
       }
     }
+
+    // A correction for something the review does not get wrong is stale or fabricated.
+    for (const [number, correction] of corrections) {
+      if (wrong.some((w) => w.includes(`SC ${number} `))) continue;
+      fail(`${dir}/ERRATA.md records a correction for SC ${number}, which the review does not miscite`,
+           `the review's own citation and the build agree at Level ${levels.get(number) ?? "?"}; ` +
+             `remove the stale record (it claims cited=${correction.cited})`);
+    }
+
     if (checked) pass(`${dir}: ${checked} criterion level(s) cited, resolved against the WCAG build`);
   }
 }
@@ -333,8 +430,10 @@ for (const file of ["REVIEW.md", "planted-defects.md"]) {
     pass(`${file}: ${commits.length} commit(s) touching it`);
   }
 
-  // And the working copy must match what git holds. An uncommitted rewrite is exactly the edit
-  // this check exists to prevent, and it is the one a commit count cannot see.
+  // And the working copy must match what git holds. This predates examples/preserved.json and is
+  // kept because it says something different: the digest catches any change, committed or not,
+  // while this catches an uncommitted one *before* it is staged, with a line count. Cheap, and the
+  // two failures read differently enough to be worth both.
   const diffProc = Bun.spawn(["git", "diff", "HEAD", "--", path], {
     cwd: ROOT, stdout: "pipe", stderr: "ignore",
   });

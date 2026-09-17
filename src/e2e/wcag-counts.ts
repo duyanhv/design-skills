@@ -76,7 +76,19 @@ const counts = {
   informativeNotes: authorities.filter((a) => a === "informative").length,
   /** Normative blocks that are really Notes. WCAG says this should be zero. */
   normativeRealNotes: normativeBlocks.filter(isNote).length,
+  /**
+   * The three published categories, mutually exclusive and exhaustive by construction: a block is
+   * a bullet, or mentions an exception, or is neither. An audit changed "6 are exceptions" to 600
+   * and the checker did not care, because it verified the total and the bullets and left the other
+   * two figures unchecked. Every published category is derived here, and their sum is asserted.
+   */
   normativeBullets: normativeBlocks.filter((b) => b.trim().startsWith("-")).length,
+  normativeExceptions: normativeBlocks.filter(
+    (b) => !b.trim().startsWith("-") && /\bexcept(?:ion)?s?\b/i.test(b),
+  ).length,
+  normativeOther: normativeBlocks.filter(
+    (b) => !b.trim().startsWith("-") && !/\bexcept(?:ion)?s?\b/i.test(b),
+  ).length,
   mixedRules: rules.filter(
     (r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"),
   ).length,
@@ -123,6 +135,16 @@ const CLAIMS: { what: string; actual: number; pattern: RegExp; in?: string }[] =
     actual: counts.normativeBullets,
     pattern: /\*\*none is a Note\*\* — (\d+) are bulleted alternatives/,
   },
+  {
+    what: "of those, exceptions",
+    actual: counts.normativeExceptions,
+    pattern: /are bulleted alternatives, (\d+) are exceptions/,
+  },
+  {
+    what: "of those, other normative text",
+    actual: counts.normativeOther,
+    pattern: /are exceptions, (\d+) are other\s*\n?> ?normative text/,
+  },
   { what: "Level A criteria", actual: counts.levelA, pattern: /\*\*(\d+) Level A,/ },
   { what: "Level AA criteria", actual: counts.levelAA, pattern: /Level A, (\d+) Level AA,/ },
   { what: "Level AAA criteria", actual: counts.levelAAA, pattern: /and (\d+) Level AAA\*\*/ },
@@ -153,6 +175,16 @@ for (const claim of CLAIMS) {
 const mixedSections = rules
   .filter((r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"))
   .map((r) => r.section ?? "");
+// The breakdown has to account for every normative block, or it is a set of numbers that happen to
+// appear in a sentence rather than a partition of the thing being described.
+const breakdown = counts.normativeBullets + counts.normativeExceptions + counts.normativeOther;
+if (breakdown === counts.normativeNotes) {
+  console.log(`✓ the published breakdown accounts for all ${counts.normativeNotes} normative block(s)`);
+} else {
+  console.log(`✗ the breakdown sums to ${breakdown}, but there are ${counts.normativeNotes} normative blocks`);
+  failed++;
+}
+
 // The guide's central factual claim: NONE of the normative blocks is a Note. WCAG says its notes
 // are informative, so a normative block that is really a Note would mean either the extraction or
 // the guide is wrong. Checked directly rather than inferred from a total.

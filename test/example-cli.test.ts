@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
-import { mkdtemp, mkdir, cp, readFile, writeFile, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdtemp, mkdir, cp, readFile, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,8 +63,33 @@ async function sandbox(): Promise<string> {
   await cp(join(REPO, ".gitignore"), join(dir, ".gitignore"));
   // The pre-registered-artifact check shells out to git log, so the copy needs history to read.
   // Pointing it at the real repository keeps that check meaningful instead of silently empty.
+  // Point at the real .git so `git log`, `git diff HEAD` and `git ls-files` see real history.
+  //
+  // READ-ONLY, and that is now enforced rather than assumed: a test that committed inside the
+  // sandbox put 14 junk commits into the actual repository, because a borrowed gitdir is the same
+  // repository. Recovered with a soft reset, and the fix is below — a sandbox that needs to commit
+  // must call `isolateGit` first and get a repository of its own.
   await writeFile(join(dir, ".git"), `gitdir: ${join(REPO, ".git")}\n`);
   return dir;
+}
+
+/**
+ * Give a sandbox its own git repository, for the cases that must commit.
+ *
+ * The borrowed gitdir above is read-only by intent; anything that commits needs this first. It
+ * copies history in so `git log` still reports real commits, then commits are contained.
+ */
+async function isolateGit(dir: string): Promise<void> {
+  await rm(join(dir, ".git"), { recursive: true, force: true });
+  for (const args of [
+    ["init", "-q"],
+    ["-c", "user.email=test@example.invalid", "-c", "user.name=test", "add", "-A"],
+    ["-c", "user.email=test@example.invalid", "-c", "user.name=test",
+     "commit", "-q", "-m", "baseline for an isolated sandbox"],
+  ]) {
+    const proc = Bun.spawn(["git", ...args], { cwd: dir, stdout: "ignore", stderr: "ignore" });
+    if ((await proc.exited) !== 0) throw new Error(`git ${args[0]} failed while isolating ${dir}`);
+  }
 }
 
 /** Run an e2e CLI inside a sandbox, returning its exit code and combined output. */
@@ -391,44 +417,66 @@ test("cutting a CLI's exit call is caught: docs.ts is the second instance of thi
  * These tests hold the two properties that keep the path honest: CI runs what `bun run check` runs,
  * and the published skills install and load as the README says.
  */
-test("CI executes every check that `bun run check` runs", async () => {
-  // A check that exists locally but not in CI protects nobody on a pull request. wcag-counts.ts was
-  // exactly that when this was written: added to `check`, never added to the workflow.
+test("CI runs the same entry point a contributor runs", () => {
+  // Structural, not parsed. The previous version compared a regex over the workflow YAML against a
+  // regex over the package script, and an audit showed three ways a step could be neutered without
+  // it noticing: replaced with `echo`, disabled with `if: false`, or simply omitted — typecheck
+  // was, and the test missed it because it only looked for `src/e2e/*.ts`. Worse, its own
+  // regression duplicated the parser, so removing the guard from the real test left both green.
+  //
+  // So there is nothing to parse now: CI runs `bun run check`. The assertions below are about that
+  // invariant holding, which is checkable without modelling YAML semantics.
+  const workflow = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+
+  const runs = [...workflow.matchAll(/^\s*run: (.+)$/gm)].map((m) => m[1]!.trim());
+  const checkStep = runs.find((r) => r === "bun run check");
+  expect(checkStep).toBe("bun run check");
+
+  // No conditional may gate it: `if: ${{ false }}` above the step would disable it silently.
+  const checkIndex = workflow.indexOf("run: bun run check");
+  const stepStart = workflow.lastIndexOf("- name:", checkIndex);
+  expect(workflow.slice(stepStart, checkIndex)).not.toContain("if:");
+
+  // Anything CI runs beyond the shared entry point is a deliberate extra, named here. A new step
+  // appearing without being added to this list is the drift this test exists to catch.
+  const CI_ONLY = ["bun install --frozen-lockfile", "bun run src/e2e/leak.ts"];
+  const extras = runs.filter(
+    (r) => r !== "bun run check" && !CI_ONLY.includes(r) && r !== "|",
+  );
+  expect(extras).toEqual([]);
+});
+
+test("`bun run check` covers every e2e guard in the repository", async () => {
+  // The entry point is only worth anything if it is complete. A new src/e2e/*.ts that nothing runs
+  // is a check that protects nobody, which is how wcag-counts.ts sat outside CI.
   const pkg = JSON.parse(await readFile(join(REPO, "package.json"), "utf8")) as {
     scripts: Record<string, string>;
   };
-  const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+  const check = pkg.scripts.check ?? "";
 
-  // Parse what CI actually EXECUTES, not what its text mentions. Searching raw workflow text for
-  // filenames passed when a step was replaced with `echo "skipped src/e2e/checklist.ts"` — the
-  // name was still present and the check was gone, which is the exact failure this is for.
-  const executed = new Set<string>();
-  for (const line of workflow.split("\n")) {
-    const run = /^\s*(?:-\s*)?run:\s*(.+)$/.exec(line);
-    if (!run) continue;
-    const command = run[1]!.trim();
-    // A command that merely prints is not a check, however it is spelled.
-    if (/^(echo|true|:)\b/.test(command)) continue;
-    for (const m of command.matchAll(/bun run (?:src\/e2e\/)?([a-z-]+)(?:\.ts)?/g)) executed.add(m[1]!);
-  }
+  const files = (await readdir(join(REPO, "src", "e2e"))).filter((f) => f.endsWith(".ts"));
+  // Modules imported by other checks rather than run directly, and the two CI-only/manual ones.
+  const NOT_DIRECTLY_RUN = new Set([
+    "links.ts",        // needs the network; its guards run offline via links-negative.ts
+    "leak.ts",         // CI-only: needs the locally built proprietary corpora
+    "trace.ts",        // needs the built corpora; trace-negative.ts runs its guards
+    "records.ts",      // needs the network; test/records.test.ts drives it offline
+    "record-source.ts", "pilot-claims.ts", "fixture.ts", "budget.ts",
+    "validate-once.ts", "probes",
+  ]);
 
-  const inCheck = new Set([...(pkg.scripts.check ?? "").matchAll(/src\/e2e\/([a-z-]+)\.ts/g)].map((m) => m[1]!));
-  expect(inCheck.size).toBeGreaterThan(5);
-  const missing = [...inCheck].filter((s) => !executed.has(s));
-  expect(missing).toEqual([]);
-
-  // CI-only checks are intentional and are named, rather than the two sets being called identical.
-  // leak.ts needs the proprietary corpora, which are built locally and never in CI.
-  const CI_ONLY = new Set(["leak"]);
-  const ciExtra = [...executed].filter(
-    (s) => !inCheck.has(s) && !CI_ONLY.has(s) && !(pkg.scripts[s] !== undefined),
-  );
-  expect(ciExtra).toEqual([]);
+  const unrun = files.filter((f) => !NOT_DIRECTLY_RUN.has(f) && !check.includes(`src/e2e/${f}`));
+  expect(unrun).toEqual([]);
 });
 
 test("every published skill is built, drift-guarded, and documented as installable", async () => {
-  // The same list in three places: build:public, the workflow's git diff guard, and the README's
-  // install instructions. accessibility-claims was missing from all three.
+  // The same list used to live in three places — build:public, the workflow's git diff guard, and
+  // the README's install instructions — and accessibility-claims was missing from all three. The
+  // workflow now diffs `skills/` wholesale, so one of the three is gone by construction; the other
+  // two are still per-bundle and are checked here.
+  //
+  // The wholesale diff is asserted separately, because "the guard covers every bundle" is now a
+  // property of the path it names rather than of a list.
   const pkg = JSON.parse(await readFile(join(REPO, "package.json"), "utf8")) as {
     scripts: Record<string, string>;
   };
@@ -445,9 +493,9 @@ test("every published skill is built, drift-guarded, and documented as installab
     .filter((s) => !FIXTURES.has(s));
 
   expect(publishedSkills.length).toBeGreaterThan(0);
+  expect(workflow).toContain("git diff --exit-code -- skills/");
   for (const skill of publishedSkills) {
     expect(pkg.scripts["build:public"]).toContain(skill);
-    expect(workflow).toContain(`skills/${skill}`);
     expect(readme).toContain(`skills/${skill}"`);
   }
 });
@@ -558,7 +606,8 @@ test("replacing a preserved review fails the CLI", async () => {
 
   expect(control.code).toBe(0);
   expect(defect.code).not.toBe(0);
-  expect(defect.output).toContain("differs from its committed content");
+  // Message changed when preservation moved from a HEAD diff to a pinned digest (audit R1).
+  expect(defect.output).toContain("does not match its recorded digest");
 });
 
 test("the audit's original Flutter wording fails the CLI", async () => {
@@ -597,27 +646,26 @@ test("a documented install destination that nothing created fails the CLI", asyn
   expect(defect.output).toContain("skils");
 });
 
-test("a CI step replaced with echo fails the parity test", async () => {
-  // Searching workflow text for filenames cannot tell a step that runs a check from one that
-  // prints its name. Asserted directly rather than through a sandbox, since this parses the file.
-  const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
-  const executed = (text: string) => {
-    const found = new Set<string>();
-    for (const line of text.split("\n")) {
-      const run = /^\s*(?:-\s*)?run:\s*(.+)$/.exec(line);
-      if (!run) continue;
-      const command = run[1]!.trim();
-      if (/^(echo|true|:)\b/.test(command)) continue;
-      for (const m of command.matchAll(/bun run (?:src\/e2e\/)?([a-z-]+)(?:\.ts)?/g)) found.add(m[1]!);
-    }
-    return found;
-  };
+test("a workflow that stops running the shared check is caught", () => {
+  // The previous regression duplicated the parity parser and therefore proved its own copy worked.
+  // This drives the same assertions the real test makes, against a sabotaged workflow.
+  const workflow = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
 
-  expect(executed(workflow).has("checklist")).toBe(true);
-  const sabotaged = workflow.replace("        run: bun run src/e2e/checklist.ts",
-                                     '        run: echo "skipped src/e2e/checklist.ts"');
-  expect(sabotaged).toContain("src/e2e/checklist.ts");   // the name is still there
-  expect(executed(sabotaged).has("checklist")).toBe(false);   // and it is not executed
+  for (const [label, sabotaged] of [
+    ["replaced with echo", workflow.replace("run: bun run check", 'run: echo "skipped check"')],
+    ["disabled by a condition", workflow.replace("      - name: check", "      - name: check\n        if: ${{ false }}")],
+    ["removed entirely", workflow.replace("        run: bun run check\n", "")],
+  ] as const) {
+    const runs = [...sabotaged.matchAll(/^\s*run: (.+)$/gm)].map((m) => m[1]!.trim());
+    const hasCheck = runs.includes("bun run check");
+    const index = sabotaged.indexOf("run: bun run check");
+    const stepStart = index >= 0 ? sabotaged.lastIndexOf("- name:", index) : -1;
+    const gated = index >= 0 && sabotaged.slice(stepStart, index).includes("if:");
+
+    // Every sabotage is visible to at least one of the two assertions the real test makes.
+    expect(!hasCheck || gated).toBe(true);
+    expect(label).toBeTruthy();
+  }
 });
 
 test("a criterion level cited in a preserved review must match WCAG", async () => {
@@ -635,7 +683,7 @@ test("a criterion level cited in a preserved review must match WCAG", async () =
   try {
     const control = await runTool(REPO, "example");
     expect(control.code).toBe(0);
-    expect(control.output).toContain("SC 2.4.7 cited as Level A, actually AA — recorded in ERRATA.md");
+    expect(control.output).toContain("SC 2.4.7 cited as Level A, actually AA — corrected in ERRATA.md");
 
     // The erratum stops naming the criterion: the uncorrected claim is live again.
     await writeFile(errata, original.replaceAll("2.4.7", "2.9.9"));
@@ -644,5 +692,201 @@ test("a criterion level cited in a preserved review must match WCAG", async () =
     expect(defect.output).toContain("SC 2.4.7 cited as Level A, actually AA");
   } finally {
     await writeFile(errata, original);
+  }
+}, 60_000);
+
+/*
+ * ---- Follow-up audit (docs/audits/section-6-914929d.md) ----
+ *
+ * Six gaps, all in the checks rather than the published claims. R6 is handled by the two parity
+ * tests above; the rest are here, each with an unchanged control.
+ */
+test("R1: a committed review rewrite fails the CLI", async () => {
+  // Comparing to HEAD made a committed rewrite the new reference, and a CI checkout is always
+  // already committed. The sandbox commits the change so this is the real scenario, not a dirty
+  // working file.
+  const dir = await sandbox();
+  try {
+    // Its own repository: committing through a borrowed gitdir writes to the real one.
+    await isolateGit(dir);
+    const control = await runTool(dir, "example");
+    expect(control.code).toBe(0);
+
+    await writeFile(join(dir, "examples/accessibility-claims-review/REVIEW.md"),
+                    "# Review\n\nNo findings. Everything conforms.\n");
+    for (const args of [
+      ["add", "-A"],
+      ["-c", "user.email=test@example.invalid", "-c", "user.name=test", "commit", "-q", "-m", "rewrite"],
+    ]) {
+      const proc = Bun.spawn(["git", ...args], { cwd: dir, stdout: "ignore", stderr: "ignore" });
+      await proc.exited;
+    }
+
+    const defect = await runTool(dir, "example");
+    expect(defect.code).not.toBe(0);
+    expect(defect.output).toContain("does not match its recorded digest");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("R1: an unpinned produced artifact fails the CLI", async () => {
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/preserved.json", (t) => {
+      const parsed = JSON.parse(t) as { artifacts: Record<string, unknown> };
+      delete parsed.artifacts["examples/accessibility-claims-review/REVIEW.md"];
+      return JSON.stringify(parsed, null, 2);
+    }));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("not pinned");
+}, 60_000);
+
+test("R2: an unbolded inflated headline fails the CLI", async () => {
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/accessibility-claims-review/README.md",
+         (t) => t.replace("**10 of 10 planted defects found. 0 false positives.**",
+                          "11 of 10 planted defects found. 0 false positives.")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("more than the total");
+}, 60_000);
+
+test("R2: an outcome read from the wrong column fails the CLI", async () => {
+  // "**Found**" in the Defect column with "**Missed**" in Outcome. The scorer now resolves the
+  // column from the header, which is the same fix the RN result-cell check needed.
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/accessibility-claims-review/scoring.md",
+         (t) => t.replace("| A1 | No criterion cited at all | **Found** |",
+                          "| A1 | **Found** no criterion cited at all | **Missed** |")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("credits");
+}, 60_000);
+
+test("R3: an erratum that restates the error fails the CLI", async () => {
+  // Verbatim from the audit: a document asserting the review was right counted as its correction.
+  //
+  // Needs the local WCAG build to resolve the level, and the sandbox copies only tracked files
+  // while ir/wcag22/ is gitignored (non-redistributable), so the check correctly skips in there.
+  // Run against the working tree instead, and restore.
+  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+
+  const errata = join(REPO, "examples", "accessibility-claims-review", "ERRATA.md");
+  const original = await readFile(errata, "utf8");
+  try {
+    expect((await runTool(REPO, "example")).code).toBe(0);
+    await writeFile(errata, "# Erratum\n\nSC 2.4.7 is Level A. The review is correct.\n");
+    const defect = await runTool(REPO, "example");
+    expect(defect.code).not.toBe(0);
+    expect(defect.output).toContain("SC 2.4.7 cited as Level A, actually AA");
+  } finally {
+    await writeFile(errata, original);
+  }
+}, 60_000);
+
+test("R4: an unchecked category in the count breakdown fails the CLI", async () => {
+  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+
+  const guide = join(REPO, "guidance", "accessibility-claims", "references", "tasks", "authority.md");
+  const original = await readFile(guide, "utf8");
+  try {
+    expect((await runTool(REPO, "wcag-counts")).code).toBe(0);
+    await writeFile(guide, original.replace("5 are exceptions", "600 are exceptions"));
+    const defect = await runTool(REPO, "wcag-counts");
+    expect(defect.code).not.toBe(0);
+    expect(defect.output).toContain("600");
+  } finally {
+    await writeFile(guide, original);
+  }
+}, 60_000);
+
+test("R5: a shared install-root typo fails the CLI", async () => {
+  // Both mkdir and ln agreeing on the wrong directory: internally consistent, externally useless.
+  const { control, defect } = await controlAndDefectFor("install", (dir) =>
+    edit(dir, "README.md", (t) => t.replaceAll("~/.agents/skills", "~/.agents/skils")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("not a directory any supported agent reads");
+}, 60_000);
+
+test("R3: an erratum that reverses the correction fails the CLI", async () => {
+  // Distinct from the false-erratum case above, and the one that needed its own test: the record
+  // keeps the criterion and the cited level, and gets the CORRECTED level wrong. Removing the
+  // comparison against the WCAG build leaves that undetected by anything else, which is why this
+  // exists rather than relying on a sibling guard.
+  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+
+  const errata = join(REPO, "examples", "accessibility-claims-review", "ERRATA.md");
+  const original = await readFile(errata, "utf8");
+  try {
+    expect((await runTool(REPO, "example")).code).toBe(0);
+
+    // "corrected=A" restates the error the erratum is supposed to fix.
+    await writeFile(errata, original.replace("corrected=AA", "corrected=A"));
+    const reversed = await runTool(REPO, "example");
+    expect(reversed.code).not.toBe(0);
+    expect(reversed.output).toContain("the WCAG build gives AA");
+
+    // And a record whose `cited` does not match what the review says.
+    await writeFile(errata, original.replace("cited=A ", "cited=AAA "));
+    const misquoted = await runTool(REPO, "example");
+    expect(misquoted.code).not.toBe(0);
+    expect(misquoted.output).toContain("but it cites A");
+  } finally {
+    await writeFile(errata, original);
+  }
+}, 60_000);
+
+test("a sandbox that commits cannot write to the real repository", async () => {
+  // This exists because it happened. The R1 test commits a review rewrite to exercise the
+  // committed-rewrite case, and the sandbox borrows the real .git via a gitdir file — so those
+  // commits landed in the actual repository, 14 of them, until a soft reset recovered it.
+  //
+  // The invariant: any sandbox that commits must call isolateGit first. Asserted by observing the
+  // real repository's HEAD across a commit made inside an isolated sandbox.
+  const headOf = async (cwd: string) => {
+    const proc = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd, stdout: "pipe", stderr: "ignore" });
+    const out = (await new Response(proc.stdout).text()).trim();
+    await proc.exited;
+    return out;
+  };
+
+  const before = await headOf(REPO);
+  const dir = await sandbox();
+  try {
+    await isolateGit(dir);
+    await writeFile(join(dir, "scratch.txt"), "a commit that must stay inside the sandbox\n");
+    for (const args of [
+      ["add", "-A"],
+      ["-c", "user.email=test@example.invalid", "-c", "user.name=test", "commit", "-q", "-m", "sandbox-only"],
+    ]) {
+      const proc = Bun.spawn(["git", ...args], { cwd: dir, stdout: "ignore", stderr: "ignore" });
+      expect(await proc.exited).toBe(0);
+    }
+
+    // The sandbox advanced; the real repository did not.
+    expect(await headOf(dir)).not.toBe(before);
+    expect(await headOf(REPO)).toBe(before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // Behavioural checks only cover the sandbox they create, so the rule is also asserted
+  // structurally: every test that commits has to isolate first. Reading this file is the only way
+  // to cover the other tests, and a new one that forgets is the case that caused the incident.
+  const source = readFileSync(join(REPO, "test", "example-cli.test.ts"), "utf8");
+  const blocks = source.split(/^test\(/m).slice(1);
+  for (const block of blocks) {
+    const name = /^"([^"]+)"/.exec(block)?.[1] ?? "(unnamed)";
+    const commits = /"commit"/.test(block);
+    if (!commits) continue;
+    // Either it isolates the sandbox, or it is this test's own structural scan.
+    const isolates = block.includes("isolateGit(dir)");
+    expect(isolates || name.includes("cannot write to the real repository")).toBe(true);
   }
 }, 60_000);
