@@ -1,0 +1,145 @@
+# Measurement records: contrast
+#
+# This pilot exists to test a record shape that control sizing did not need: a value selected by
+# *conditions* rather than by a single row label. It broke the format in four ways, and each is
+# handled explicitly rather than smoothed over.
+#
+#   1. The rows OVERLAP. 16 pt Bold matches both "Up to 17 pts / All weights → 4.5:1" and
+#      "All sizes / Bold → 3:1". The source does not say which wins. A format with one answer per
+#      lookup would have to invent a precedence Apple never stated.
+#   2. The boundary is UNDEFINED between the rows. The first says "Up to 17 pts", the second says
+#      "18 pts" — not "18 pts or larger". Nothing in the table covers 17.5 pt.
+#   3. "All" is a wildcard in two columns and means different things in each.
+#   4. The ratios are NOT Apple's requirements. Apple's own sentence says it "uses the following
+#      values from WCAG Level AA as guidance". Publishing them as Apple requirements would
+#      misattribute a standard to a vendor, so `attribution` is a required field here.
+#
+# Consequently these records carry `conditions_match` (machine-checkable predicates) and
+# `overlaps`/`undefined_between` where the source is genuinely silent. A reader is told what the
+# table says and where it stops saying anything.
+
+topic: contrast
+
+provenance:
+  accessibility:
+    url: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    retrieved: "2026-09-16T09:51:32Z"
+    sha256: be49ec0b34397f356a1e3fd8c7ad323713198515523947097913cb9c57da699b
+    snapshot: snapshots/accessibility.json
+    page_updated: "2025-06-09"
+
+source_page: accessibility
+source_url: https://developer.apple.com/design/human-interface-guidelines/accessibility
+source_anchor: Vision
+source_table: "Text size | Text weight | Minimum contrast ratio"
+
+# Who is being quoted matters more here than anywhere else in this bundle.
+attribution: |
+  Apple reproduces these values from WCAG Level AA and says so: "uses the following values from
+  WCAG Level AA as guidance in determining whether your app's colors have an acceptable contrast."
+  They are therefore WCAG's thresholds, presented by Apple as guidance, not Apple-authored
+  requirements. Cite them that way. Apple also names APCA as a second popular standard without
+  publishing values for it.
+
+tension: |
+  The table's three rows overlap and leave a gap, and the page resolves neither:
+
+  - 16 pt Bold satisfies row 1 (up to 17 pts, all weights → 4.5:1) and row 3 (all sizes, bold →
+    3:1) simultaneously. The stricter reading is 4.5:1; the bold-specific reading is 3:1. Apple
+    states no precedence.
+  - Sizes above 17 pt and below 18 pt match no row at all.
+
+  Do not resolve these silently. If a finding depends on which reading applies, say which you
+  applied and why, or measure against the stricter value and say that is what you did.
+
+# WCAG's own rule, which Apple's table summarises, carries exceptions the table drops entirely.
+# Recorded here so a reader is not misled into thinking the three rows are the whole requirement.
+upstream_standard:
+  name: WCAG 2.2
+  criterion: "1.4.3 Contrast (Minimum)"
+  level: AA
+  url: https://www.w3.org/TR/WCAG22/#distinguishable
+  url_note: >-
+    Anchor taken from the local wcag22 build's recorded provenance, not guessed. It could not be
+    re-verified against the live spec from here: w3.org served a bot-check page rather than the
+    document.
+  omitted_by_apples_table:
+    - "Large Text — large-scale text and images of large-scale text have a contrast ratio of at least 3:1."
+    - "Incidental — text that is part of an inactive component, pure decoration, invisible, or part of a picture containing significant other visual content has no contrast requirement."
+    - "Logotypes — text that is part of a logo or brand name has no contrast requirement."
+  note: >-
+    WCAG defines "large scale" in its own terms rather than in points, so Apple's 17/18 pt rows are
+    a platform-specific rendering of that idea, not a quotation of it. Check WCAG directly before
+    asserting conformance; this bundle is not a conformance standard.
+
+records:
+  - id: contrast.small-text
+    row: "Up to 17 pts"
+    values:
+      minimum_ratio: "4.5:1"
+    columns:
+      minimum_ratio: "Minimum contrast ratio"
+    meaning:
+      minimum_ratio: "The Minimum contrast ratio for this size and weight combination."
+    conditions_match:
+      text_size_max_pt: 17        # inclusive: the row reads "Up to 17 pts"
+      text_weight: any
+    boundary: "17 pts"            # the size named in this row's own cell
+    conditions: >-
+      Foreground text and icons against background colors, measured with a standard contrast
+      calculator. Applies to text at or below 17 pt of any weight.
+    exceptions: >-
+      Overlaps contrast.bold for bold text at or below 17 pt, where the table gives 3:1 instead.
+      See the file's `tension`. WCAG's own criterion additionally exempts incidental text and
+      logotypes; Apple's table does not reproduce those exceptions.
+    attribution: WCAG Level AA, reproduced by Apple as guidance
+
+  - id: contrast.large-text
+    row: "18 pts"
+    values:
+      minimum_ratio: "3:1"
+    columns:
+      minimum_ratio: "Minimum contrast ratio"
+    meaning:
+      minimum_ratio: "The Minimum contrast ratio for this size and weight combination."
+    conditions_match:
+      text_size_pt: 18            # the row names exactly 18, not "18 or larger"
+      text_weight: any
+    boundary: "18 pts"
+    conditions: >-
+      The table names 18 pts specifically. It does not say "18 pts or larger", and nothing in the
+      table covers sizes between 17 and 18.
+    exceptions: >-
+      The undefined band above 17 pt and below 18 pt is the source's gap, not ours. Larger sizes
+      are not addressed by the table either; WCAG's large-text exception is the upstream rule this
+      row summarises.
+    attribution: WCAG Level AA, reproduced by Apple as guidance
+
+  - id: contrast.bold
+    row: "All"
+    values:
+      minimum_ratio: "3:1"
+    columns:
+      minimum_ratio: "Minimum contrast ratio"
+    meaning:
+      minimum_ratio: "The Minimum contrast ratio for this size and weight combination."
+    conditions_match:
+      text_size: any
+      text_weight: bold
+    conditions: "Bold text at any size."
+    exceptions: >-
+      Overlaps contrast.small-text below 18 pt, where that row gives 4.5:1 for all weights. The
+      table states no precedence between them.
+    attribution: WCAG Level AA, reproduced by Apple as guidance
+
+# Where the source's rows disagree or fall silent, stated as data so a checker can assert it and a
+# reader cannot miss it.
+overlaps:
+  - between: [contrast.small-text, contrast.bold]
+    when: "bold text at or below 17 pt"
+    values_disagree: ["4.5:1", "3:1"]
+    source_resolves: false
+
+undefined_between:
+  - description: "text larger than 17 pt and smaller than 18 pt"
+    reason: "row 1 ends at 17 pts inclusive; row 2 names 18 pts exactly"

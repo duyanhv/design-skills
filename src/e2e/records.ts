@@ -57,6 +57,13 @@ export interface MeasurementRecord {
    * Required for every prose value: an omitted field used to disable the check entirely.
    */
   qualifiers?: { [k: string]: string };
+  /**
+   * For a value selected by conditions rather than by one label: the predicate, checked against
+   * the row it claims to come from. Contrast needs this; control sizing did not.
+   */
+  conditions_match?: { [k: string]: string | number };
+  /** Who the value belongs to. Required when the page attributes it to another standard. */
+  attribution?: string;
 }
 
 export interface RecordDoc {
@@ -69,6 +76,12 @@ export interface RecordDoc {
     [page: string]: { url: string; retrieved: string; sha256: string; snapshot: string; page_updated?: string };
   };
   tension?: string;
+  /** Set when the source attributes its values to another body; makes per-record attribution required. */
+  attribution?: string;
+  upstream_standard?: { name?: string; criterion?: string; level?: string; url?: string; omitted_by_apples_table?: string[]; note?: string };
+  /** Claims about where the source's own rows disagree, asserted rather than described. */
+  overlaps?: { between: string[]; when: string; values_disagree: string[]; source_resolves: boolean }[];
+  undefined_between?: { description: string; reason: string }[];
   origin?: string;
   method?: string;
   conditions?: string;
@@ -155,6 +168,15 @@ export function verifyRecord(
   }
   if (!record.conditions?.trim()) report(record.id, "no conditions stated");
 
+  // When the page says its values come from elsewhere, every record must say so too. Publishing
+  // WCAG's thresholds as Apple's requirements would misattribute a standard to a vendor.
+  if (doc.attribution && !record.attribution?.trim()) {
+    report(
+      record.id,
+      "the source attributes these values to another standard, so this record must carry `attribution`",
+    );
+  }
+
   // ---- Table-sourced: resolve section → table → row → column, then cross-check the labels. ----
   if (!record.source_kind) {
     if (!record.row) {
@@ -162,20 +184,58 @@ export function verifyRecord(
       return 0;
     }
 
-    // The row label IS the platform column. Derive rather than trust: a record that claims the
-    // iOS cell while labelling itself tvOS is exactly the mutation v2 missed.
-    const fromRow = platformsInRow(record.row);
-    const claimed = (record.platform ?? []).map(norm);
-    if (!claimed.length) {
-      report(record.id, "no platform, but the row names one");
-    } else {
-      const extra = claimed.filter((p) => !fromRow.includes(p));
-      const missing = fromRow.filter((p) => !claimed.includes(p));
-      if (extra.length || missing.length) {
-        report(
-          record.id,
-          `platform [${claimed.join(", ")}] disagrees with the row it selects ("${record.row}" → [${fromRow.join(", ")}])`,
-        );
+    // Derive platform from the row rather than trusting the label — but only when the row really
+    // is a platform. Control sizing's first column is "Platform"; contrast's is "Text size", and
+    // demanding a platform there was this check over-generalising from one table.
+    const table = page.tables.find(
+      (tb) => tb.anchor === anchor && tb.rows.some((r) => r.length && norm(r[0]!) === norm(record.row!)),
+    );
+    const rowIsPlatform = table ? norm(table.header[0] ?? "") === "platform" : false;
+
+    if (rowIsPlatform) {
+      const fromRow = platformsInRow(record.row);
+      const claimed = (record.platform ?? []).map(norm);
+      if (!claimed.length) {
+        report(record.id, "no platform, but the row names one");
+      } else {
+        const extra = claimed.filter((p) => !fromRow.includes(p));
+        const missing = fromRow.filter((p) => !claimed.includes(p));
+        if (extra.length || missing.length) {
+          report(
+            record.id,
+            `platform [${claimed.join(", ")}] disagrees with the row it selects ("${record.row}" → [${fromRow.join(", ")}])`,
+          );
+        }
+      }
+    } else if (record.platform?.length) {
+      // The converse: claiming a platform a non-platform row cannot support.
+      report(
+        record.id,
+        `declares platform [${record.platform.join(", ")}], but its row "${record.row}" is a ` +
+          `"${table?.header[0] ?? "?"}" value, which selects no platform`,
+      );
+    }
+
+    // A conditional record must have its predicate agree with the row and the other condition
+    // columns. Contrast selects by size AND weight, so a record can name the right cell and still
+    // describe the wrong combination.
+    if (record.conditions_match && table) {
+      const rowCells = table.rows.find((r) => r.length && norm(r[0]!) === norm(record.row!));
+      if (rowCells) {
+        for (const [index, header] of table.header.entries()) {
+          if (index === 0) continue;
+          const declared = record.conditions_match[norm(header).replace(/\s+/g, "_")];
+          if (declared === undefined) continue;
+          const cell = norm(rowCells[index] ?? "");
+          if (cell === "all" && norm(String(declared)) !== "any") {
+            report(
+              record.id,
+              `condition "${header}" says "${declared}", but the row's cell is "All"; use \`any\``,
+            );
+          } else if (cell !== "all" && cell !== norm(String(declared))) {
+            report(record.id, `condition "${header}"="${declared}" disagrees with the row's cell "${rowCells[index]}"`);
+          }
+        }
       }
     }
 
@@ -349,6 +409,34 @@ if (import.meta.main) {
       if (!quiet && failed === before) {
         console.log(`  ✓ ${record.id} (${(record.platform ?? []).join(", ") || "unscoped"})`);
       }
+    }
+
+    // An `overlaps:` claim is itself a claim about the source, so check it rather than trust it:
+    // the named records must exist and their values must really differ. A stale overlap entry
+    // would tell readers the source is ambiguous where it is not.
+    for (const overlap of doc.overlaps ?? []) {
+      const ids = overlap.between ?? [];
+      const found = ids.map((id) => (doc.records ?? []).find((r) => r.id === id));
+      const missing = ids.filter((id, i) => !found[i]);
+      if (missing.length) {
+        fail(`${file}:overlaps`, `names record(s) that do not exist: ${missing.join(", ")}`);
+        continue;
+      }
+      const values = found.map((r) => Object.values(r!.values ?? {})[0] ?? "");
+      const unique = new Set(values.map(norm));
+      if (unique.size < 2) {
+        fail(
+          `${file}:overlaps`,
+          `claims ${ids.join(" and ")} disagree, but both give "${values[0]}" — the overlap is not a conflict`,
+        );
+      } else if (overlap.values_disagree) {
+        const declared = overlap.values_disagree.map(norm).sort().join(",");
+        const actual = [...unique].sort().join(",");
+        if (declared !== actual) {
+          fail(`${file}:overlaps`, `declares values_disagree ${overlap.values_disagree.join(" vs ")}, but the records hold ${values.join(" vs ")}`);
+        }
+      }
+      if (!quiet) console.log(`  · overlap documented: ${ids.join(" / ")} → ${values.join(" vs ")} (source resolves: ${overlap.source_resolves})`);
     }
   }
 

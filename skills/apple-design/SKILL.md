@@ -41,6 +41,7 @@ about one control is not an invitation to restructure the screen.
 | App structure, tabs, sidebars, screen-to-screen movement | [navigation.md](references/tasks/navigation.md) |
 | Buttons, menus, destructive or confirming operations | [actions.md](references/tasks/actions.md) |
 | Target sizes and spacing, with Apple's published values | [control-sizing.md](references/tasks/control-sizing.md) |
+| Contrast ratios, and whose standard they are | [contrast.md](references/tasks/contrast.md) |
 | Fields, pickers, toggles, validation, settings | [forms.md](references/tasks/forms.md) |
 | Text, type styles, Dynamic Type, localization | [typography.md](references/tasks/typography.md) |
 | Color, light and dark, materials, contrast | [appearance.md](references/tasks/appearance.md) |

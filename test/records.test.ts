@@ -371,3 +371,118 @@ records:
     server.stop(true);
   }
 });
+
+// ---- Conditional records: contrast.
+//
+// Control sizing selects a value by one row label. Contrast selects by size AND weight, with rows
+// that overlap and a gap between them, so these test the parts the first pilot could not.
+
+const contrastFixture = {
+  metadata: { title: "Accessibility" },
+  primaryContentSections: [
+    {
+      kind: "content",
+      content: [
+        { type: "heading", level: 2, text: "Vision", anchor: "Vision" },
+        {
+          type: "table",
+          header: "row",
+          rows: [
+            [
+              [{ type: "text", text: "Text size" }],
+              [{ type: "text", text: "Text weight" }],
+              [{ type: "text", text: "Minimum contrast ratio" }],
+            ],
+            [
+              [{ type: "text", text: "Up to 17 pts" }],
+              [{ type: "text", text: "All" }],
+              [{ type: "text", text: "4.5:1" }],
+            ],
+            [[{ type: "text", text: "18 pts" }], [{ type: "text", text: "All" }], [{ type: "text", text: "3:1" }]],
+            [[{ type: "text", text: "All" }], [{ type: "text", text: "Bold" }], [{ type: "text", text: "3:1" }]],
+          ],
+        },
+      ],
+    },
+  ],
+};
+const contrastRaw = JSON.stringify(contrastFixture);
+const contrastPage = parsePage(contrastFixture, contrastRaw);
+const contrastDoc: RecordDoc = {
+  topic: "contrast",
+  source_page: "accessibility",
+  source_anchor: "Vision",
+  attribution: "WCAG Level AA, reproduced by Apple as guidance",
+  records: [],
+};
+
+const smallText = (): MeasurementRecord => ({
+  id: "contrast.small-text",
+  row: "Up to 17 pts",
+  values: { minimum_ratio: "4.5:1" },
+  columns: { minimum_ratio: "Minimum contrast ratio" },
+  meaning: { minimum_ratio: "The Minimum contrast ratio for this combination." },
+  conditions_match: { text_size_max_pt: 17, text_weight: "any" },
+  conditions: "text at or below 17 pt, any weight",
+  attribution: "WCAG Level AA, reproduced by Apple as guidance",
+});
+
+function checkContrast(record: MeasurementRecord) {
+  const problems: string[] = [];
+  const ok = verifyRecord(record, contrastDoc, contrastPage, "Vision", (_id, m) => problems.push(m));
+  return { problems, ok };
+}
+
+test("a conditional record resolves to its own row", () => {
+  const { problems, ok } = checkContrast(smallText());
+  expect(problems).toEqual([]);
+  expect(ok).toBe(1);
+});
+
+test("the three contrast rows resolve to different ratios", () => {
+  expect(resolveTableCell(contrastPage, "Vision", "Up to 17 pts", "Minimum contrast ratio")).toBe("4.5:1");
+  expect(resolveTableCell(contrastPage, "Vision", "18 pts", "Minimum contrast ratio")).toBe("3:1");
+  expect(resolveTableCell(contrastPage, "Vision", "All", "Minimum contrast ratio")).toBe("3:1");
+});
+
+test("taking the large-text ratio while citing the small-text row fails", () => {
+  const record = smallText();
+  record.values = { minimum_ratio: "3:1" };
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain('holds "4.5:1", but the record says minimum_ratio="3:1"');
+});
+
+test("a condition that disagrees with its row's cell fails", () => {
+  const record = smallText();
+  // The row's weight cell is "All"; claiming bold narrows it to something the row does not say.
+  record.conditions_match = { text_size_max_pt: 17, text_weight: "bold" };
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain('the row\'s cell is "All"');
+});
+
+test("a record attributing values to nobody fails when the source attributes them elsewhere", () => {
+  const record = smallText();
+  delete record.attribution;
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain("must carry `attribution`");
+});
+
+test("claiming a platform on a non-platform row fails", () => {
+  const record = smallText();
+  record.platform = ["iOS"];
+  const { problems } = checkContrast(record);
+  expect(problems.join()).toContain("selects no platform");
+});
+
+// Boundary behaviour. The table's own rows are the authority on what is and is not covered.
+test("boundaries: 17 pt is covered, 18 pt is covered, the band between them is not", () => {
+  const rows = contrastPage.tables[0]!.rows.map((r) => r[0]!);
+  expect(rows).toContain("Up to 17 pts");
+  expect(rows).toContain("18 pts");
+  // Nothing in the table names a size strictly between 17 and 18, which is why the record file
+  // carries `undefined_between` rather than inventing a rule.
+  const covers17point5 = rows.some((r) => /17\.5|between/i.test(r));
+  expect(covers17point5).toBe(false);
+  // And row 2 names 18 exactly rather than "18 or larger", so it cannot be read as a floor.
+  expect(rows.some((r) => /18\s*pts?\s*(or larger|and above|\+)/i.test(r))).toBe(false);
+});

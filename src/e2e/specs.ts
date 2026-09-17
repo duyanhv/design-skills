@@ -136,11 +136,14 @@ async function publishedValues(id: string): Promise<Map<string, Publisher[]>> {
   if (!(await exists(dir))) return values;
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml"))) {
     const doc = parse(await readFile(join(dir, file), "utf8")) as {
-      records?: { id: string; values?: { [k: string]: string } }[];
+      records?: { id: string; values?: { [k: string]: string }; boundary?: string }[];
     };
     for (const record of doc.records ?? []) {
-      for (const [key, raw] of Object.entries(record.values ?? {})) {
-        for (const m of raw.matchAll(/\d+(?:\.\d+)?\s*(?:[x\u00d7]\s*\d+(?:\.\d+)?\s*)?(?:pt|px|dp|points?|pixels?)/gi)) {
+      const fields: [string, string][] = Object.entries(record.values ?? {});
+      if (record.boundary) fields.push(["boundary", record.boundary]);
+      for (const [key, raw] of fields) {
+        const VALUE_SHAPES = /\d+(?:\.\d+)?\s*(?:[x\u00d7]\s*\d+(?:\.\d+)?\s*)?(?:pt|px|dp|points?|pixels?)|\d+(?:\.\d+)?\s*:\s*1/gi;
+        for (const m of raw.matchAll(VALUE_SHAPES)) {
           const value = norm(m[0]);
           values.set(value, [...(values.get(value) ?? []), { recordId: record.id, key }]);
         }
