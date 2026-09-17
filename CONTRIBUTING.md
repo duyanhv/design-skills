@@ -87,6 +87,13 @@ different table in the same document. Prose-sourced values carry the source's qu
 - `bun run records` (network) — every record resolves to its cell or passage in the live source.
 - `bun test test/records.test.ts` — the mutations above, offline, against a committed fixture.
 
+A test must fail when the thing it guards is removed. An earlier snapshot test hashed files with its
+own helper and asserted that different bytes give different digests, which is a property of SHA-256
+rather than of this repository: disabling the production comparison left every test passing. Call
+the production function, and where wiring matters, run the real CLI against a stub — a correct
+validator nobody calls passes a function test. Both layers are covered here, so deleting the
+comparison fails two tests and deleting the *call* fails one.
+
 Snapshots of source pages stay local and git-ignored: they are the source's text. Records commit a
 per-page `sha256` instead, kept separate from the page's own update date. The digest is computed
 from the snapshot's **bytes**, so replacing the file while keeping the digest fails; upstream drift

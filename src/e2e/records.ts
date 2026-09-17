@@ -76,6 +76,47 @@ export interface RecordDoc {
   records: MeasurementRecord[];
 }
 
+/**
+ * Validate one page's provenance entry, including that the snapshot on disk is the snapshot the
+ * record claims.
+ *
+ * Extracted so the regression suite can call the production code path. An earlier test hashed files
+ * with its own helper, which proved only that SHA-256 distinguishes different bytes: disabling the
+ * comparison below left all 21 tests passing. A test that cannot fail when the check is removed is
+ * not testing the check.
+ *
+ * `recordsDir` is where a relative `snapshot:` path resolves from.
+ */
+export async function validateProvenance(
+  pageName: string,
+  prov: { url?: string; retrieved?: string; sha256?: string; snapshot?: string } | undefined,
+  recordsDir: string,
+  report: (msg: string) => void,
+): Promise<void> {
+  if (!prov) {
+    report(`no provenance entry for page "${pageName}" (needs url, retrieved, sha256, snapshot)`);
+    return;
+  }
+  for (const field of ["url", "retrieved", "sha256", "snapshot"] as const) {
+    if (!prov[field]) report(`provenance has no ${field}`);
+  }
+  if (!prov.snapshot || !prov.sha256) return;
+
+  const path = join(recordsDir, prov.snapshot);
+  if (!(await exists(path))) {
+    report(`snapshot "${prov.snapshot}" does not resolve to a file`);
+    return;
+  }
+  // Hash the bytes we hold, not the live response: otherwise the file could be anything.
+  const digest = new Bun.CryptoHasher("sha256").update(await readFile(path)).digest("hex");
+  if (digest !== prov.sha256) {
+    report(
+      `snapshot contents do not match the recorded sha256 ` +
+        `(recorded ${prov.sha256.slice(0, 12)}…, file is ${digest.slice(0, 12)}…)`,
+    );
+  }
+}
+
 let failed = 0;
 let verified = 0;
 const fail = (id: string, msg: string) => {
@@ -276,33 +317,15 @@ if (import.meta.main) {
       }
 
       const prov = doc.provenance?.[pageName];
-      if (!prov) {
-        fail(record.id, `no provenance entry for page "${pageName}" (needs url, retrieved, sha256, snapshot)`);
-      } else if (!checkedPages.has(pageName)) {
+      if (!checkedPages.has(pageName)) {
         checkedPages.add(pageName);
-        for (const field of ["url", "retrieved", "sha256", "snapshot"] as const) {
-          if (!prov[field]) fail(`${file}:${pageName}`, `provenance has no ${field}`);
+        const before = failed;
+        await validateProvenance(pageName, prov, dir, (msg) => fail(`${file}:${pageName}`, msg));
+        if (!quiet && failed === before && prov?.snapshot) {
+          console.log(`  · ${pageName}: snapshot matches its recorded digest`);
         }
-        // Hash the snapshot we actually hold. Checking only that the path exists let `{}` stand in
-        // for the page while keeping the recorded digest.
-        if (prov.snapshot && prov.sha256) {
-          const path = join(dir, prov.snapshot);
-          if (!(await exists(path))) {
-            fail(`${file}:${pageName}`, `snapshot "${prov.snapshot}" does not resolve to a file`);
-          } else {
-            const bytes = await readFile(path);
-            const digest = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-            if (digest !== prov.sha256) {
-              fail(
-                `${file}:${pageName}`,
-                `snapshot contents do not match the recorded sha256 ` +
-                  `(recorded ${prov.sha256.slice(0, 12)}…, file is ${digest.slice(0, 12)}…)`,
-              );
-            } else if (!quiet) {
-              console.log(`  · ${pageName}: snapshot matches its recorded digest`);
-            }
-          }
-        }
+      } else if (!prov) {
+        fail(record.id, `no provenance entry for page "${pageName}"`);
       }
 
       const page = await fetchPage(pageName);

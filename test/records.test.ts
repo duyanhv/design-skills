@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePage, resolveTableCell, sectionText } from "../src/e2e/record-source.ts";
-import { verifyRecord, type MeasurementRecord, type RecordDoc } from "../src/e2e/records.ts";
+import { verifyRecord, validateProvenance, type MeasurementRecord, type RecordDoc } from "../src/e2e/records.ts";
 
 /**
  * Regression tests for measurement-record verification.
@@ -216,27 +216,158 @@ test("a prose value present on the page but under a different section fails", as
   expect(problems.join()).toContain("does not appear in the text under Mobility");
 });
 
-// ---- Snapshot integrity. The verifier checked that the snapshot path existed and then hashed the
-// *live* response, so `{}` could stand in for the page while the recorded digest was retained.
-// The digest must be computed from the bytes we actually hold.
+// ---- Snapshot integrity, through the production validator.
+//
+// An earlier version of this test hashed files with its own helper and asserted that different
+// bytes produce different digests. That is a property of SHA-256, not of this repository: an audit
+// disabled the production comparison and all 21 tests still passed. These call
+// `validateProvenance`, so removing the check fails them.
 
-test("a snapshot's bytes must hash to the recorded digest", async () => {
-  const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+async function scratchRecords(contents: string | null): Promise<string> {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const dir = await mkdtemp(join(tmpdir(), "ds-snap-"));
-  await mkdir(join(dir, "snapshots"), { recursive: true });
+  if (contents !== null) {
+    await mkdir(join(dir, "snapshots"), { recursive: true });
+    await writeFile(join(dir, "snapshots", "p.json"), contents);
+  }
+  return dir;
+}
 
-  const real = '{"metadata":{"title":"Accessibility"}}';
-  const digest = new Bun.CryptoHasher("sha256").update(real).digest("hex");
-  await writeFile(join(dir, "snapshots", "p.json"), real);
+const PAGE = '{"metadata":{"title":"Accessibility"}}';
+const DIGEST = new Bun.CryptoHasher("sha256").update(PAGE).digest("hex");
+const prov = (over: Record<string, string> = {}) => ({
+  url: "https://example.invalid/p",
+  retrieved: "2026-09-17T00:00:00Z",
+  sha256: DIGEST,
+  snapshot: "snapshots/p.json",
+  ...over,
+});
 
-  const hashOf = async (path: string) =>
-    new Bun.CryptoHasher("sha256").update(await Bun.file(path).arrayBuffer()).digest("hex");
+test("a snapshot matching its recorded digest passes the production validator", async () => {
+  const dir = await scratchRecords(PAGE);
+  const problems: string[] = [];
+  await validateProvenance("p", prov(), dir, (m) => problems.push(m));
+  expect(problems).toEqual([]);
+});
 
-  // Intact snapshot matches.
-  expect(await hashOf(join(dir, "snapshots", "p.json"))).toBe(digest);
+test("replacing the snapshot with {} fails with the integrity diagnostic", async () => {
+  // The audit's exact substitution: keep the recorded digest, swap the contents.
+  const dir = await scratchRecords("{}");
+  const problems: string[] = [];
+  await validateProvenance("p", prov(), dir, (m) => problems.push(m));
+  expect(problems.join()).toContain("snapshot contents do not match the recorded sha256");
+});
 
-  // The audit's substitution: keep the digest, replace the contents.
-  await writeFile(join(dir, "snapshots", "p.json"), "{}");
-  expect(await hashOf(join(dir, "snapshots", "p.json"))).not.toBe(digest);
+test("a missing snapshot file fails", async () => {
+  const dir = await scratchRecords(null);
+  const problems: string[] = [];
+  await validateProvenance("p", prov(), dir, (m) => problems.push(m));
+  expect(problems.join()).toContain("does not resolve to a file");
+});
+
+test("a missing provenance entry fails", async () => {
+  const problems: string[] = [];
+  await validateProvenance("p", undefined, "/tmp", (m) => problems.push(m));
+  expect(problems.join()).toContain("no provenance entry");
+});
+
+test("each provenance field is required", async () => {
+  const dir = await scratchRecords(PAGE);
+  for (const field of ["url", "retrieved", "sha256", "snapshot"]) {
+    const partial = prov();
+    delete (partial as Record<string, unknown>)[field];
+    const problems: string[] = [];
+    await validateProvenance("p", partial, dir, (m) => problems.push(m));
+    expect(problems.join()).toContain(`provenance has no ${field}`);
+  }
+});
+
+// ---- End to end, through the CLI.
+//
+// The function tests above cover the comparison; this covers the wiring. A correct validator that
+// nobody calls would pass them, which is the same class of gap as a test that hashes its own files.
+// Runs against a temporary repository whose records cite a page served by a local stub, so no
+// network and no dependence on Apple's current content.
+
+test("the records CLI reports a substituted snapshot and exits non-zero", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+
+  const page = {
+    metadata: { title: "Probe" },
+    primaryContentSections: [
+      {
+        kind: "content",
+        content: [
+          { type: "heading", level: 2, text: "Mobility", anchor: "Mobility" },
+          {
+            type: "table",
+            header: "row",
+            rows: [
+              [[{ type: "text", text: "Platform" }], [{ type: "text", text: "Default control size" }]],
+              [[{ type: "text", text: "iOS" }], [{ type: "text", text: "44x44 pt" }]],
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const body = JSON.stringify(page);
+  const digest = new Bun.CryptoHasher("sha256").update(body).digest("hex");
+
+  const server = Bun.serve({ port: 0, fetch: () => new Response(body) });
+  try {
+    const root = await mkdtemp(join(tmpdir(), "ds-cli-"));
+    const records = join(root, "guidance", "apple-design", "records");
+    await mkdir(join(records, "snapshots"), { recursive: true });
+    await writeFile(
+      join(records, "r.yaml"),
+      `topic: t
+provenance:
+  probe:
+    url: "http://127.0.0.1:${server.port}/probe"
+    retrieved: "2026-09-17T00:00:00Z"
+    sha256: "${digest}"
+    snapshot: snapshots/probe.json
+source_page: probe
+source_anchor: Mobility
+records:
+  - id: t.ios
+    platform: [iOS]
+    row: "iOS"
+    values: { default: "44x44 pt" }
+    columns: { default: "Default control size" }
+    meaning: { default: "The Default control size for this platform." }
+    conditions: "c"
+`,
+    );
+
+    const run = async () => {
+      const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "src", "e2e", "records.ts")], {
+        cwd: root,
+        env: { ...process.env, DS_RECORD_SOURCE_BASE: `http://127.0.0.1:${server.port}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [out, err] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      return { code: await proc.exited, output: out + err };
+    };
+
+    // Intact snapshot: the integrity check passes, so any failure is not about the digest.
+    await writeFile(join(records, "snapshots", "probe.json"), body);
+    const intact = await run();
+    expect(intact.output).not.toContain("snapshot contents do not match");
+
+    // The audit's substitution, end to end.
+    await writeFile(join(records, "snapshots", "probe.json"), "{}");
+    const tampered = await run();
+    expect(tampered.output).toContain("snapshot contents do not match the recorded sha256");
+    expect(tampered.code).not.toBe(0);
+  } finally {
+    server.stop(true);
+  }
 });

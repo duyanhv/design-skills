@@ -83,9 +83,16 @@ export function parsePage(data: unknown, raw: string): PageData {
 
 const cache = new Map<string, PageData | null>();
 
+/**
+ * Base for page fetches. Overridable so the regression suite can drive the real CLI against a local
+ * stub: an end-to-end test that needs Apple's live content is neither hermetic nor offline.
+ */
+const BASE = process.env.DS_RECORD_SOURCE_BASE ??
+  "https://developer.apple.com/tutorials/data/design/human-interface-guidelines";
+
 export async function fetchPage(page: string): Promise<PageData | null> {
   if (cache.has(page)) return cache.get(page)!;
-  const url = `https://developer.apple.com/tutorials/data/design/human-interface-guidelines/${page}.json`;
+  const url = `${BASE}/${page}.json`;
   try {
     const res = await fetch(url, { headers: { "user-agent": UA, accept: "application/json" } });
     if (!res.ok) {
