@@ -450,3 +450,56 @@ test("install.ts fails when a published bundle is missing a file it links to", a
     await rm(dir, { recursive: true, force: true });
   }
 }, 60_000);
+
+/** Run a control/defect pair against a named tool rather than the example CLI. */
+async function controlAndDefectFor(
+  tool: string,
+  apply: (dir: string) => Promise<void>,
+): Promise<{ control: Awaited<ReturnType<typeof runTool>>; defect: Awaited<ReturnType<typeof runTool>> }> {
+  const dir = await sandbox();
+  try {
+    const control = await runTool(dir, tool);
+    await apply(dir);
+    const defect = await runTool(dir, tool);
+    return { control, defect };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test("a fabricated checklist tick fails the CLI", async () => {
+  // The defect that prompted this: adding "- [x] Ship a fully verified Flutter skill with three
+  // worked examples" to the checklist passed `bun run check` clean. Every tick is a public claim
+  // about what this project delivered, and nothing resolved them.
+  const { control, defect } = await controlAndDefectFor("checklist", (dir) =>
+    edit(dir, "docs/public-output-checklist.md", (t) =>
+      t.replace("- [x] Add these bundles and examples to the README",
+                "- [x] Ship a Flutter skill: `guidance/flutter/SKILL.md`\n- [x] Add these bundles and examples to the README")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("guidance/flutter/SKILL.md");
+}, 60_000);
+
+test("a checklist tick naming a script that does not exist fails the CLI", async () => {
+  // The other half of the resolver, and it had no test until each guard was removed one at a time
+  // to check. A tick can claim work is verified by a command; the command has to be real.
+  const { control, defect } = await controlAndDefectFor("checklist", (dir) =>
+    edit(dir, "docs/public-output-checklist.md", (t) =>
+      t.replace("- [x] Add these bundles and examples to the README",
+                "- [x] Verified by `bun run flutter-check`.\n- [x] Add these bundles and examples to the README")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("flutter-check");
+}, 60_000);
+
+test("a checklist tick naming a renamed file fails the CLI", async () => {
+  const { control, defect } = await controlAndDefectFor("checklist", (dir) =>
+    edit(dir, "docs/public-output-checklist.md",
+         (t) => t.replace("`src/e2e/install.ts`", "`src/e2e/installer.ts`")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("installer.ts");
+}, 60_000);

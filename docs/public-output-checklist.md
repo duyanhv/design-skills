@@ -241,8 +241,10 @@ measurement drifting from its probe.
       every published score to its pre-registered list and the RN percentages to the harness that
       produced them, `specs.ts` refuses a measurement with no record, `records.ts` binds each
       record to a clause of its source, `wcag-counts.ts` recounts what the accessibility bundle
-      says about WCAG, `links.ts` verifies official links per host, and `test/example-cli.test.ts`
-      runs the real CLIs so a check that stops failing is itself caught.
+      says about WCAG, `links.ts` verifies official links per host, `src/e2e/install.ts` follows
+      the README's own install instructions and loads each published bundle through the resulting
+      symlink, `src/e2e/checklist.ts` resolves the artifacts this page's own ticks name, and
+      `test/example-cli.test.ts` runs the real CLIs so a check that stops failing is itself caught.
 
 ### What is still not established
 
@@ -258,3 +260,6 @@ behaviour, and these are the gaps behind the numbers above:
 - **The React Native pilot is one version, one OS, simulator only.**
 - **`specs.ts` is a prose pattern scan** with four recorded holes; it catches dimensions, ratios and
   colour literals, and nothing else. `wcag-counts.ts` exists because it could not see a count.
+- **Most of the ticks on this page are not machine-checkable.** `checklist.ts` resolves the 9 that
+  name a file, a bundle or a script; the other 37 assert that work was done well, which is a
+  judgement no script settles. The check reports that split rather than implying full coverage.

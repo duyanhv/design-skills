@@ -84,6 +84,12 @@ jobs:
       # guard named two of three, and the README's install section named two of three.
       - name: Published skills install and load as documented
         run: bun run src/e2e/install.ts
+      # The checklist is where this project records what it delivered, and every tick is a public
+      # claim. Nothing verified them: adding "- [x] Ship a fully verified Flutter skill" passed the
+      # whole suite. This resolves the artifacts a tick names, and reports how many ticks assert
+      # work rather than naming it, which no script can settle.
+      - name: Completed checklist items name artifacts that exist
+        run: bun run src/e2e/checklist.ts
       # The worked example's published numbers are prose, and prose drifts. Three audits found
       # figures that disagreed with the artifacts they summarised; these invariants are the fix.
       - name: The worked example's claims match its artifacts
