@@ -13,12 +13,30 @@
   "files": {
     "references/research/sources.md": "85bf4cba843a1cac",
     "references/review/evidence.md": "2d448d2a490aa0ea",
-    "SKILL.md": "2bd6402315affd9d"
+    "references/tasks/accessibility.md": "0e0954e48c89ec6e",
+    "references/tasks/components.md": "1dcf8c21c1524490",
+    "references/tasks/layout.md": "f198f2377841e596",
+    "references/tasks/theming.md": "54243d287890ea3c",
+    "references/tasks/typography.md": "95871e5363369137",
+    "SKILL.md": "78c1a501408d74f3"
   },
   "references": [
     "https://developer.android.com/develop/ui/compose/designsystems/material3",
     "https://github.com/material-components/material-web",
     "https://github.com/material-components/material-web/blob/main/docs/theming/README.md",
-    "https://m3.material.io/"
+    "https://m3.material.io/",
+    "https://m3.material.io/components/buttons/overview",
+    "https://m3.material.io/components/navigation-bar/overview",
+    "https://m3.material.io/components/navigation-rail/overview",
+    "https://m3.material.io/components/text-fields/overview",
+    "https://m3.material.io/foundations/accessible-design/overview",
+    "https://m3.material.io/foundations/adaptive-design/overview",
+    "https://m3.material.io/foundations/interaction/states/overview",
+    "https://m3.material.io/styles/color/roles",
+    "https://m3.material.io/styles/color/system/overview",
+    "https://m3.material.io/styles/elevation/overview",
+    "https://m3.material.io/styles/typography/overview",
+    "https://m3.material.io/styles/typography/type-scale-tokens",
+    "https://www.w3.org/TR/WCAG22/"
   ]
 }

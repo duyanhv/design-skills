@@ -41,6 +41,11 @@ const UA = "design-skills/0.1 (+https://github.com/duyanhv/design-skills; guidel
 export interface PageFacts {
   title: string | null;
   anchors: Set<string>;
+  /**
+   * Whether the served body mentions the URL's own slug. Only some hosts can answer this, so it is
+   * optional and a verifier that cannot tell leaves it undefined rather than guessing `false`.
+   */
+  bodyNamesSlug?: boolean;
 }
 
 /** A source whose pages have a machine-readable render we can ask about existence and anchors. */
@@ -48,7 +53,7 @@ export interface Verifier {
   handles: (url: string) => boolean;
   dataUrl: (url: string) => string;
   /** Throw, or return `title: null`, when the body is not a usable document for this source. */
-  parse: (body: string) => PageFacts;
+  parse: (body: string, page: string) => PageFacts;
   /**
    * Does the document returned still correspond to the URL that was requested?
    *
@@ -225,22 +230,44 @@ export const MATERIAL: Verifier = {
   establishes: "existence",
   handles: (url) => url.startsWith("https://m3.material.io/"),
   dataUrl: (url) => url,
-  parse: (body) => {
+  parse: (body, page) => {
     const title = htmlTitle(body);
     // Still refuse a body that is not a document at all; that much is checkable.
     if (!title || body.length < 2000) return { title: null, anchors: new Set() };
-    return { title, anchors: new Set() };
+    // The served HTML contains its own slug and not a sibling's, which is the only reliable
+    // identity signal this host offers.
+    // Positive evidence only: the page's own slug or its parent segment appearing in the body.
+    const parts = page.replace(/\/$/, "").split("/").filter(Boolean);
+    const slug = parts.at(-1) ?? "";
+    const parent = parts.at(-2) ?? "";
+    const names = (s: string) => s.length > 3 && s !== "overview" && body.includes(s);
+    return { title, anchors: new Set(), bodyNamesSlug: names(slug) || names(parent) };
   },
   identity: (page, facts) => {
-    const slug = page.replace(/\/$/, "").split("/").filter(Boolean).pop() ?? "";
+    // What this host does and does not support, measured rather than assumed.
+    //
+    // Titles cannot carry it: /styles/typography/overview and /styles/typography/type-scale-tokens
+    // are BOTH titled "Typography – Material Design 3", so a title comparison reported a real,
+    // distinct page as a merge. Other routes answer with the bare shell title "Material Design".
+    //
+    // The body is better, and partial. /styles/color/roles mentions "roles" and "color"; a 404
+    // mentions neither; but /foundations/accessible-design/overview mentions neither its slug nor
+    // its parent, so absence proves nothing about it.
+    //
+    // So a body naming the page is positive evidence, and a body that does not is NO evidence
+    // rather than a failure — reporting the latter flagged two healthy links. This is exactly why
+    // the verifier declares `establishes: "existence"`: on this host the honest 404 carries the
+    // check, and the summary says so rather than implying identity was established.
+    if (facts.bodyNamesSlug) return null;
+    const parts = page.replace(/\/$/, "").split("/").filter(Boolean);
+    const slug = parts.at(-1) ?? "";
     const letters = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
-    // Only a title that names a DIFFERENT document is a failure. The generic shell title cannot
-    // distinguish a real page from a missing one, so it is not evidence either way, and the 404
-    // check above is what carries this host.
-    if (letters(facts.title!) === "materialdesign") return null;
-    const want = letters(slug === "overview" ? page.split("/").slice(-2)[0]! : slug);
-    if (!want || letters(facts.title!).includes(want)) return null;
-    return `serves "${facts.title}", whose title does not contain "${slug}" from the URL; the page may have been renamed or merged`;
+    const title = letters(facts.title!);
+    // A shell title identifies nothing, so it is not evidence against the link either.
+    if (!title || title === "materialdesign") return null;
+    const want = letters(slug === "overview" ? (parts.at(-2) ?? "") : slug);
+    if (!want || title.includes(want)) return null;
+    return `serves "${facts.title}", which does not correspond to "${slug}" in the URL; the page may have been renamed or merged`;
   },
 };
 
@@ -299,7 +326,7 @@ export async function checkPage(
 
   let facts: PageFacts;
   try {
-    facts = verifier.parse(res.body);
+    facts = verifier.parse(res.body, page);
   } catch {
     return { problems: [{ url: page, message: "data render was not valid JSON" }], verified: 0, unchecked: 0 };
   }
@@ -397,7 +424,7 @@ if (import.meta.main) {
     if (!result.problems.length && result.verified && !quiet) {
       const weak = VERIFIERS.find((v) => v.handles(page))?.establishes === "existence";
       const label = page.split("/").filter(Boolean).pop() ?? page;
-      console.log(`✓ ${label}${anchors.size ? ` (+${anchors.size} anchors)` : ""}${weak ? " — exists; identity not checkable on this host" : ""}`);
+      console.log(`✓ ${label}${anchors.size ? ` (+${anchors.size} anchors)` : ""}${weak ? " — exists; this host cannot confirm identity for every page" : ""}`);
     }
   }
 

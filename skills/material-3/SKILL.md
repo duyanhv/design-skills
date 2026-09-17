@@ -29,6 +29,20 @@ experimental API. Preserve the project's current framework unless the user reque
 Read [the source map and implementation notes](references/research/sources.md) for the relevant
 platform. Use [the review workflow](references/review/evidence.md) when assessing existing UI.
 
+## Route to the task
+
+| The task involves… | Read |
+| --- | --- |
+| Colors, roles, tokens, dark theme, dynamic color | [theming.md](references/tasks/theming.md) |
+| Choosing a component, or its states and variants | [components.md](references/tasks/components.md) |
+| Window sizes, navigation shape, panes, density | [layout.md](references/tasks/layout.md) |
+| Type scale, text that must survive user settings | [typography.md](references/tasks/typography.md) |
+| Contrast, targets, names, and whose standard applies | [accessibility.md](references/tasks/accessibility.md) |
+
+Each guide states the decision to make and links the official page that settles it. None of them
+restates a token value or a threshold: those are versioned, they live in the project's theme or in
+the linked source, and a number copied into this bundle would be a number nobody re-checks.
+
 ## Design or implement
 
 1. Define the screen's main task and the information needed to complete it. Select a component

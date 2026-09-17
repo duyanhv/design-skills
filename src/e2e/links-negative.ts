@@ -13,7 +13,7 @@
  * The control cases matter as much as the failures — a verifier that rejected everything would pass
  * every negative case here.
  */
-import { checkPage, APPLE, ANDROID, GITHUB, type Verifier } from "./links.ts";
+import { checkPage, APPLE, ANDROID, GITHUB, MATERIAL, type Verifier } from "./links.ts";
 import { log } from "../util/log.ts";
 
 const HIG = "https://developer.apple.com/design/human-interface-guidelines";
@@ -185,6 +185,60 @@ const CASES: Case[] = [
       body: JSON.stringify({ meta: { title: "material-web/docs/theming/README.md at main · material-components/material-web" } }),
     },
     expect: null,
+  },
+  /*
+   * m3.material.io. This verifier declares `establishes: "existence"` and the cases below are the
+   * reason: two healthy links were reported as merges before the rule was measured rather than
+   * assumed.
+   */
+  {
+    name: "material: sibling pages sharing one title are not merges",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/styles/typography/type-scale-tokens",
+    // Both this page and /styles/typography/overview really are titled "Typography – Material
+    // Design 3". A title comparison called this real, distinct page renamed.
+    respond: {
+      status: 200,
+      body: `<title>Typography – Material Design 3</title>${"x".repeat(2100)}type-scale-tokens`,
+    },
+    expect: null,
+  },
+  {
+    name: "material: a body that names nothing is not evidence against the link",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/foundations/adaptive-design/overview",
+    // /foundations/* pages mention neither their slug nor their parent. Treating that absence as
+    // a failure flagged two healthy links.
+    respond: { status: 200, body: `<title>Material Design</title>${"x".repeat(2100)}` },
+    expect: null,
+  },
+  {
+    name: "material: a body naming the page is accepted",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/styles/color/roles",
+    respond: { status: 200, body: `<title>Material Design</title>${"x".repeat(2100)}color roles` },
+    expect: null,
+  },
+  {
+    name: "material: a title naming a different document is still reported",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/styles/color/roles",
+    respond: { status: 200, body: `<title>Elevation – Material Design 3</title>${"x".repeat(2100)}` },
+    expect: "may have been renamed or merged",
+  },
+  {
+    name: "material: a removed page 404s and is reported",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/styles/typography/type-scale",
+    respond: { status: 404, body: "not found" },
+    expect: "no such page",
+  },
+  {
+    name: "material: a truncated body is not a document",
+    verifier: MATERIAL,
+    page: "https://m3.material.io/styles/color/roles",
+    respond: { status: 200, body: "<title>Material Design</title>" },
+    expect: "no usable document",
   },
   {
     name: "github: a 200 carrying no title identifies nothing",
