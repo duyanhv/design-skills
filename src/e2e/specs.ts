@@ -112,7 +112,14 @@ function citationScope(text: string, lineNumber: number): string {
 /** A URL may contain digits that mean nothing here (anchors, versions). Strip links first. */
 const withoutLinks = (line: string) => line.replace(/\]\([^)]*\)/g, "]()").replace(/https?:\/\/\S+/g, "");
 
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[\u00d7\u2715]/g, "x").trim();
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[\u00d7\u2715]/g, "x")
+    // "34 pt" and "34pt" are one value written two ways; compare them as one.
+    .replace(/(\d)\s+(pt|px|dp|sp|points?|pixels?)\b/g, "$1$2")
+    .trim();
 
 async function markdownFiles(dir: string, prefix = ""): Promise<string[]> {
   const out: string[] = [];

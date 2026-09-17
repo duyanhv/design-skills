@@ -53,3 +53,22 @@ records:
       The post-fix figure is the system's own metric for a toolbar item on this OS version, not
       something the screen controls. Reported rather than presented as fixed.
     source_kind: measured
+
+  # From the React Native pilot. Measured on a running RN app, not taken from any source page.
+  - id: measured.rn-fontscale
+    platform: [iOS]
+    values:
+      font_scale_ax5: "3.571"
+      title_base: "34 pt"
+      title_rendered_ax5: "121 pt"
+    meaning:
+      font_scale_ax5: "useWindowDimensions().fontScale reported by RN at the largest accessibility text size."
+      title_base: "The fontSize the example's title style declares."
+      title_rendered_ax5: "Approximate rendered size, base multiplied by the reported fontScale."
+    conditions: >-
+      React Native 0.76.5, New Architecture (Fabric, bridgeless), iPhone 17 Pro, iOS 26.5, content
+      size accessibility-extra-extra-extra-large. Read from a console.log in the running app.
+    exceptions: >-
+      RN-specific and version-specific. This is not an Apple value and says nothing about Dynamic
+      Type on Apple's own frameworks; it describes how RN scales text on one version.
+    source_kind: measured
