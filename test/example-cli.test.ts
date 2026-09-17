@@ -25,37 +25,50 @@ import { join } from "node:path";
 // a broken invocation, exactly the confusion these tests exist to prevent.
 const REPO = join(import.meta.dir, "..");
 
-/** Files the example CLI reads. Copied per case so a fixture can be mutated in isolation. */
-const NEEDED = [
-  "src",
-  "examples/apple-design-review",
-  "examples/apple-design-build",
-  "examples/react-native-pilot/README.md",
-  "examples/react-native-pilot/harness/results.tsv",
-  "guidance/apple-design/references/frameworks/react-native.md",
-  "README.md",
-  "docs/public-output-checklist.md",
-  "package.json",
-  "tsconfig.json",
-];
+/**
+ * Build the sandbox from `git ls-files` rather than a hand-written list.
+ *
+ * The list started as "files the example CLI reads" and stopped being true the moment these tests
+ * covered other tools: docs.ts resolves every relative link in README.md, so omitting CONTRIBUTING.md
+ * and LICENSING.md made its control run fail on missing files that exist perfectly well in the
+ * repository. A control that fails for a reason unrelated to the defect proves nothing, and worse,
+ * looks like a finding.
+ *
+ * Copying what git tracks removes the guesswork: the sandbox is the repository as published, which
+ * is also exactly the set docs.ts is asking about.
+ */
+// Only paths git does not track are skipped, and git ls-files already excludes those. skills/ is
+// NOT excluded: skills/apple-design/ is redistributable and tracked, and README.md links into it,
+// so dropping it made docs.ts report thirty broken links that are fine in the repository.
+const IGNORED_PREFIXES: string[] = [];
+
+async function trackedFiles(): Promise<string[]> {
+  const proc = Bun.spawn(["git", "ls-files"], { cwd: REPO, stdout: "pipe", stderr: "ignore" });
+  const listing = await new Response(proc.stdout).text();
+  await proc.exited;
+  return listing.split("\n").filter(Boolean);
+}
 
 async function sandbox(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "design-skills-cli-"));
-  for (const entry of NEEDED) {
-    const from = join(REPO, entry);
+  for (const entry of await trackedFiles()) {
+    if (IGNORED_PREFIXES.some((prefix) => entry.startsWith(prefix))) continue;
     const to = join(dir, entry);
     await mkdir(join(to, ".."), { recursive: true });
-    await cp(from, to, { recursive: true });
+    await cp(join(REPO, entry), to);
   }
+  // Built skills are git-ignored for the non-redistributable sources, and manifests checks exactly
+  // that. Copying the ignore file keeps that check meaningful in the sandbox.
+  await cp(join(REPO, ".gitignore"), join(dir, ".gitignore"));
   // The pre-registered-artifact check shells out to git log, so the copy needs history to read.
   // Pointing it at the real repository keeps that check meaningful instead of silently empty.
   await writeFile(join(dir, ".git"), `gitdir: ${join(REPO, ".git")}\n`);
   return dir;
 }
 
-/** Run the example CLI inside a sandbox, returning its exit code and combined output. */
-async function runCli(dir: string): Promise<{ code: number; output: string }> {
-  const proc = Bun.spawn(["bun", "run", join(dir, "src", "e2e", "example.ts")], {
+/** Run an e2e CLI inside a sandbox, returning its exit code and combined output. */
+async function runTool(dir: string, tool: string): Promise<{ code: number; output: string }> {
+  const proc = Bun.spawn(["bun", "run", join(dir, "src", "e2e", `${tool}.ts`)], {
     cwd: dir,
     stdout: "pipe",
     stderr: "pipe",
@@ -68,6 +81,8 @@ async function runCli(dir: string): Promise<{ code: number; output: string }> {
   const code = await proc.exited;
   return { code, output: stdout + stderr };
 }
+
+const runCli = (dir: string) => runTool(dir, "example");
 
 /** Apply an edit to one file inside the sandbox. */
 async function edit(dir: string, file: string, change: (text: string) => string): Promise<void> {
@@ -213,6 +228,100 @@ test("removing the problem-propagation line makes the CLI miss a real defect", a
     // This is the gap an audit found: the validator still reports the problem, and the CLI exits 0.
     expect(unwired.code).toBe(0);
     expect(wired.code).not.toBe(unwired.code);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+/*
+ * ---- Every e2e CLI must exit non-zero on the defect it exists to catch ----
+ *
+ * Generalised from the gap found in example.ts. That was not a one-off: docs.ts has the same shape,
+ * and commenting out its `process.exit(1)` let a dangling link exit 0 while docs-negative.ts —
+ * which tests `checkLinks` directly — stayed green, along with the whole unit suite. Any CLI whose
+ * validator is tested through a function call has this seam, and the seam is invisible to exactly
+ * the tests that were written to cover the validator.
+ *
+ * `bun run check` chains these with `&&`, so an exit code that stops being non-zero does not fail
+ * a build; it removes a check from the build and says nothing. These cases are cheap insurance
+ * against that, and each pairs a control run with the defect run.
+ */
+interface ToolCase {
+  tool: string;
+  what: string;
+  file: string;
+  edit: (text: string) => string;
+  expect: string;
+}
+
+const TOOL_CASES: ToolCase[] = [
+  {
+    tool: "docs",
+    what: "a relative link to a file that does not exist",
+    file: "guidance/apple-design/SKILL.md",
+    edit: (t) => t.replace("](references/", "](references/nonexistent-"),
+    expect: "broken documentation link",
+  },
+  {
+    tool: "specs",
+    what: "a measurement in prose with no record behind it",
+    file: "guidance/apple-design/references/tasks/contrast.md",
+    edit: (t) => `${t}\n\nA control should be at least 44 pt tall.\n`,
+    expect: "44 pt",
+  },
+  {
+    tool: "specs",
+    what: "a citation naming a record that does not exist",
+    file: "guidance/apple-design/references/tasks/contrast.md",
+    // Replacing every occurrence: leaving one behind lets the paragraph keep a valid citation,
+    // and specs checks per passage, so the defect would not be reached.
+    edit: (t) => t.replaceAll("`contrast.small-text`", "`contrast.invented`"),
+    expect: "no record cited nearby",
+  },
+  {
+    tool: "manifests",
+    what: "an unknown key in a source manifest",
+    file: "sources/apple-design.yaml",
+    edit: (t) => t.replace("  max_skill_lines: 150", "  max_skill_line: 150"),
+    expect: "max_skill_line",
+  },
+];
+
+for (const item of TOOL_CASES) {
+  test(`${item.tool} exits non-zero on ${item.what}`, async () => {
+    const dir = await sandbox();
+    try {
+      // Control first: this tool must pass on an unmodified copy, or the case proves nothing.
+      const control = await runTool(dir, item.tool);
+      expect(control.code).toBe(0);
+
+      await edit(dir, item.file, item.edit);
+      const defect = await runTool(dir, item.tool);
+      expect(defect.code).not.toBe(0);
+      expect(defect.output).toContain(item.expect);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+}
+
+test("cutting a CLI's exit call is caught: docs.ts is the second instance of this seam", async () => {
+  const dir = await sandbox();
+  try {
+    await edit(dir, "guidance/apple-design/SKILL.md", (t) =>
+      t.replace("](references/", "](references/nonexistent-"));
+    const wired = await runTool(dir, "docs");
+    expect(wired.code).not.toBe(0);
+
+    // Remove the propagation and the same defect exits 0. docs-negative.ts, which drives
+    // checkLinks() directly, cannot see this — which is the whole reason these tests exist.
+    const cli = join(dir, "src", "e2e", "docs.ts");
+    const source = await readFile(cli, "utf8");
+    expect(source).toContain("    process.exit(1);");
+    await writeFile(cli, source.replace("    process.exit(1);", "    // exit removed"));
+
+    const unwired = await runTool(dir, "docs");
+    expect(unwired.code).toBe(0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
