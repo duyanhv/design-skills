@@ -687,6 +687,13 @@ const generalRatio = (): MeasurementRecord => ({
   attribution: "W3C, WCAG 2.2 SC 1.4.3",
 });
 
+/** Drive the checker against a modified rule set, for cases that need different source text. */
+function checkPilotIr(records: MeasurementRecord[], rules: Map<string, IrRule>) {
+  const problems: string[] = [];
+  verifyIrRecords(irDoc(records), rules, (_id, m) => problems.push(m));
+  return problems.join("\n");
+}
+
 function checkIr(records: MeasurementRecord[]) {
   const problems: string[] = [];
   const verified = verifyIrRecords(irDoc(records), irRules, (_id, m) => problems.push(m));
@@ -768,12 +775,43 @@ test("a value with no clause or no context fails", () => {
 });
 
 test("claiming normative authority for an informative note fails", () => {
+  // The note explains where the sizes came from. Citing it for a threshold would dress an
+  // informative aside as a requirement.
+  //
+  // This test used to carry "18 and 14 point" as its value, which the whole-value parser now
+  // rejects before authority is ever reached — a value naming two numbers is not a measurement.
+  // Rewritten with a single one so it exercises the authority check it is named for.
   const r = regular();
   r.clauses = { min_size: "note:0" };
-  r.context = { min_size: "18 and 14 point sizes" };
-  r.values = { min_size: "18 and 14 point" };
+  r.context = { min_size: "The 18 and 14 point sizes" };
+  r.values = { min_size: "18 point" };
   const problems = checkIr([r]).problems.join();
-  // The note is marked informative; the record claims normative.
+  // "The 18 and 14 point sizes" holds exactly one MEASUREMENT: "14 point". "18 and" has no unit,
+  // and the parser reads units rather than adjacency, so this context cannot support 18 point.
+  expect(problems).toContain('does not state "18 point" as a measurement');
+
+  // Worth noting what "18 and 14 point sizes" parses to: only ONE measurement, "14 point",
+  // because "18 and" carries no unit. The measurement parser reads units, not adjacency, so this
+  // context cannot support an 18 point claim at all.
+  const pinned = regular();
+  pinned.clauses = { min_size: "note:0" };
+  pinned.context = { min_size: "18 and 14 point sizes" };
+  pinned.values = { min_size: "18 point" };
+  expect(checkIr([pinned]).problems.join()).toContain('does not state "18 point" as a measurement');
+});
+
+test("an informative note cannot warrant a normative claim", () => {
+  // A note holding exactly one measurement, so the authority check is what decides it.
+  const rules = new Map(irRules);
+  rules.set("wcag22/glossary/041", {
+    ...irRules.get("wcag22/glossary/041")!,
+    notes: ["_[informative]_ > **Note:** roughly 18 point is a common large-print size."],
+    noteAuthority: ["informative"],
+  });
+  const r = regular();
+  r.clauses = { min_size: "note:0" };
+  r.context = { min_size: "roughly 18 point" };
+  const problems = checkPilotIr([r], rules);
   expect(problems).toContain("informative");
 });
 
@@ -934,4 +972,46 @@ test("measurement parsing: equivalent spellings match, different quantities do n
 
   // A clause with both thresholds yields both, in order.
   expect(measurementsIn("with at least 18 point or 14 point bold").map((m) => m.value)).toEqual([18, 14]);
+});
+
+/*
+ * A declared value must be parsed WHOLE, not scraped for a plausible token.
+ *
+ * An audit set the regular threshold to ".18 point", "1,018 point" and "-18 point". Each contains
+ * exactly one extractable measurement that reads as 18, so a "find one token" test accepted all
+ * three, and the real CLI verified ".18 point" against "at least 18 point". Prose is allowed to be
+ * messy around a number; a declared value is not.
+ */
+test("a declared value must consume its whole text", () => {
+  for (const bad of [".18 point", "1,018 point", "-18 point", "18 point or more", "at least 18 point", "18 point."]) {
+    const r = regular();
+    r.values = { min_size: bad };
+    expect(checkIr([r]).problems.join()).toContain("is not a single measurement");
+  }
+
+  const ratio = generalRatio();
+  ratio.values = { minimum_ratio: ".4.5:1" };
+  expect(checkIr([ratio]).problems.join()).toContain("is not a single measurement");
+});
+
+test("equivalent spellings of one quantity are still accepted", () => {
+  // The point of rejecting unsupported syntax is precision, not pedantry: the same quantity
+  // written differently must still verify, or the check is just demanding one spelling.
+  for (const good of ["18 point", "18 points", "18 pt", "18 pts", "18.0 point"]) {
+    const r = regular();
+    r.values = { min_size: good };
+    expect(checkIr([r]).problems).toEqual([]);
+  }
+
+  for (const good of ["4.5:1", "4.5 : 1", "9:2"]) {
+    const r = generalRatio();
+    r.values = { minimum_ratio: good };
+    expect(checkIr([r]).problems).toEqual([]);
+  }
+});
+
+test("a ratio with a zero denominator is refused rather than becoming Infinity", () => {
+  const r = generalRatio();
+  r.values = { minimum_ratio: "4.5:0" };
+  expect(checkIr([r]).problems.join()).toContain("is not a single measurement");
 });

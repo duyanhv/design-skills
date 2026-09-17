@@ -576,10 +576,33 @@ export function measurementsIn(text: string): Measurement[] {
   return found;
 }
 
-/** Parse a record's declared value into exactly one measurement, or undefined if it is not one. */
+/**
+ * Parse a record's declared value as a WHOLE measurement.
+ *
+ * Deliberately not `measurementsIn(value)` with a length check. Extracting a token from prose and
+ * parsing a declared value are different jobs, and conflating them was a real hole: ".18 point",
+ * "1,018 point" and "-18 point" each contain exactly one extractable token that reads as 18, so a
+ * one-match test accepted all three as the record's value. Prose is allowed to be messy around a
+ * number; a declared value is not.
+ *
+ * So this anchors both ends and refuses anything it cannot fully account for. Unsupported numeric
+ * syntax (thousands separators, signs, leading dots) is rejected rather than silently reinterpreted
+ * — a checker that guesses what "1,018 point" meant is back to guessing.
+ */
+const WHOLE_MEASUREMENT =
+  /^(?:(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(pts?|points?|px|pixels?|dp))$/i;
+
 function soleMeasurement(value: string): Measurement | undefined {
-  const found = measurementsIn(value);
-  return found.length === 1 ? found[0] : undefined;
+  const text = norm(value);
+  const m = WHOLE_MEASUREMENT.exec(text);
+  if (!m) return undefined;
+  if (m[1] !== undefined && m[2] !== undefined) {
+    const denominator = Number(m[2]);
+    if (denominator === 0) return undefined;
+    return { value: Number(m[1]) / denominator, unit: "ratio", text };
+  }
+  const unit = POINT_UNITS[m[4]!.toLowerCase()] ?? m[4]!.toLowerCase();
+  return { value: Number(m[3]), unit, text };
 }
 
 export function sameMeasurement(a: Measurement, b: Measurement): boolean {
