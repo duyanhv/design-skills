@@ -116,10 +116,14 @@ if (!(await exists(probeResult))) {
  * names it rather than against the whole document.
  */
 const VARIANT_MARKERS: Record<string, RegExp> = {
-  "A-uncapped": /uncapped|baseline/i,
+  "A-uncapped": /uncapped/i,
   "B-max-multiplier": /maxFontSizeMultiplier/,
   "C-inline-cap": /Math\.min/,
-  "CONTROL-edited-text": /control/i,
+  // Narrow on purpose. /control/i also matched "small controls", "control arm", and a paragraph
+  // explaining why the control exists while quoting another variant's figure — which the
+  // contradiction check then flagged, correctly by its own rules and wrongly in substance. A
+  // marker has to identify the variant, not mention its name.
+  "CONTROL-edited-text": /control (?:variant|row)|\*\*control:\*\*|title'?s? \*?text\*?/i,
   "D-no-scaling": /allowFontScaling=\{false\}/,
   "E-dynamic-type-ramp": /dynamicTypeRamp/,
   "F-platform-color": /PlatformColor/,
@@ -135,9 +139,12 @@ const rnResults = join(ROOT, "examples", "react-native-pilot", "harness", "resul
 if (!(await exists(rnResults))) {
   fail("react-native-pilot/harness/results.tsv is missing", "published percentages need the run that produced them");
 } else {
-  const rows = (await readFile(rnResults, "utf8")).trim().split("\n").slice(1)
+  // Two views of the file: every row, for completeness, and the measured ones, for the figures.
+  // Filtering first and asking "is everything here?" afterwards can only ever answer yes.
+  const allRows = (await readFile(rnResults, "utf8")).trim().split("\n").slice(1)
     .map((line) => line.split("\t"))
-    .filter((cells) => cells.length >= 2 && cells[1] !== "-");
+    .filter((cells) => cells.length >= 2 && cells[0]?.trim());
+  const rows = allRows.filter((cells) => cells[1] !== "-");
   const rnReadme = await readFile(join(ROOT, "examples", "react-native-pilot", "README.md"), "utf8");
   const rnReference = await readFile(
     join(ROOT, "guidance", "apple-design", "references", "frameworks", "react-native.md"), "utf8");
@@ -152,7 +159,10 @@ if (!(await exists(rnResults))) {
     "A-uncapped", "B-max-multiplier", "C-inline-cap",
     "CONTROL-edited-text", "D-no-scaling", "E-dynamic-type-ramp", "F-platform-color",
   ];
-  const present = new Set([...rows.map(([v]) => v), "A-uncapped"]);
+  // Checked against the rows the file actually has. Adding the baseline to this set by hand was a
+  // way of asserting it exists, which is not the same as it existing: an audit deleted the
+  // A-uncapped row and the checker still reported all seven present.
+  const present = new Set(allRows.map(([v]) => v));
   const missing = EXPECTED_VARIANTS.filter((v) => !present.has(v));
   if (missing.length) {
     fail(`results.tsv is missing variant(s): ${missing.join(", ")}`,
@@ -182,12 +192,39 @@ if (!(await exists(rnResults))) {
       const naming = units.filter((unit) => marker.test(unit));
       if (!naming.length) {
         fail(`${name} never mentions ${variant} (looked for ${marker})`);
-      } else if (!naming.some((unit) => unit.includes(figure))) {
+        continue;
+      }
+
+      // EVERY passage that names the variant and quotes a percentage must quote the right one.
+      //
+      // "some passage agrees" was not enough: an audit changed the comparison table's control row
+      // to 99.99% and it passed, because a prose paragraph elsewhere still had 53.15%. One correct
+      // occurrence cannot excuse an incorrect one — a reader looking at the table is reading the
+      // wrong number regardless of what a later paragraph says.
+      const PERCENT = /\d+(?:\.\d+)?%/g;
+      const contradicting = naming
+        .map((unit) => ({ unit, quoted: [...unit.matchAll(PERCENT)].map((m) => m[0]) }))
+        .filter(({ quoted }) => quoted.length && !quoted.includes(figure));
+      if (contradicting.length) {
+        fail(`${name} gives ${variant} a percentage that is not its measured ${figure}`,
+             `contradicting passage: ${contradicting[0]!.unit.trim().replace(/\s+/g, " ").slice(0, 160)}`);
+        continue;
+      }
+      if (!naming.some((unit) => unit.includes(figure))) {
         fail(`${name} does not give ${variant} its measured ${figure}`,
              `the passage(s) naming it say: ${naming.map((l) => l.trim().replace(/\s+/g, " ")).join(" | ").slice(0, 200)}`);
-      } else {
-        pass(`${name} gives ${variant} = ${figure} in the passage that names it`);
+        continue;
       }
+
+      // The comparison table is the part readers scan, so require the figure there specifically
+      // rather than accepting it anywhere in the file.
+      const tableRows = naming.filter((unit) => unit.trimStart().startsWith("|"));
+      if (tableRows.length && !tableRows.some((row) => row.includes(figure))) {
+        fail(`${name}'s comparison table row for ${variant} does not carry ${figure}`,
+             `row: ${tableRows[0]!.trim().slice(0, 160)}`);
+        continue;
+      }
+      pass(`${name} gives ${variant} = ${figure} everywhere it names it`);
     }
   }
 
@@ -200,15 +237,47 @@ if (!(await exists(rnResults))) {
     fail("results.tsv has no B-max-multiplier row; the cap experiment is the pilot's finding");
   } else {
     const differing = (capRow[3] ?? "").trim();
+    const total = (capRow[4] ?? "").trim();
     if (!/^\d+$/.test(differing)) {
       fail(`B-max-multiplier has no differing-pixel count (got "${capRow[3]}")`,
            "equality cannot be decided from a rounded percentage; re-run the harness");
+    } else if (!/^\d+$/.test(total) || Number(total) <= 0) {
+      // "0 of 0" is not evidence of anything, and the checker used to print it as a pass. The
+      // denominator is the size of the frame the claim is about, so it has to be real.
+      fail(`B-max-multiplier reports a total of "${capRow[4]}"`,
+           "zero differing pixels out of zero pixels compares nothing; re-run the harness");
     } else if (differing !== "0") {
       fail(`B-max-multiplier differs from the baseline by ${differing} pixel(s)`,
            `it reports ${capRow[1]}, but the reference's claim that the prop does nothing needs exactly zero`);
     } else {
-      pass(`B-max-multiplier differs by exactly 0 of ${capRow[4]} pixels`);
+      pass(`B-max-multiplier differs by exactly 0 of ${total} pixels`);
     }
+  }
+
+  // Every measured row's percentage must follow from its own counts, and every row must describe
+  // the same frame. A denominator that drifts between rows means the captures were not comparable,
+  // and a percentage that does not match its counts means one of the two was edited by hand.
+  const denominators = new Set<string>();
+  let countsUsable = true;
+  for (const cells of rows) {
+    const [variant, pct, , differing, total] = cells.map((c) => (c ?? "").trim());
+    if (!/^\d+$/.test(differing ?? "") || !/^\d+$/.test(total ?? "") || Number(total) <= 0) {
+      fail(`${variant} has no usable pixel counts (${differing} of ${total})`);
+      countsUsable = false;
+      continue;
+    }
+    denominators.add(total!);
+    const expected = (Number(differing) / Number(total) * 100).toFixed(2);
+    if (pct !== `${expected}%`) {
+      fail(`${variant} reports ${pct}, but ${differing} of ${total} is ${expected}%`,
+           "the percentage and the counts disagree, so one of them was not produced by the run");
+    }
+  }
+  if (denominators.size > 1) {
+    fail(`variants were compared over different frame sizes: ${[...denominators].join(", ")}`,
+         "percentages over different denominators are not comparable to each other");
+  } else if (denominators.size === 1 && countsUsable) {
+    pass(`all variants compared over the same ${[...denominators][0]} pixel frame, percentages match their counts`);
   }
 }
 

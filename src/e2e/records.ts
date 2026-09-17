@@ -536,6 +536,57 @@ export function verifyRecord(
 }
 
 /**
+ * A complete measurement token: a number with its unit, as written.
+ *
+ * Substring matching over prose cannot represent this, and that gap was real: "8 point" matched
+ * inside "at least 18 point", "4 point" inside "14 point bold", and "5:1" inside "at least 4.5:1".
+ * Three published values could be corrupted into something the source never says, and every one
+ * passed, because a regex over characters has no idea where a number begins.
+ *
+ * So numbers are parsed and compared as numbers.
+ */
+interface Measurement {
+  value: number;
+  /** Normalised unit: "pt" for point-like units, "ratio" for an X:1 contrast ratio. */
+  unit: string;
+  /** The token as it appeared, for error messages. */
+  text: string;
+}
+
+const MEASUREMENT_TOKEN =
+  /(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(pts?|points?|px|pixels?|dp)\b/gi;
+
+const POINT_UNITS: Record<string, string> = {
+  pt: "pt", pts: "pt", point: "pt", points: "pt",
+  px: "px", pixel: "px", pixels: "px", dp: "dp",
+};
+
+/** Every complete measurement in a piece of text, in order. */
+export function measurementsIn(text: string): Measurement[] {
+  const found: Measurement[] = [];
+  for (const m of norm(text).matchAll(MEASUREMENT_TOKEN)) {
+    if (m[1] !== undefined && m[2] !== undefined) {
+      // "4.5:1" — a ratio. Recorded against its denominator so "4.5:1" and "9:2" stay distinct.
+      found.push({ value: Number(m[1]) / Number(m[2]), unit: "ratio", text: norm(m[0]) });
+    } else if (m[3] !== undefined && m[4] !== undefined) {
+      const unit = POINT_UNITS[m[4].toLowerCase()] ?? m[4].toLowerCase();
+      found.push({ value: Number(m[3]), unit, text: norm(m[0]) });
+    }
+  }
+  return found;
+}
+
+/** Parse a record's declared value into exactly one measurement, or undefined if it is not one. */
+function soleMeasurement(value: string): Measurement | undefined {
+  const found = measurementsIn(value);
+  return found.length === 1 ? found[0] : undefined;
+}
+
+export function sameMeasurement(a: Measurement, b: Measurement): boolean {
+  return a.unit === b.unit && a.value === b.value;
+}
+
+/**
  * Condition markers this checker can read out of a source's own prose.
  *
  * These are OUR classifications applied to W3C's words, not W3C's taxonomy, and that distinction
@@ -632,35 +683,53 @@ export function verifyIrRecords(
         report(record.id, `value "${key}" names no \`context\` pattern; the clause alone does not distinguish two numbers in one sentence`);
         continue;
       }
-      // The context must contain the value, and contain it ONCE. "at least 18 point or 14 point
-      // bold" contains "14 point" as a substring, so a mere containment test let the regular
-      // threshold be swapped to the bold one and still pass. Requiring a unique occurrence
-      // forces a context that distinguishes the two cases, which is the point of having one.
-      const valueRe = norm(String(value)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
-      const occurrences = [...norm(context).matchAll(new RegExp(valueRe, "gi"))].length;
-      if (occurrences === 0) {
-        report(record.id, `context for "${key}" does not itself contain "${value}"; the pattern must pin the value, not sit near it`);
-        continue;
-      }
-      // A context that also contains a DIFFERENT value of the same shape is ambiguous: it would
-      // accept either one. Reject it and demand a tighter phrase.
-      const sameShape = new RegExp(
-        /^[\d.]+\s*:\s*1$/.test(norm(String(value)))
-          ? String.raw`\d+(?:\.\d+)?\s*:\s*1`
-          : String.raw`\d+(?:\.\d+)?\s*(?:pt|pts|px|point|points)`,
-        "gi",
-      );
-      const candidates = new Set([...norm(context).matchAll(sameShape)].map((m) => norm(m[0])));
-      if (candidates.size > 1) {
+      // The value must be a complete measurement, and the context must contain THAT measurement,
+      // compared as a number and a unit rather than as characters.
+      //
+      // The previous version matched substrings, so "8 point" was accepted as appearing in "at
+      // least 18 point" and "5:1" inside "at least 4.5:1". Tokenising removes the whole class:
+      // 8 != 18, whatever the characters do.
+      const declaredValue = soleMeasurement(String(value));
+      if (!declaredValue) {
         report(
           record.id,
-          `context for "${key}" contains more than one candidate value (${[...candidates].join(", ")}), ` +
+          `value "${key}"="${value}" is not a single measurement this checker can parse ` +
+            `(expected e.g. "18 point" or "4.5:1"); an unparsed value could only be string-matched`,
+        );
+        continue;
+      }
+      const contextMeasurements = measurementsIn(context);
+      const matching = contextMeasurements.filter((m) => sameMeasurement(m, declaredValue));
+      if (!matching.length) {
+        report(
+          record.id,
+          `context for "${key}" does not state "${value}" as a measurement` +
+            (contextMeasurements.length
+              ? ` (it states ${contextMeasurements.map((m) => `"${m.text}"`).join(", ")})`
+              : " (it states none)"),
+        );
+        continue;
+      }
+      // A context holding two different measurements of the same kind is ambiguous: it would
+      // accept either one, so it is not pinning this value.
+      const distinct = new Set(
+        contextMeasurements.filter((m) => m.unit === declaredValue.unit).map((m) => m.value),
+      );
+      if (distinct.size > 1) {
+        report(
+          record.id,
+          `context for "${key}" contains more than one candidate value ` +
+            `(${contextMeasurements.filter((m) => m.unit === declaredValue.unit).map((m) => m.text).join(", ")}), ` +
             `so it does not pin "${value}"; use a phrase that states this case alone`,
         );
         continue;
       }
+
+      // The phrase must appear in the clause, and the clause must state the same measurement.
+      // The phrase check alone would accept a context whose number the clause spells differently.
       const contextRe = norm(context).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
-      if (!new RegExp(contextRe, "i").test(norm(clause))) {
+      const clauseStatesValue = measurementsIn(clause).some((m) => sameMeasurement(m, declaredValue));
+      if (!new RegExp(contextRe, "i").test(norm(clause)) || !clauseStatesValue) {
         report(
           record.id,
           `value "${key}"="${value}" is not stated as "${context}" in ${record.rule} (${clauseName}); ` +
@@ -743,7 +812,12 @@ export function verifyIrRecords(
       for (const sibling of siblings) {
         for (const other of Object.values(sibling.values ?? {})) {
           if (norm(String(other)) === norm(String(value))) continue;
-          const swapped = norm(context).replace(new RegExp(valueRe, "gi"), norm(String(other)));
+          const otherMeasurement = soleMeasurement(String(other));
+          if (!otherMeasurement) continue;
+          const swapped = norm(context).replace(
+            new RegExp(matching[0]!.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*"), "gi"),
+            norm(String(other)),
+          );
           const swappedRe = swapped.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
           if (new RegExp(swappedRe, "i").test(norm(clause))) ambiguous = String(other);
         }
@@ -751,7 +825,8 @@ export function verifyIrRecords(
       if (ambiguous) {
         report(
           record.id,
-          `context "${context}" would be equally true of ${ambiguous} ("${norm(context).replace(new RegExp(valueRe, "gi"), norm(ambiguous))}" ` +
+          `context "${context}" would be equally true of ${ambiguous} ` +
+            `(the same phrase with ${ambiguous} substituted ` +
             `also appears in ${record.rule}); it does not bind "${value}" to this case`,
         );
         continue;

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parsePage, resolveTableCell, sectionText, parsePredicate, admits, intersects } from "../src/e2e/record-source.ts";
 import {
   verifyRecord, validateProvenance, verifyIrRecords, deriveConditions,
+  measurementsIn, sameMeasurement,
   type MeasurementRecord, type RecordDoc, type IrRule,
 } from "../src/e2e/records.ts";
 
@@ -674,6 +675,18 @@ const largeRatio = (): MeasurementRecord => ({
   attribution: "W3C, WCAG 2.2 SC 1.4.3",
 });
 
+const generalRatio = (): MeasurementRecord => ({
+  id: "wcag.contrast-minimum",
+  rule: "wcag22/distinguishable/003",
+  values: { minimum_ratio: "4.5:1" },
+  clauses: { minimum_ratio: "statement" },
+  context: { minimum_ratio: "contrast ratio of at least 4.5:1" },
+  conditions_match: { text_weight: "any", text_scale: "any" },
+  authority: { minimum_ratio: "normative" },
+  conditions: "text that is not large scale",
+  attribution: "W3C, WCAG 2.2 SC 1.4.3",
+});
+
 function checkIr(records: MeasurementRecord[]) {
   const problems: string[] = [];
   const verified = verifyIrRecords(irDoc(records), irRules, (_id, m) => problems.push(m));
@@ -691,19 +704,19 @@ test("audit swap 1: the regular threshold cannot take the bold number", () => {
   r.values = { min_size: "14 point" };
   // "14 point" is in the clause, so a substring search accepted this. The context does not
   // contain it, so binding the value to its phrase rejects it.
-  expect(checkIr([r]).problems.join()).toContain('does not itself contain "14 point"');
+  expect(checkIr([r]).problems.join()).toContain('does not state "14 point" as a measurement');
 });
 
 test("audit swap 2: the bold threshold cannot take the regular number", () => {
   const r = bold();
   r.values = { min_size: "18 point" };
-  expect(checkIr([r]).problems.join()).toContain('does not itself contain "18 point"');
+  expect(checkIr([r]).problems.join()).toContain('does not state "18 point" as a measurement');
 });
 
 test("audit swap 3: the large-text ratio cannot take the general ratio", () => {
   const r = largeRatio();
   r.values = { minimum_ratio: "4.5:1" };
-  expect(checkIr([r]).problems.join()).toContain('does not itself contain "4.5:1"');
+  expect(checkIr([r]).problems.join()).toContain('does not state "4.5:1" as a measurement');
 });
 
 test("a context naming both thresholds is rejected as ambiguous", () => {
@@ -853,4 +866,72 @@ test("weight is read from the phrase but scale from the whole entry", () => {
     "- Large Text — Large-scale text and images of large-scale text have a contrast ratio of at least 3:1;",
     "",
   )).toEqual(new Map([["text_weight", "any"], ["text_scale", "large"]]));
+});
+
+/*
+ * Values are measurements, not strings.
+ *
+ * A fourth audit corrupted three published thresholds into numbers the source never states, and
+ * every one passed, because the value was matched as a substring: "8 point" sits inside "at least
+ * 18 point", "4 point" inside "14 point bold", "5:1" inside "at least 4.5:1". A regex over
+ * characters cannot tell where a number starts.
+ */
+test("a truncated number is not the number: 8 point is not 18 point", () => {
+  for (const [bad, states] of [["8 point", "18 point"], ["1 point", "18 point"]] as const) {
+    const r = regular();
+    r.values = { min_size: bad };
+    const problems = checkIr([r]).problems.join();
+    expect(problems).toContain(`does not state "${bad}" as a measurement`);
+    expect(problems).toContain(states);
+  }
+
+  const b = bold();
+  b.values = { min_size: "4 point" };
+  expect(checkIr([b]).problems.join()).toContain('does not state "4 point" as a measurement');
+});
+
+test("a truncated ratio is not the ratio: 5:1 is not 4.5:1", () => {
+  const r = generalRatio();
+  r.values = { minimum_ratio: "5:1" };
+  expect(checkIr([r]).problems.join()).toContain('does not state "5:1" as a measurement');
+
+  const large = largeRatio();
+  large.values = { minimum_ratio: "1:1" };
+  expect(checkIr([large]).problems.join()).toContain('does not state "1:1" as a measurement');
+});
+
+test("the same number in a different unit is a different measurement", () => {
+  const r = regular();
+  r.values = { min_size: "18 px" };
+  expect(checkIr([r]).problems.join()).toContain('does not state "18 px" as a measurement');
+});
+
+test("a value that is not a single parseable measurement is refused", () => {
+  const r = regular();
+  r.values = { min_size: "largish" };
+  expect(checkIr([r]).problems.join()).toContain("is not a single measurement");
+
+  const two = regular();
+  two.values = { min_size: "18 point or 14 point" };
+  expect(checkIr([two]).problems.join()).toContain("is not a single measurement");
+});
+
+test("measurement parsing: equivalent spellings match, different quantities do not", () => {
+  const eighteenPt = measurementsIn("at least 18 point");
+  expect(eighteenPt).toHaveLength(1);
+  expect(eighteenPt[0]).toMatchObject({ value: 18, unit: "pt" });
+
+  // "18 point" and "18 pts" are one quantity written two ways.
+  expect(sameMeasurement(measurementsIn("18 point")[0]!, measurementsIn("18 pts")[0]!)).toBe(true);
+  // 18 and 8 are not, however the characters overlap.
+  expect(sameMeasurement(measurementsIn("18 point")[0]!, measurementsIn("8 point")[0]!)).toBe(false);
+  // Nor are the same digits in different units.
+  expect(sameMeasurement(measurementsIn("18 point")[0]!, measurementsIn("18 px")[0]!)).toBe(false);
+
+  // Ratios are compared by value, so 4.5:1 and 9:2 are the same ratio and 5:1 is not.
+  expect(sameMeasurement(measurementsIn("4.5:1")[0]!, measurementsIn("9:2")[0]!)).toBe(true);
+  expect(sameMeasurement(measurementsIn("4.5:1")[0]!, measurementsIn("5:1")[0]!)).toBe(false);
+
+  // A clause with both thresholds yields both, in order.
+  expect(measurementsIn("with at least 18 point or 14 point bold").map((m) => m.value)).toEqual([18, 14]);
 });
