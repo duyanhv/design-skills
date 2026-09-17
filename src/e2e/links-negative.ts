@@ -13,7 +13,7 @@
  * The control cases matter as much as the failures — a verifier that rejected everything would pass
  * every negative case here.
  */
-import { checkPage, APPLE, type Verifier } from "./links.ts";
+import { checkPage, APPLE, ANDROID, GITHUB, type Verifier } from "./links.ts";
 import { log } from "../util/log.ts";
 
 const HIG = "https://developer.apple.com/design/human-interface-guidelines";
@@ -29,6 +29,8 @@ const doc = (title: string, anchors: string[] = []) =>
 
 interface Case {
   name: string;
+  /** Which verifier is under test. Defaults to Apple's, which most cases exercise. */
+  verifier?: Verifier;
   /** Page URL under test. */
   page: string;
   /** Anchors cited into it. */
@@ -120,6 +122,77 @@ const CASES: Case[] = [
     expect: null,
     verified: 1,
   },
+
+  /*
+   * ---- developer.android.com and github.com ----
+   *
+   * Added when the Material 3 bundle turned out to have zero of its four official links verified:
+   * every one was reported "no verifier for this host". A guide that is almost entirely links and
+   * checks none of them is the failure mode links.ts was written for, applied to a different
+   * source.
+   *
+   * These hosts 404 honestly, unlike Apple, so existence is the easy half. Identity is the half
+   * worth testing, and each host's signal is different — which is why the first version of both
+   * verifiers reported healthy links as broken. Both of those mistakes are cases here.
+   */
+  {
+    name: "android: a page whose title no longer contains the slug is a renamed page",
+    verifier: ANDROID,
+    page: "https://developer.android.com/develop/ui/compose/designsystems/material3",
+    respond: { status: 200, body: "<main><title>Views Interoperability | Android Developers</title></main>" },
+    expect: "may have been renamed",
+  },
+  {
+    name: "android: the real title verifies, though the slug is spelled differently in it",
+    verifier: ANDROID,
+    page: "https://developer.android.com/develop/ui/compose/designsystems/material3",
+    // The mistake this catches: requiring the literal token "material3" rejected this real page,
+    // whose title spells the same thing as "Material Design 3".
+    respond: {
+      status: 200,
+      body: "<main><title>Material Design 3 in Compose &nbsp;|&nbsp; Jetpack Compose &nbsp;|&nbsp; Android Developers</title></main>",
+    },
+    expect: null,
+  },
+  {
+    name: "android: a 200 with no article body is not a verified page",
+    verifier: ANDROID,
+    page: "https://developer.android.com/develop/ui/compose/designsystems/material3",
+    respond: { status: 200, body: "<title>Material Design 3</title><div>error</div>" },
+    expect: "no usable document",
+  },
+  {
+    name: "github: a repository page that names a different repository is rejected",
+    verifier: GITHUB,
+    page: "https://github.com/material-components/material-web",
+    respond: { status: 200, body: JSON.stringify({ meta: { title: "GitHub - someone-else/other-repo: x" } }) },
+    expect: "may have been renamed or transferred",
+  },
+  {
+    name: "github: a blob page that no longer names the file is rejected",
+    verifier: GITHUB,
+    page: "https://github.com/material-components/material-web/blob/main/docs/theming/README.md",
+    // What GitHub serves after a file is deleted: the repository, not the file.
+    respond: { status: 200, body: JSON.stringify({ meta: { title: "GitHub - material-components/material-web: x" } }) },
+    expect: "may have been moved or deleted",
+  },
+  {
+    name: "github: the real blob title verifies",
+    verifier: GITHUB,
+    page: "https://github.com/material-components/material-web/blob/main/docs/theming/README.md",
+    respond: {
+      status: 200,
+      body: JSON.stringify({ meta: { title: "material-web/docs/theming/README.md at main · material-components/material-web" } }),
+    },
+    expect: null,
+  },
+  {
+    name: "github: a 200 carrying no title identifies nothing",
+    verifier: GITHUB,
+    page: "https://github.com/material-components/material-web",
+    respond: { status: 200, body: JSON.stringify({ payload: {} }) },
+    expect: "no usable document",
+  },
 ];
 
 let failed = 0;
@@ -130,7 +203,8 @@ for (const testCase of CASES) {
     port: 0,
     fetch: () => new Response(testCase.respond.body, { status: testCase.respond.status }),
   });
-  const stub: Verifier = { ...APPLE, dataUrl: () => `http://127.0.0.1:${server.port}/page.json` };
+  const base = testCase.verifier ?? APPLE;
+  const stub: Verifier = { ...base, dataUrl: () => `http://127.0.0.1:${server.port}/page.json` };
 
   try {
     const result = await checkPage(testCase.page, new Set(testCase.anchors ?? []), [stub]);
