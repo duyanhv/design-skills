@@ -22,6 +22,12 @@ bundle is about: whether a claim holds up, not whether a screen is good.
 
 **10 of 10 planted defects found. 0 false positives.**
 
+That is a detection score. It is not a claim that the review's explanations are all correct — an
+audit found one that is not, and [`ERRATA.md`](ERRATA.md) records it: the review calls SC 2.4.7
+Focus Visible Level A when it is AA. The review is published verbatim and not edited, so the
+correction lives beside it. Detection quality and explanation accuracy are separate measurements,
+and reporting only the first would be the flattering half of the result rather than the result.
+
 The defects were the ones that get audits ignored: a contrast finding against a **disabled control**
 and another against a **logotype**, both of which SC 1.4.3 explicitly exempts; a **Level AAA
 criterion** reported as failing an AA target; a **clean axe-core run** filed as proof of

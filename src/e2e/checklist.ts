@@ -70,6 +70,20 @@ const PATH_LIKE = /`([a-z0-9][\w./-]*\.(?:ts|md|yaml|json|sh|swift|tsx|mjs))`|`(
 /** A named npm script: `bun run x` or `bun run src/e2e/x.ts`. */
 const SCRIPT_LIKE = /`bun run ([a-z:-]+)`/gi;
 
+/** `bun run src/e2e/x.ts` — a command naming a file. The path must resolve. */
+const SCRIPT_PATH_LIKE = /`bun run ([\w./-]+\.ts)`/gi;
+
+/**
+ * Wording that claims a deliverable rather than describing work done well.
+ *
+ * The distinction matters because an unrecognised claim was being counted as an unverifiable
+ * judgement, which is how the audit's motivating example survived: "Ship a fully verified Flutter
+ * skill with three worked examples" names no path, so the resolver had nothing to check and the
+ * summary filed it under "judgements this cannot check". A delivery claim is not a judgement. If
+ * it says something was shipped, added, created or published, it has to point at the thing.
+ */
+const DELIVERY_VERB = /\b(ship|shipped|add|added|create|created|publish|published|build|built|write|wrote)\b/i;
+
 const pkg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")) as {
   scripts: Record<string, string>;
 };
@@ -108,15 +122,39 @@ for (const item of items) {
   for (const match of item.body.matchAll(SCRIPT_LIKE)) {
     const name = match[1]!;
     references.push(`bun run ${name}`);
-    // `bun run <script>` must be a declared script; `bun run src/...` is covered by PATH_LIKE.
-    if (!name.includes("/") && !pkg.scripts[name]) {
+    if (!pkg.scripts[name]) {
       fail(`checklist:${item.line} is ticked and names \`bun run ${name}\`, which is not a script`,
            item.body.split("\n")[0]!.trim().slice(0, 96));
     }
   }
 
-  if (references.length) resolved++;
-  else unverifiable++;
+  // `bun run src/e2e/x.ts` was matched by neither pattern: SCRIPT_LIKE's character class excluded
+  // the slash and the dot, and PATH_LIKE never looked inside a command. A comment claimed this form
+  // was covered. It was not, and the audit's second example exercised exactly that gap.
+  for (const match of item.body.matchAll(SCRIPT_PATH_LIKE)) {
+    const file = match[1]!;
+    references.push(`bun run ${file}`);
+    if (!(await exists(join(ROOT, file)))) {
+      fail(`checklist:${item.line} is ticked and names \`bun run ${file}\`, which does not exist`,
+           item.body.split("\n")[0]!.trim().slice(0, 96));
+    }
+  }
+
+  if (references.length) {
+    resolved++;
+    continue;
+  }
+
+  // No reference at all. That is fine for an item describing how work was done, and not fine for
+  // one claiming a deliverable — the latter is checkable in principle, so leaving it unreferenced
+  // is a documentation defect rather than an inherent limit.
+  const first = item.body.split("\n")[0]!.trim();
+  if (DELIVERY_VERB.test(first)) {
+    fail(`checklist:${item.line} claims a deliverable and names nothing that can be resolved`,
+         `${first.slice(0, 96)}\n    name the path, bundle or command that delivers it`);
+  } else {
+    unverifiable++;
+  }
 }
 
 console.log("");

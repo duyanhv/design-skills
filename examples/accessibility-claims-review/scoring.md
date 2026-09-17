@@ -22,6 +22,10 @@ outside the reviewing agent's workspace. The rubric was fixed in advance and is 
 
 **10 of 10 found.**
 
+This counts detection only. [`ERRATA.md`](ERRATA.md) records a factual error in the review's
+explanation of finding 5 — SC 2.4.7 Focus Visible labelled Level A, which is AA — that does not
+change any adjudication above and is not excused by them.
+
 ## Deliberate non-defects
 
 | # | Non-defect | Outcome |

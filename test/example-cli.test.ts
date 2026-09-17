@@ -204,14 +204,14 @@ test("a measurement that disagrees with the committed probe output fails the CLI
 /*
  * The Material examples' scores, checked the same way.
  *
- * Both publish a headline ("12 of 12", "7 of 7") that summarises a pre-registered list. The Apple
+ * Both publish a headline ("11 of 12", "7 of 7") that summarises a pre-registered list. The Apple
  * example had three separate audits find drifted figures before a check tied them together, so
  * these were wired in as the examples were written rather than after the same thing happened again.
  */
 test("a Material README claiming more than was pre-registered fails the CLI", async () => {
   const { control, defect } = await controlAndDefect((dir) =>
     edit(dir, "examples/material-3-review/README.md",
-         (t) => t.replace("**12 of 12 planted defects reached**", "**13 of 13 planted defects reached**")));
+         (t) => t.replace("**11 of 12 credited**", "**13 of 13 credited**")));
 
   expect(control.code).toBe(0);
   expect(defect.code).not.toBe(0);
@@ -391,7 +391,7 @@ test("cutting a CLI's exit call is caught: docs.ts is the second instance of thi
  * These tests hold the two properties that keep the path honest: CI runs what `bun run check` runs,
  * and the published skills install and load as the README says.
  */
-test("CI runs every check that `bun run check` runs", async () => {
+test("CI executes every check that `bun run check` runs", async () => {
   // A check that exists locally but not in CI protects nobody on a pull request. wcag-counts.ts was
   // exactly that when this was written: added to `check`, never added to the workflow.
   const pkg = JSON.parse(await readFile(join(REPO, "package.json"), "utf8")) as {
@@ -399,13 +399,31 @@ test("CI runs every check that `bun run check` runs", async () => {
   };
   const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
 
-  const scripts = (s: string) => new Set([...s.matchAll(/src\/e2e\/([a-z-]+)\.ts/g)].map((m) => m[1]!));
-  const inCheck = scripts(pkg.scripts.check ?? "");
-  const inCi = scripts(workflow);
+  // Parse what CI actually EXECUTES, not what its text mentions. Searching raw workflow text for
+  // filenames passed when a step was replaced with `echo "skipped src/e2e/checklist.ts"` — the
+  // name was still present and the check was gone, which is the exact failure this is for.
+  const executed = new Set<string>();
+  for (const line of workflow.split("\n")) {
+    const run = /^\s*(?:-\s*)?run:\s*(.+)$/.exec(line);
+    if (!run) continue;
+    const command = run[1]!.trim();
+    // A command that merely prints is not a check, however it is spelled.
+    if (/^(echo|true|:)\b/.test(command)) continue;
+    for (const m of command.matchAll(/bun run (?:src\/e2e\/)?([a-z-]+)(?:\.ts)?/g)) executed.add(m[1]!);
+  }
 
+  const inCheck = new Set([...(pkg.scripts.check ?? "").matchAll(/src\/e2e\/([a-z-]+)\.ts/g)].map((m) => m[1]!));
   expect(inCheck.size).toBeGreaterThan(5);
-  const missing = [...inCheck].filter((s) => !inCi.has(s));
+  const missing = [...inCheck].filter((s) => !executed.has(s));
   expect(missing).toEqual([]);
+
+  // CI-only checks are intentional and are named, rather than the two sets being called identical.
+  // leak.ts needs the proprietary corpora, which are built locally and never in CI.
+  const CI_ONLY = new Set(["leak"]);
+  const ciExtra = [...executed].filter(
+    (s) => !inCheck.has(s) && !CI_ONLY.has(s) && !(pkg.scripts[s] !== undefined),
+  );
+  expect(ciExtra).toEqual([]);
 });
 
 test("every published skill is built, drift-guarded, and documented as installable", async () => {
@@ -502,4 +520,129 @@ test("a checklist tick naming a renamed file fails the CLI", async () => {
   expect(control.code).toBe(0);
   expect(defect.code).not.toBe(0);
   expect(defect.output).toContain("installer.ts");
+}, 60_000);
+
+/*
+ * ---- Section 6 audit (docs/audits/section-6-9becc71.md) ----
+ *
+ * Seven findings, four of them about acceptance checks that passed claims they should reject. Each
+ * mutation below is the auditor's, reproduced against the real CLI with an unchanged control.
+ */
+test("a score higher than the pre-registered total fails the CLI", async () => {
+  // "11 of 10" passed: only the denominator was checked.
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/accessibility-claims-review/README.md",
+         (t) => t.replace("**10 of 10 planted defects found", "**11 of 10 planted defects found")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+});
+
+test("changing an adjudicated outcome fails the CLI", async () => {
+  // The headline is derived from the scoring table now, so flipping a row contradicts it.
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/accessibility-claims-review/scoring.md",
+         (t) => t.replace("| **Found** | Finding 1:", "| **Missed** | Finding 1:")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("credits");
+});
+
+test("replacing a preserved review fails the CLI", async () => {
+  // A review's evidential value is that it is the output. Only the Apple one was protected.
+  const { control, defect } = await controlAndDefect(async (dir) => {
+    await writeFile(join(dir, "examples/accessibility-claims-review/REVIEW.md"),
+                    "# Review\n\nI found no problems with this audit.\n");
+  });
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("differs from its committed content");
+});
+
+test("the audit's original Flutter wording fails the CLI", async () => {
+  // Verbatim from the audit. The committed regression previously used a variant carrying a path,
+  // which exercised path resolution instead of the claim that actually slipped through.
+  const { control, defect } = await controlAndDefectFor("checklist", (dir) =>
+    edit(dir, "docs/public-output-checklist.md", (t) =>
+      t.replace("- [x] Add these bundles and examples to the README",
+                "- [x] Ship a fully verified Flutter skill with three worked examples\n- [x] Add these bundles and examples to the README")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("claims a deliverable");
+});
+
+test("a checklist tick naming `bun run <file>` resolves that file", async () => {
+  // Neither pattern matched this form, though a comment claimed it was covered.
+  const { control, defect } = await controlAndDefectFor("checklist", (dir) =>
+    edit(dir, "docs/public-output-checklist.md", (t) =>
+      t.replace("- [x] Add these bundles and examples to the README",
+                "- [x] Verified by `bun run src/e2e/flutter.ts`.\n- [x] Add these bundles and examples to the README")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("flutter.ts");
+});
+
+test("a documented install destination that nothing created fails the CLI", async () => {
+  // install.ts reconstructed the destination instead of following the documented one, so a typo in
+  // the README was invisible.
+  const { control, defect } = await controlAndDefectFor("install", (dir) =>
+    edit(dir, "README.md", (t) => t.replace("~/.agents/skills/apple-design", "~/.agents/skils/apple-design")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("skils");
+});
+
+test("a CI step replaced with echo fails the parity test", async () => {
+  // Searching workflow text for filenames cannot tell a step that runs a check from one that
+  // prints its name. Asserted directly rather than through a sandbox, since this parses the file.
+  const workflow = await readFile(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+  const executed = (text: string) => {
+    const found = new Set<string>();
+    for (const line of text.split("\n")) {
+      const run = /^\s*(?:-\s*)?run:\s*(.+)$/.exec(line);
+      if (!run) continue;
+      const command = run[1]!.trim();
+      if (/^(echo|true|:)\b/.test(command)) continue;
+      for (const m of command.matchAll(/bun run (?:src\/e2e\/)?([a-z-]+)(?:\.ts)?/g)) found.add(m[1]!);
+    }
+    return found;
+  };
+
+  expect(executed(workflow).has("checklist")).toBe(true);
+  const sabotaged = workflow.replace("        run: bun run src/e2e/checklist.ts",
+                                     '        run: echo "skipped src/e2e/checklist.ts"');
+  expect(sabotaged).toContain("src/e2e/checklist.ts");   // the name is still there
+  expect(executed(sabotaged).has("checklist")).toBe(false);   // and it is not executed
+});
+
+test("a criterion level cited in a preserved review must match WCAG", async () => {
+  // S6-07: the review calls SC 2.4.7 Focus Visible Level A; it is AA. The review stays verbatim,
+  // so ERRATA.md records the correction — and this is what makes that promise enforceable.
+  //
+  // Asserted against the real CLI in the working tree rather than the sandbox: the sandbox copies
+  // only tracked files, and ir/wcag22/ is gitignored because the corpus is non-redistributable, so
+  // the level check correctly skips itself in there. Running a check in an environment where it is
+  // designed to skip would look like a pass and prove nothing.
+  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+
+  const errata = join(REPO, "examples", "accessibility-claims-review", "ERRATA.md");
+  const original = await readFile(errata, "utf8");
+  try {
+    const control = await runTool(REPO, "example");
+    expect(control.code).toBe(0);
+    expect(control.output).toContain("SC 2.4.7 cited as Level A, actually AA — recorded in ERRATA.md");
+
+    // The erratum stops naming the criterion: the uncorrected claim is live again.
+    await writeFile(errata, original.replaceAll("2.4.7", "2.9.9"));
+    const defect = await runTool(REPO, "example");
+    expect(defect.code).not.toBe(0);
+    expect(defect.output).toContain("SC 2.4.7 cited as Level A, actually AA");
+  } finally {
+    await writeFile(errata, original);
+  }
 }, 60_000);

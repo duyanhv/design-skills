@@ -32,8 +32,11 @@
   source: components
   expect:
     - "state layers"
-    # Disabled must not be a licence to fail contrast.
-    - "disabled"
+    # The disabled state must not be described as a contrast failure: WCAG exempts inactive
+    # components, and an earlier version of this guide said the opposite. The distinction that
+    # matters is inactive versus merely styled to look inactive.
+    - "exempts text in an inactive"
+    - "styled** to look disabled"
     # The library is not the specification.
     - "is not Material"
     # A review that only saw the default state has established very little.

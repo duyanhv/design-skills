@@ -35,10 +35,54 @@ const fail = (msg: string, detail?: string) => {
 };
 const pass = (msg: string) => console.log(`✓ ${msg}`);
 
-/** The skills the README tells people to install. Read from the README, not hard-coded here. */
+/**
+ * The install commands the README actually gives, parsed as commands rather than scraped for names.
+ *
+ * An audit found the earlier version extracted the *source* bundle name and then built its own
+ * correct destination, so changing the documented destination to `~/.agents/skils/apple-design`
+ * left the check green while the published instructions pointed somewhere nothing had created.
+ * Both halves of the command are now used as written.
+ */
 const readme = await readFile(join(ROOT, "README.md"), "utf8");
-const installed = [...readme.matchAll(/ln -s "\$PWD\/skills\/([a-z0-9-]+)"/g)].map((m) => m[1]!);
-const advertised = [...new Set(installed)];
+
+interface InstallCommand {
+  source: string;
+  destination: string;
+  /** The `mkdir -p` directory in force when this command appears, if any. */
+  parent: string | undefined;
+}
+
+const commands: InstallCommand[] = [];
+let currentMkdir: string | undefined;
+for (const line of readme.split("\n")) {
+  const mkdir = /^\s*mkdir -p (\S+)\s*$/.exec(line);
+  if (mkdir) {
+    currentMkdir = mkdir[1]!;
+    continue;
+  }
+  const link = /^\s*ln -s "\$PWD\/skills\/([a-z0-9-]+)"\s+(\S+)\s*$/.exec(line);
+  if (link) commands.push({ source: link[1]!, destination: link[2]!, parent: currentMkdir });
+}
+
+const advertised = [...new Set(commands.map((c) => c.source))];
+
+// The destination has to sit inside a directory the instructions created, and has to be named for
+// the bundle it links. Both are checkable from the text, and a reader following the steps in order
+// would hit either mistake immediately.
+for (const command of commands) {
+  const expected = `${command.parent ?? ""}/${command.source}`;
+  if (!command.parent) {
+    fail(`the README links ${command.source} into ${command.destination} with no preceding \`mkdir -p\``,
+         "following the instructions in order would target a directory that does not exist");
+  } else if (command.destination !== expected) {
+    // Defense in depth, and honestly labelled as such: the symlink below also fails for a
+    // destination nothing created, so removing this line does not make the suite pass a typo'd
+    // README. What it adds is the diagnostic — it names the destination that was expected, where
+    // the symlink failure can only say the one given did not work. Verified by removing it.
+    fail(`the README links ${command.source} to ${command.destination}, not ${expected}`,
+         "the destination is not the directory the preceding mkdir created, or is misspelled");
+  }
+}
 
 // Every publicly committed skill. A bundle that is published but never mentioned in the install
 // section is one a reader cannot install by following the documentation.
@@ -75,15 +119,23 @@ if (stale.length) {
 // ---- Install each one the way the README says, into a throwaway "agent skills" directory. ----
 const home = await mkdtemp(join(tmpdir(), "design-skills-install-"));
 try {
-  const skillsDir = join(home, ".agents", "skills");
-  await mkdir(skillsDir, { recursive: true });
-
-  for (const skill of published) {
-    await symlink(join(ROOT, "skills", skill), join(skillsDir, skill));
+  // Rewrite each documented destination into the throwaway home and follow it literally: the
+  // mkdir the README gives, then the ln -s it gives, in that order.
+  const localise = (p: string) => join(home, p.replace(/^~\//, ""));
+  const installedAt = new Map<string, string>();
+  for (const command of commands) {
+    if (!command.parent) continue;
+    await mkdir(localise(command.parent), { recursive: true });
+    const destination = localise(command.destination);
+    if (await exists(destination)) continue;   // both agent directories link the same bundles
+    await symlink(join(ROOT, "skills", command.source), destination);
+    if (!installedAt.has(command.source)) installedAt.set(command.source, destination);
   }
 
-  for (const skill of published) {
-    const root = join(skillsDir, skill);
+  // Only what the README installs. lumen-ds is a fixture published to be read, not installed, and
+  // it is already excluded from the coverage check above for the same reason.
+  for (const skill of published.filter((s) => installedAt.has(s))) {
+    const root = installedAt.get(skill)!;
     const entry = join(root, "SKILL.md");
     if (!(await exists(entry))) {
       fail(`${skill}: SKILL.md is not readable through the installed symlink`);

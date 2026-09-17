@@ -9,7 +9,9 @@ work.
 Read all of it before applying any of it:
 
 1. **The statement** — the requirement itself.
-2. **Its exceptions** — usually in the statement, sometimes in a normative note.
+2. **Its exceptions and alternatives** — "except for the following", or a set of bulleted options
+   any one of which satisfies it. These continue the normative text; they are not Notes, and WCAG's
+   Notes are informative. See [authority.md](authority.md).
 3. **The glossary terms it uses** — WCAG's definitions are normative, and several criteria turn
    entirely on one. A term like "large scale (text)" or "user interface component" does specific
    work, and the everyday meaning is not it.

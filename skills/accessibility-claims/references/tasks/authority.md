@@ -8,28 +8,43 @@ accessibility" is not a claim anyone can check. "This fails WCAG 2.2 SC 1.4.3 at
 | Kind | Example source | What a violation means |
 | --- | --- | --- |
 | **Normative requirement** | a WCAG success criterion | the interface does not conform at that level |
-| **Normative note or definition** | a criterion's exceptions, a glossary term it depends on | part of the requirement; ignoring it makes the finding wrong |
-| **Informative note** | a criterion's explanatory notes, WCAG's Understanding documents | helpful, not binding; a "violation" of it is not a conformance failure |
+| **Normative continuation** | a criterion's exceptions, its bulleted alternatives, a glossary term it depends on | part of the requirement; ignoring it makes the finding wrong |
+| **Note, example, or diagram** | anything WCAG marks as a Note; the Understanding documents | informative by WCAG's own rule; a "violation" of it is not a conformance failure |
 | **Vendor or house guidance** | Apple's HIG, Material, a design system | a product decision, arguable on its merits |
 
 The middle two are the trap, because they sit in the same document and often in the same rule.
 
 ## Normative and informative live side by side
 
-In WCAG 2.2, notes attached to a criterion are individually marked, and they are mixed:
+WCAG is explicit about which of its own words create requirements. From
+[Interpreting Normative Requirements](https://www.w3.org/TR/WCAG22/#interpreting-normative-requirements):
+the main content is normative, while **"diagrams, examples, and notes are informative
+(non-normative)"** and do "not create requirements that impact a conformance claim."
 
-- across the specification, **118 notes are normative and 181 are informative**
-- **20 criteria carry both kinds of note at once**, including 2.5.2 Pointer Cancellation,
-  2.5.8 Target Size (Minimum), and 3.3.8 Accessible Authentication (Minimum)
+So a **Note is informative.** Full stop. That is the rule to carry, and it is simpler than the one
+an earlier version of this page gave.
 
-*(Counted from the WCAG 2.2 text as built locally by this repository, source version 2026-08-17.
-They describe the document's structure, not a requirement, and a different revision may differ.)*
+What does bind you, and is easy to skim past, is the normative material that follows a criterion's
+opening sentence:
 
-So "it says so in the criterion" is not enough. It matters **which part** of the criterion, because
-one paragraph down may be commentary that binds nobody.
+- **exception lists** — "except for the following", then the cases the requirement does not reach
+- **alternatives** — a criterion satisfied by any one of several bulleted options
+- **glossary definitions** the criterion depends on
 
-When you cite a note, say whether it is normative. If you cannot tell, that is a finding about your
-evidence, not a detail to round off.
+2.5.2 Pointer Cancellation is the clearest example. Its text continues into four bulleted
+alternatives — No Down-Event, Abort or Undo, Up Reversal, Essential — any one of which satisfies it.
+Those are requirements. Two actual Notes follow them, and those are not.
+
+So "it says so in the criterion" is not enough. It matters **which part**: a paragraph further down
+may be an alternative that lets an implementation off, or commentary that binds nobody.
+
+> **A correction, because this page got it wrong.** It previously said WCAG has "118 normative notes
+> and 181 informative notes", counted from this repository's own extraction. Those counts are real
+> but the label was not: the extractor keeps everything after a criterion's first paragraph in one
+> `notes` field, and marks each block normative or informative. Of the 118 blocks it marks
+> normative, **none is a Note** — 94 are bulleted alternatives, 6 are exceptions, 18 are other
+> normative text. Publishing them as "normative notes" gave an internal representation the source's
+> vocabulary, and contradicted what WCAG says about its own notes. An audit caught it.
 
 ## Understanding documents are not the standard
 

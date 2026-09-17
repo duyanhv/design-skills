@@ -25,7 +25,13 @@ Every interactive component has states beyond the one in the mockup:
 - **enabled** — the default
 - **hovered / focused / pressed** — Material draws these as *state layers*, a translucent overlay of
   the content color at a defined opacity, not as separate colors
-- **disabled** — reduced opacity, and **not** an excuse to fail contrast; see
+- **disabled** — reduced opacity. Two things are true at once here, and an earlier version of this
+  guide stated only the first: a disabled control should still be *readable enough to understand
+  what is unavailable*, **and** WCAG's contrast criterion exempts text in an inactive user
+  interface component. So low contrast on a genuinely inactive control is a usability improvement,
+  not a conformance failure, and filing it as one is the most common way a contrast finding dies.
+  What is *not* exempt is a control merely **styled** to look disabled while remaining operable —
+  the exception is about the component being inactive, not about how it looks. See
   [accessibility.md](accessibility.md)
 - **error** — for inputs, paired with a message that says what to do
 - **selected** — for navigation and choice components

@@ -24,8 +24,9 @@ in the review's favour.
 | M11 | No response to width | **Found** | A15 |
 | M12 | Touch target smaller than it looks | **Handled, not asserted** | B5. Traced `.info`'s 24px override into the component's own `_shared.scss`, found the internal `.touch` span is `max(48px, 100%)` and absolutely positioned, reasoned the real hit area is probably larger than the visible box but may overlap the neighbouring select — and then declined to claim a failure it could not measure. |
 
-**12 of 12 reached. 10 found outright, 1 handled with the right reasoning and a refusal to assert,
-1 partial.**
+**11 of 12 credited.** 10 found outright, 1 handled with the right reasoning and a refusal to
+assert. The twelfth (M7) is partial and is not credited: every planted defect was reached, but
+"reached" is a weaker claim than "found" and the headline should carry the stronger one.
 
 ## Deliberate non-defects
 

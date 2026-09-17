@@ -53,10 +53,30 @@ for (const file of (await readdir(PAGES)).filter((f) => f.endsWith(".json"))) {
   rules.push(...(page.rules ?? []));
 }
 
+/**
+ * The blocks an extracted rule keeps after its opening paragraph, and what they actually are.
+ *
+ * `note_authority` is the extractor's internal labelling of the `notes` field, which holds
+ * exceptions, bulleted alternatives, real Notes and examples together. An audit found the guide
+ * publishing those labels as WCAG's own terminology — "118 normative notes" — when WCAG says
+ * plainly that its notes are informative. The counts were right and the noun was wrong.
+ *
+ * So this now checks the claim the guide actually makes: that the normative material after a
+ * criterion's first sentence is NOT notes. If a future extraction starts labelling a real Note
+ * normative, that is a defect in the extraction and this is where it surfaces.
+ */
+const normativeBlocks = rules.flatMap((r) =>
+  (r.notes ?? []).filter((_, i) => (r.note_authority ?? [])[i] === "normative"),
+);
+const isNote = (block: string) => /^_?\[?informative/i.test(block.trim()) || /\bNote\b/.test(block.trim().slice(0, 40));
+
 const authorities = rules.flatMap((r) => r.note_authority ?? []);
 const counts = {
   normativeNotes: authorities.filter((a) => a === "normative").length,
   informativeNotes: authorities.filter((a) => a === "informative").length,
+  /** Normative blocks that are really Notes. WCAG says this should be zero. */
+  normativeRealNotes: normativeBlocks.filter(isNote).length,
+  normativeBullets: normativeBlocks.filter((b) => b.trim().startsWith("-")).length,
   mixedRules: rules.filter(
     (r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"),
   ).length,
@@ -93,9 +113,16 @@ const CLAIMS: { what: string; actual: number; pattern: RegExp; in?: string }[] =
     pattern: /\*\*\d+ of (\d+) success criteria state an exception/,
     in: "criteria.md",
   },
-  { what: "normative notes", actual: counts.normativeNotes, pattern: /\*\*(\d+) notes are normative/ },
-  { what: "informative notes", actual: counts.informativeNotes, pattern: /normative and (\d+) are informative\*\*/ },
-  { what: "criteria carrying both kinds", actual: counts.mixedRules, pattern: /\*\*(\d+) criteria carry both kinds/ },
+  {
+    what: "blocks the extractor marks normative",
+    actual: counts.normativeNotes,
+    pattern: /Of the (\d+) blocks it marks\s*\n?> ?normative/,
+  },
+  {
+    what: "of those, bulleted alternatives",
+    actual: counts.normativeBullets,
+    pattern: /\*\*none is a Note\*\* — (\d+) are bulleted alternatives/,
+  },
   { what: "Level A criteria", actual: counts.levelA, pattern: /\*\*(\d+) Level A,/ },
   { what: "Level AA criteria", actual: counts.levelAA, pattern: /Level A, (\d+) Level AA,/ },
   { what: "Level AAA criteria", actual: counts.levelAAA, pattern: /and (\d+) Level AAA\*\*/ },
@@ -126,24 +153,34 @@ for (const claim of CLAIMS) {
 const mixedSections = rules
   .filter((r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"))
   .map((r) => r.section ?? "");
-// Read the examples OUT OF the guide rather than checking a hard-coded list against it. The first
-// version skipped any example the guide no longer named, so replacing a correct example with a
-// wrong one passed: the check only ever looked for names it already believed. Whatever criteria the
-// sentence names are the ones that have to be true.
-// The claim is a bullet, which ends at a blank line rather than a full stop.
-const exampleSentence = /carry both kinds of note at once[\s\S]*?\n\n/.exec(guide)?.[0] ?? "";
-const namedExamples = [...exampleSentence.matchAll(/\b(\d\.\d\.\d+)\b/g)].map((m) => m[1]!);
-if (!namedExamples.length) {
-  console.log("✗ authority.md names no example criteria for the mixed-notes claim");
-  console.log("    a structural claim with no instance is not checkable by a reader either");
+// The guide's central factual claim: NONE of the normative blocks is a Note. WCAG says its notes
+// are informative, so a normative block that is really a Note would mean either the extraction or
+// the guide is wrong. Checked directly rather than inferred from a total.
+if (counts.normativeRealNotes === 0) {
+  console.log(`✓ none of the ${counts.normativeNotes} normative block(s) is a Note, as the guide states`);
+} else {
+  console.log(`✗ ${counts.normativeRealNotes} block(s) marked normative are Notes; WCAG says notes are informative`);
+  console.log("    either the extraction mislabels them or authority.md's claim is wrong");
   failed++;
 }
-for (const criterion of namedExamples) {
-  if (mixedSections.some((s) => s.startsWith(`${criterion} `))) {
-    console.log(`✓ SC ${criterion} does mix normative and informative notes`);
+
+// The named example must really carry bulleted alternatives followed by real Notes.
+const pointerCancellation = rules.find((r) => (r.section ?? "").startsWith("2.5.2 "));
+if (!guide.includes("2.5.2 Pointer Cancellation")) {
+  console.log("✗ authority.md no longer names the criterion its explanation rests on");
+  failed++;
+} else if (!pointerCancellation) {
+  console.log("✗ authority.md names SC 2.5.2, which is not in the build");
+  failed++;
+} else {
+  const blocks = pointerCancellation.notes ?? [];
+  const auth = pointerCancellation.note_authority ?? [];
+  const alternatives = blocks.filter((b, i) => auth[i] === "normative" && b.trim().startsWith("-")).length;
+  const realNotes = blocks.filter((b, i) => auth[i] === "informative" && isNote(b)).length;
+  if (alternatives >= 4 && realNotes >= 2) {
+    console.log(`✓ SC 2.5.2 carries ${alternatives} normative alternative(s) and ${realNotes} informative Note(s)`);
   } else {
-    const exists = rules.some((r) => (r.section ?? "").startsWith(`${criterion} `));
-    console.log(`✗ authority.md names SC ${criterion} as mixing both kinds of note; ${exists ? "it does not" : "no such criterion in the build"}`);
+    console.log(`✗ SC 2.5.2 has ${alternatives} normative alternative(s) and ${realNotes} Note(s); the guide describes four and two`);
     failed++;
   }
 }

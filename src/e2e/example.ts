@@ -19,7 +19,7 @@
  *
  * Usage: bun run src/e2e/example.ts
  */
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { ROOT, exists } from "../util/fs.ts";
 import { log } from "../util/log.ts";
@@ -162,14 +162,82 @@ for (const [name, dir, expectations] of [
     fail(`${expectations} names no pre-registered items`, "the scoring has nothing to be scored against");
     continue;
   }
-  // "12 of 12", "7 of 7": the denominator must be the number actually pre-registered.
-  for (const claim of readme.matchAll(/(\d+) of (\d+)/g)) {
-    if (Number(claim[2]) !== planted.size) {
+  // The scoring table adjudicates each pre-registered item. Read it, then derive the score from
+  // the adjudications rather than trusting the sentence in the README.
+  //
+  // Checking the denominator alone was not enough, and an audit showed it three ways: "11 of 10"
+  // passed, changing a Found row to Missed passed, and replacing the entire review with "I found
+  // no problems" passed. A published score has to follow from the table it summarises.
+  // The review examples adjudicate in scoring.md; the build example does it in its README's trap
+  // table. Either is fine — what matters is that an adjudication exists and the headline follows
+  // from it, not which file it lives in.
+  const scoringPath = join(ROOT, "examples", dir, "scoring.md");
+  const scoring = ((await exists(scoringPath)) ? await readFile(scoringPath, "utf8") : "") + "\n" + readme;
+
+  /** id -> the outcome its scoring row records. */
+  const adjudicated = new Map<string, string>();
+  for (const row of scoring.split("\n")) {
+    const cells = row.trim().startsWith("|") ? row.split("|").map((c) => c.trim()) : [];
+    if (cells.length < 4) continue;
+    const id = /^\*{0,2}([MTA]\d+)\*{0,2}$/.exec(cells[1] ?? "")?.[1];
+    if (!id) continue;
+    // The outcome is the first bolded verdict after the id: column 3 in the review tables (which
+    // carry a "where" column) and column 2 in the build's trap table. Scanning the rest of the row
+    // rather than a fixed index keeps both formats working without a per-example special case.
+    const rest = cells.slice(2).join(" | ");
+    const outcome = /\*\*([A-Za-z][A-Za-z ,-]*)[.\*]/.exec(rest)?.[1]?.trim().toLowerCase();
+    if (outcome) adjudicated.set(id, outcome);
+  }
+
+  const unadjudicated = [...planted].filter((id) => !adjudicated.has(id));
+  if (unadjudicated.length) {
+    fail(`${name}: ${unadjudicated.length} pre-registered item(s) have no scoring row: ${unadjudicated.join(", ")}`,
+         "an item that was registered and never adjudicated is missing from the result, not passing");
+  }
+  const invented = [...adjudicated.keys()].filter((id) => !planted.has(id));
+  if (invented.length) {
+    fail(`${name}: scoring.md adjudicates item(s) that were never pre-registered: ${invented.join(", ")}`);
+  }
+
+  // Outcomes that count toward a "found"/"handled" headline. Anything else — partial, missed —
+  // does not, which is what makes the derived numerator meaningful.
+  const CREDITED = ["found", "handled", "avoided"];
+  const credited = [...adjudicated.values()].filter((o) => CREDITED.some((c) => o.startsWith(c))).length;
+
+  for (const claim of readme.matchAll(/\*\*(\d+) of (\d+)/g)) {
+    const [numerator, denominator] = [Number(claim[1]), Number(claim[2])];
+    if (denominator !== planted.size) {
       fail(`${name}/README.md claims "${claim[0]}", but ${expectations} pre-registers ${planted.size}`,
            "a denominator that does not match the list is a score against a different experiment");
     }
+    if (numerator > denominator) {
+      fail(`${name}/README.md claims "${claim[0]}", which is more than the total`);
+    }
+    if (numerator !== credited) {
+      fail(`${name}/README.md claims ${numerator}, but scoring.md credits ${credited}`,
+           `outcomes recorded: ${[...adjudicated.values()].join(", ")}`);
+    }
   }
-  pass(`${name}: README agrees with the ${planted.size} item(s) in ${expectations}`);
+  pass(`${name}: ${credited} credited outcome(s) across ${planted.size} pre-registered item(s), and the README agrees`);
+
+  // Every review in this repository is published verbatim; that is its whole evidential value.
+  // The Apple example's REVIEW.md was protected and the newer ones were not.
+  for (const artifact of ["REVIEW.md", "NOTES.md"]) {
+    const path = join(ROOT, "examples", dir, artifact);
+    if (!(await exists(path))) continue;
+    const diffProc = Bun.spawn(["git", "diff", "HEAD", "--", `examples/${dir}/${artifact}`], {
+      cwd: ROOT, stdout: "pipe", stderr: "ignore",
+    });
+    const diff = (await new Response(diffProc.stdout).text()).trim();
+    if ((await diffProc.exited) !== 0) continue;
+    if (diff) {
+      const changed = diff.split("\n").filter((l) => /^[+-][^+-]/.test(l)).length;
+      fail(`${name}/${artifact} differs from its committed content (${changed} changed line(s))`,
+           "a produced artifact is evidence only while it is the one that was produced");
+    } else {
+      pass(`${name}/${artifact} matches its committed content`);
+    }
+  }
 
   // The review example's before/ screen has to still run: a straw man that throws tests nothing.
   if (dir === "material-3-review") {
@@ -184,6 +252,58 @@ for (const [name, dir, expectations] of [
     } else {
       pass("the review example's before/ screen still renders");
     }
+  }
+}
+
+// 3d. Levels cited in a preserved review must match WCAG.
+//
+// An audit found the accessibility review calling SC 2.4.7 Focus Visible "Level A" when it is AA.
+// The review is published verbatim and is not edited, so the correction lives in ERRATA.md — and
+// this is what makes that promise real: every "SC n.n.n (Level X)" in a preserved review is
+// resolved against the local WCAG build. Skips when wcag22 is not built, like the other checks
+// that need it, so it is silent in CI and meaningful locally.
+const wcagPages = join(ROOT, "ir", "wcag22", "pages");
+if (await exists(wcagPages)) {
+  const levels = new Map<string, string>();
+  for (const file of (await readdir(wcagPages)).filter((f) => f.endsWith(".json"))) {
+    const page = JSON.parse(await readFile(join(wcagPages, file), "utf8")) as {
+      rules?: { section?: string; conformance_level?: string }[];
+    };
+    for (const rule of page.rules ?? []) {
+      const number = /^(\d+\.\d+\.\d+)\s/.exec(rule.section ?? "")?.[1];
+      if (number && rule.conformance_level) levels.set(number, rule.conformance_level);
+    }
+  }
+
+  for (const dir of ["accessibility-claims-review", "material-3-review", "apple-design-review"]) {
+    const reviewPath = join(ROOT, "examples", dir, "REVIEW.md");
+    if (!(await exists(reviewPath))) continue;
+    const review = await readFile(reviewPath, "utf8");
+    const errataPath = join(ROOT, "examples", dir, "ERRATA.md");
+    const errata = (await exists(errataPath)) ? await readFile(errataPath, "utf8") : "";
+
+    let checked = 0;
+    const wrong: string[] = [];
+    for (const cite of review.matchAll(/SC (\d+\.\d+\.\d+)[^(]{0,60}\(Level (A{1,3})\b/g)) {
+      const [number, claimed] = [cite[1]!, cite[2]!];
+      const actual = levels.get(number);
+      if (!actual) continue;
+      checked++;
+      if (actual !== claimed) wrong.push(`SC ${number} cited as Level ${claimed}, actually ${actual}`);
+    }
+
+    for (const problem of wrong) {
+      // A known error stays published so long as the erratum records it. An unrecorded one is a
+      // claim the repository is still making.
+      const number = /SC (\d+\.\d+\.\d+)/.exec(problem)![1]!;
+      if (errata.includes(number)) {
+        pass(`${dir}: ${problem} — recorded in ERRATA.md`);
+      } else {
+        fail(`${dir}/REVIEW.md: ${problem}`,
+             "preserve the review and record the correction in ERRATA.md rather than editing it");
+      }
+    }
+    if (checked) pass(`${dir}: ${checked} criterion level(s) cited, resolved against the WCAG build`);
   }
 }
 

@@ -21,8 +21,8 @@ find "it does not run" and stop.
 
 ## Result
 
-**12 of 12 planted defects reached**: 10 found outright, 1 handled with the right reasoning, 1
-partial. One partial false positive. Full detail, including the disagreements, in
+**11 of 12 credited**: 10 found outright and 1 handled with the right reasoning and a refusal to
+assert. The twelfth is scored partial, not credited. One partial false positive. Full detail, including the disagreements, in
 [`scoring.md`](scoring.md).
 
 The two weakest moments are both about **where a finding belongs**, not whether it was seen:

@@ -70,6 +70,7 @@ describe it.
 ## 3. Publish one real worked example
 
 - [x] Create an original example screen with representative, verifiable issues.
+      `examples/apple-design-review/before/` and its planted-defect list.
 - [x] Include the starting code and a screenshot of its actual rendered state.
 - [x] Review it using the public Apple skill and record supported findings.
 - [x] Tie each finding to the affected element, source guidance, applicable scope, and proposed fix.
@@ -111,6 +112,7 @@ Claims are scoped: one screen, one run, one platform, no control arm.
 - [x] Open with a short explanation of what the skills help users accomplish.
 - [x] Show the real before/after example near the top.
 - [x] Add a “Browse the skills” table linking directly to complete public bundles.
+      In `README.md`, one row per bundle with its task guides and worked examples.
 - [x] Describe each skill's intended tasks and platform scope.
 - [x] Link the worked example beside the relevant skill.
 - [x] Put installation after the showcase and browsable output.
@@ -163,6 +165,7 @@ establish usable Dynamic Type support.
 - [x] Validate every local reference and required bundled file.
 - [x] Confirm local-only source text and caches remain excluded from publishing.
 - [x] Exercise the public Apple skill on a build task and a review task.
+      `examples/apple-design-build/` and `examples/apple-design-review/`.
 - [x] Check findings for unsupported claims, missed exceptions, and confusion between visible size and actual interaction bounds.
 - [x] Confirm the worked example's results match the claims made in the README.
 
@@ -224,6 +227,8 @@ measurement drifting from its probe.
       defects found, 0 false positives, including contrast findings raised against a disabled
       control and a logotype, and a Level AAA criterion reported as failing an AA target.
 - [x] Add these bundles and examples to the README once they are complete and verified.
+      The skills table in `README.md` lists all four bundles; `src/e2e/install.ts` checks that the
+      install instructions cover every published one.
 
 ## Completion check
 
