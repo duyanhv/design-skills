@@ -47,6 +47,18 @@ records:
     rule: wcag22/glossary/041
     values:
       min_size: "18 point"
+    # Which clause states it, and the exact phrase. Both are required: "18 point" and "14 point"
+    # occur in the SAME sentence, so naming the clause alone cannot tell them apart. An audit
+    # swapped the two and the first version of this check accepted it.
+    clauses:
+      min_size: rationale
+    # "at least 18 point" and not the whole clause: the fuller phrase "at least 18 point or 14
+    # point bold" names BOTH thresholds, so it would accept either number. The verifier rejects an
+    # ambiguous context for exactly that reason.
+    context:
+      min_size: "at least 18 point"
+    authority:
+      min_size: normative
     meaning:
       min_size: >-
         The lower bound at which non-bold text counts as "large scale (text)" under WCAG 2.2, and
@@ -66,6 +78,14 @@ records:
     rule: wcag22/glossary/041
     values:
       min_size: "14 point"
+    clauses:
+      min_size: rationale
+    # Note the difference from wcag.large-scale-regular: same clause, different phrase. The bold
+    # threshold is only "14 point bold", never "14 point" alone.
+    context:
+      min_size: "14 point bold"
+    authority:
+      min_size: normative
     meaning:
       min_size: >-
         The lower bound at which BOLD text counts as "large scale (text)" under WCAG 2.2. This is
@@ -80,10 +100,42 @@ records:
       larger standard font size (18pt)."
     attribution: W3C, WCAG 2.2 glossary, "large scale (text)"
 
+  # WCAG's general requirement, recorded because the divergence from Apple's table turns on it:
+  # below the large-scale thresholds this is the number that applies, and citing it is what stops
+  # "Apple permits 3:1" from looking like the whole story.
+  - id: wcag.contrast-minimum
+    rule: wcag22/distinguishable/003
+    values:
+      minimum_ratio: "4.5:1"
+    clauses:
+      minimum_ratio: statement
+    context:
+      minimum_ratio: "contrast ratio of at least 4.5:1"
+    authority:
+      minimum_ratio: normative
+    meaning:
+      minimum_ratio: >-
+        The default minimum contrast ratio under WCAG 2.2 SC 1.4.3 (Level AA), for text that is not
+        large scale. Numerically equal to the ratio in Apple's first row, but reached by a
+        different condition.
+    conditions: "Visual presentation of text and images of text that is not large scale."
+    exceptions: >-
+      Incidental text and logotypes are exempt; see wcag.large-scale-ratio for the large-text case.
+    attribution: W3C, WCAG 2.2 SC 1.4.3 Contrast (Minimum), Level AA
+
   - id: wcag.large-scale-ratio
     rule: wcag22/distinguishable/003
     values:
       minimum_ratio: "3:1"
+    # The 3:1 for large text is in the Large Text exception (note 0), NOT in the statement, which
+    # gives 4.5:1 for everything else. Both ratios live in this rule; only the phrase separates
+    # them.
+    clauses:
+      minimum_ratio: "note:0"
+    context:
+      minimum_ratio: "contrast ratio of at least 3:1"
+    authority:
+      minimum_ratio: normative
     meaning:
       minimum_ratio: >-
         The minimum contrast ratio WCAG 2.2 SC 1.4.3 (Level AA) requires for large-scale text.
@@ -101,10 +153,20 @@ records:
 divergence_from_apple:
   - dimension: bold text
     wcag: "large scale from 14 point bold upward, so 3:1 applies at 14 pt and above"
-    apple_table: "a wildcard row: bold at ANY size gets 3:1, including well below 14 pt"
+    apple_table: "a wildcard row (contrast.bold): bold at ANY size gets 3:1, including below 14 pt"
     consequence: >-
-      Apple's table is more permissive for small bold text. A 10 pt bold label meets Apple's table
-      at 3:1 and fails WCAG, which requires 4.5:1 there.
+      For small bold text the two documents differ, but NOT as simply as "Apple permits 3:1". A
+      10 pt bold label matches two of Apple's rows at once: contrast.bold gives 3:1, and
+      contrast.small-text gives 4.5:1 for all weights up to 17 pts. Apple states no precedence
+      between them, which is the overlap recorded in contrast.yaml. So the accurate statement is
+      that Apple's BOLD-SPECIFIC row permits 3:1 while its all-weights row conflicts, and the page
+      does not resolve which applies. WCAG has no such ambiguity here: below 14 point bold is not
+      large scale, so 4.5:1 applies.
+    correction: >-
+      An earlier version of this entry said a 10 pt bold label "meets Apple's table at 3:1". An
+      audit caught that: it silently picked the looser of two conflicting rows, which is exactly
+      what contrast.md tells readers not to do. Attributing that choice to Apple's table made our
+      resolution look like the source's.
   - dimension: non-bold text at and above 18 pt
     wcag: "a lower bound: 18 point and larger is large scale"
     apple_table: 'names "18 pts" alone, with no "or larger"'

@@ -3,6 +3,12 @@
 // Written against CoreGraphics rather than ImageMagick so the harness has no install step: any
 // macOS with Xcode can run it. `swift pixel-diff.swift a.png b.png` prints one number.
 //
+// By default the top 140 px are EXCLUDED, because they are the status bar and its clock advances
+// between builds. Comparing full screenshots made an otherwise-identical pair read as 0.06%
+// different, which is small but not zero, and "not zero" was doing real work in this pilot's
+// conclusion. Pass --full to include it. A reproduction across two machines found this; the first
+// run happened to capture both variants inside the same clock minute.
+//
 // The metric is a count of pixels differing in ANY channel by more than `tolerance` (default 0).
 // That makes it a sensitive detector of "did anything change at all", which is the question the
 // maxFontSizeMultiplier experiment turns on. It is NOT a perceptual measure: 58% does not mean
@@ -23,12 +29,16 @@ func load(_ path: String) -> (CGImage, [UInt8], Int, Int)? {
     return (img, buf, w, h)
 }
 
-let args = CommandLine.arguments
+var args = CommandLine.arguments
+let includeStatusBar = args.contains("--full")
+args.removeAll { $0 == "--full" }
 guard args.count >= 3 else {
-    FileHandle.standardError.write("usage: swift pixel-diff.swift A.png B.png [tolerance]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: swift pixel-diff.swift A.png B.png [tolerance] [--full]\n".data(using: .utf8)!)
     exit(2)
 }
 let tolerance = args.count > 3 ? Int(args[3]) ?? 0 : 0
+/// Status-bar height in device pixels on the captured device. Excluded unless --full.
+let statusBarPx = 140
 
 guard let (_, a, aw, ah) = load(args[1]), let (_, b, bw, bh) = load(args[2]) else {
     FileHandle.standardError.write("error: could not read one of the images\n".data(using: .utf8)!)
@@ -40,13 +50,21 @@ guard aw == bw, ah == bh else {
     exit(1)
 }
 
+let firstRow = includeStatusBar ? 0 : min(statusBarPx, ah)
 var differing = 0
-let total = aw * ah
-for i in stride(from: 0, to: total * 4, by: 4) {
-    if abs(Int(a[i]) - Int(b[i])) > tolerance ||
-       abs(Int(a[i+1]) - Int(b[i+1])) > tolerance ||
-       abs(Int(a[i+2]) - Int(b[i+2])) > tolerance {
-        differing += 1
+let total = aw * (ah - firstRow)
+guard total > 0 else {
+    FileHandle.standardError.write("error: nothing to compare after excluding the status bar\n".data(using: .utf8)!)
+    exit(1)
+}
+for y in firstRow..<ah {
+    for x in 0..<aw {
+        let i = (y * aw + x) * 4
+        if abs(Int(a[i]) - Int(b[i])) > tolerance ||
+           abs(Int(a[i+1]) - Int(b[i+1])) > tolerance ||
+           abs(Int(a[i+2]) - Int(b[i+2])) > tolerance {
+            differing += 1
+        }
     }
 }
 print(String(format: "%.2f", Double(differing) / Double(total) * 100))

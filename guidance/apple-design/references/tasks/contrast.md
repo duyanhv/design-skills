@@ -68,10 +68,20 @@ rather than against Apple's page. Keeping them in their own file is the point: t
 values, and a record in `contrast.yaml` would inherit Apple's provenance for something Apple did not
 author.
 
-So WCAG sets its bold threshold at 14 point (`wcag.large-scale-bold`) and requires 3:1 above it
-(`wcag.large-scale-ratio`), while Apple's table gives bold 3:1 at every size (`contrast.bold`) —
-more permissive below that threshold. And WCAG covers all text from 18 point upward
-(`wcag.large-scale-regular`) where Apple's row names 18 pts alone (`contrast.large-text`). Conformance claims must be checked against
+So WCAG sets its bold threshold at 14 point (`wcag.large-scale-bold`) and requires 3:1 at and above
+it (`wcag.large-scale-ratio`). Below that, bold text is not large scale, so WCAG's general requirement applies
+(`wcag.contrast-minimum`).
+
+Apple's table has no single answer for the same case. A small bold label, well under either
+threshold, matches `contrast.bold`
+(bold at any size → 3:1) *and* `contrast.small-text` (up to 17 pts, all weights → 4.5:1), and the
+page states no precedence. So the correct statement is that Apple's **bold-specific row** permits
+3:1 there while its **all-weights row conflicts** — not that "Apple's table permits 3:1", which
+quietly picks the looser row. An earlier version of this page did exactly that, one section after
+warning against it.
+
+And WCAG covers all text from 18 point upward (`wcag.large-scale-regular`) where Apple's row names
+18 pts alone (`contrast.large-text`). Conformance claims must be checked against
 [WCAG](https://www.w3.org/TR/WCAG22/#distinguishable) directly. This bundle is not a conformance
 standard, and Apple's table is a summary that its own page attributes to WCAG "as guidance".
 ## Apple's table drops WCAG's exceptions

@@ -43,8 +43,14 @@ const quiet = process.argv.includes("--quiet");
 
 export interface MeasurementRecord {
   id: string;
-  /** For local_ir records: the rule id in the IR build whose text must contain the value. */
+  /** For local_ir records: the rule id in the IR build the value comes from. */
   rule?: string;
+  /** Per value, which clause of that rule states it: "statement", "rationale", or "note:N". */
+  clauses?: { [k: string]: string };
+  /** Per value, the exact phrase that states it. Must contain the value and appear in the clause. */
+  context?: { [k: string]: string };
+  /** Per value, the authority claimed for it; checked against the clause's own marking. */
+  authority?: { [k: string]: string };
   /** Checked against the row label, not trusted: the row is what selects the values. */
   platform?: string[];
   values?: { [k: string]: string };
@@ -116,25 +122,68 @@ export interface RecordDoc {
 function conditionDimension(key: string): string {
   return key.replace(/_(max|min|exact|eq)(_[a-z]+)?$/, "").replace(/_(pt|pts|px|point|points)$/, "");
 }
+/** One rule from a local IR build, with its clauses kept apart rather than concatenated. */
+export interface IrRule {
+  statement?: string;
+  rationale?: string;
+  notes: string[];
+  /** WCAG marks each note normative or informative. A normative claim cannot rest on a note. */
+  noteAuthority: string[];
+}
+
 /**
- * Load rule id -> full text from a local IR build, so a record citing a rule can be checked
- * against what that rule actually says rather than against our summary of it.
+ * Load rule id -> its clauses from a local IR build.
+ *
+ * This used to join every field into one string, which is what let an audit swap "18 point" for
+ * "14 point": both live in the same rule, so a substring search could not tell them apart. Keeping
+ * the clauses separate is the first half of the fix; the `context` pattern is the second.
  */
-async function loadIrRules(build: string): Promise<Map<string, string> | undefined> {
+async function loadIrRules(build: string): Promise<Map<string, IrRule> | undefined> {
   const dir = join(ROOT, build, "pages");
   if (!build || !(await exists(dir))) return undefined;
-  const rules = new Map<string, string>();
+  const rules = new Map<string, IrRule>();
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".json"))) {
     const page = JSON.parse(await readFile(join(dir, file), "utf8")) as {
-      rules?: { id: string; statement?: string; rationale?: string; notes?: string[] }[];
+      rules?: {
+        id: string; statement?: string; rationale?: string;
+        notes?: string[]; note_authority?: string[];
+      }[];
     };
     for (const rule of page.rules ?? []) {
-      rules.set(rule.id, [rule.statement, rule.rationale, ...(rule.notes ?? [])].filter(Boolean).join(" "));
+      rules.set(rule.id, {
+        statement: rule.statement,
+        rationale: rule.rationale,
+        notes: rule.notes ?? [],
+        noteAuthority: rule.note_authority ?? [],
+      });
     }
   }
   return rules;
 }
 
+/** Resolve a clause name ("statement", "rationale", "note:2") to its text. */
+function clauseText(rule: IrRule, name: string): string | undefined {
+  const n = norm(name);
+  if (n === "statement") return rule.statement;
+  if (n === "rationale") return rule.rationale;
+  const note = /^note:(\d+)$/.exec(n);
+  if (note) return rule.notes[Number(note[1])];
+  return undefined;
+}
+
+/**
+ * Whether a clause is normative or informative.
+ *
+ * WCAG's own distinction, and it matters for what a record may claim: the 18/14 point thresholds
+ * sit in a glossary definition's rationale, while the reason those sizes were chosen sits in an
+ * informative note. A record that cited the note as if it bound implementers would overstate it.
+ */
+function clauseAuthority(rule: IrRule, name: string): string {
+  const n = norm(name);
+  const note = /^note:(\d+)$/.exec(n);
+  if (note) return rule.noteAuthority[Number(note[1])] ?? "unmarked";
+  return "normative";
+}
 
 /** Rebuild a record's predicate for one condition dimension, so overlap claims can be evaluated. */
 function predicateFor(record: MeasurementRecord, dimension: string): Predicate | undefined {
@@ -331,6 +380,30 @@ export function verifyRecord(
               report(record.id, `condition "${declaredKey}"="${declaredText}" is not numeric, but the cell "${cell}" is`);
               continue;
             }
+            // The key's unit suffix must agree with the cell's unit. Without this, renaming
+            // text_size_max_pt to text_size_max_px passed silently: same number, different
+            // quantity. Equivalent spellings of one unit are fine; a different unit is not.
+            const UNIT_ALIASES: Record<string, string> = {
+              pt: "pt", pts: "pt", point: "pt", points: "pt",
+              px: "px", pixel: "px", pixels: "px",
+              dp: "dp",
+            };
+            const cellUnit = UNIT_ALIASES[predicate.unit.toLowerCase()] ?? predicate.unit.toLowerCase();
+            const keyUnitRaw = /_([a-z]+)$/.exec(declaredKey)?.[1] ?? "";
+            const keyUnit = UNIT_ALIASES[keyUnitRaw];
+            if (!keyUnit) {
+              report(
+                record.id,
+                `condition "${declaredKey}" states no unit, but the cell "${cell}" is in ${cellUnit}; ` +
+                  `end the key with the unit (e.g. ..._${cellUnit})`,
+              );
+            } else if (keyUnit !== cellUnit) {
+              report(
+                record.id,
+                `condition "${declaredKey}" is in ${keyUnit}, but the cell "${cell}" is in ${cellUnit}`,
+              );
+            }
+
             const wantsMax = declaredKey.includes("_max");
             const wantsExact = declaredKey.includes("_exact") || declaredKey.includes("_eq");
             if (predicate.kind === "max" && !wantsMax) {
@@ -462,6 +535,133 @@ export function verifyRecord(
   return ok;
 }
 
+/**
+ * Verify one file of local_ir records against a loaded IR build. Exported so the swaps an audit
+ * used can be committed as tests rather than re-run by hand.
+ */
+export function verifyIrRecords(
+  doc: RecordDoc,
+  rules: Map<string, IrRule>,
+  report: (id: string, message: string) => void,
+  onPass?: (id: string, message: string) => void,
+): number {
+  let verified = 0;
+  for (const record of doc.records ?? []) {
+    if (!record.rule) {
+      report(record.id, "a local_ir record must name the `rule` its value comes from");
+      continue;
+    }
+    const rule = rules.get(record.rule);
+    if (rule === undefined) {
+      report(record.id, `names rule "${record.rule}", which does not exist in ${doc.source_build}`);
+      continue;
+    }
+    if (!record.attribution?.trim()) {
+      report(record.id, "a local_ir record must carry `attribution`: these are another body's values");
+    }
+
+    for (const [key, value] of Object.entries(record.values ?? {})) {
+      const clauseName = record.clauses?.[key];
+      if (!clauseName) {
+        report(record.id, `value "${key}" names no \`clause\`; without one, any occurrence of the number in the rule would do`);
+        continue;
+      }
+      const clause = clauseText(rule, clauseName);
+      if (clause === undefined) {
+        report(record.id, `value "${key}" names clause "${clauseName}", which ${record.rule} does not have`);
+        continue;
+      }
+
+      // The context pattern is the record's claim about what the number MEANS in that clause.
+      // It must contain the value, so a pattern cannot match somewhere the value is not.
+      const context = record.context?.[key];
+      if (!context) {
+        report(record.id, `value "${key}" names no \`context\` pattern; the clause alone does not distinguish two numbers in one sentence`);
+        continue;
+      }
+      // The context must contain the value, and contain it ONCE. "at least 18 point or 14 point
+      // bold" contains "14 point" as a substring, so a mere containment test let the regular
+      // threshold be swapped to the bold one and still pass. Requiring a unique occurrence
+      // forces a context that distinguishes the two cases, which is the point of having one.
+      const valueRe = norm(String(value)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+      const occurrences = [...norm(context).matchAll(new RegExp(valueRe, "gi"))].length;
+      if (occurrences === 0) {
+        report(record.id, `context for "${key}" does not itself contain "${value}"; the pattern must pin the value, not sit near it`);
+        continue;
+      }
+      // A context that also contains a DIFFERENT value of the same shape is ambiguous: it would
+      // accept either one. Reject it and demand a tighter phrase.
+      const sameShape = new RegExp(
+        /^[\d.]+\s*:\s*1$/.test(norm(String(value)))
+          ? String.raw`\d+(?:\.\d+)?\s*:\s*1`
+          : String.raw`\d+(?:\.\d+)?\s*(?:pt|pts|px|point|points)`,
+        "gi",
+      );
+      const candidates = new Set([...norm(context).matchAll(sameShape)].map((m) => norm(m[0])));
+      if (candidates.size > 1) {
+        report(
+          record.id,
+          `context for "${key}" contains more than one candidate value (${[...candidates].join(", ")}), ` +
+            `so it does not pin "${value}"; use a phrase that states this case alone`,
+        );
+        continue;
+      }
+      const contextRe = norm(context).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+      if (!new RegExp(contextRe, "i").test(norm(clause))) {
+        report(
+          record.id,
+          `value "${key}"="${value}" is not stated as "${context}" in ${record.rule} (${clauseName}); ` +
+            `the number may appear there for a different case`,
+        );
+        continue;
+      }
+
+      // Discrimination: the context must not be satisfiable by a SIBLING record's value.
+      //
+      // "14 point bold" and "at least 18 point" both pin their number. But weaken the bold
+      // context to a bare "14 point" and it still passes a containment test, while no longer
+      // saying anything about weight. Substituting the sibling's value exposes that: "18 point"
+      // does occur in the clause, so the weakened context would have been just as true of the
+      // other case. A context that cannot tell two cases apart is not binding a value to its
+      // condition, which is the whole purpose.
+      const siblings = (doc.records ?? []).filter(
+        (r) => r.id !== record.id && r.rule === record.rule &&
+          norm(r.clauses?.[Object.keys(r.values ?? {})[0] ?? ""] ?? "") === norm(clauseName),
+      );
+      let ambiguous: string | undefined;
+      for (const sibling of siblings) {
+        for (const other of Object.values(sibling.values ?? {})) {
+          if (norm(String(other)) === norm(String(value))) continue;
+          const swapped = norm(context).replace(new RegExp(valueRe, "gi"), norm(String(other)));
+          const swappedRe = swapped.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+          if (new RegExp(swappedRe, "i").test(norm(clause))) ambiguous = String(other);
+        }
+      }
+      if (ambiguous) {
+        report(
+          record.id,
+          `context "${context}" would be equally true of ${ambiguous} ("${norm(context).replace(new RegExp(valueRe, "gi"), norm(ambiguous))}" ` +
+            `also appears in ${record.rule}); it does not bind "${value}" to this case`,
+        );
+        continue;
+      }
+
+      // A normative claim must not rest on an informative note. WCAG marks which is which.
+      const authority = clauseAuthority(rule, clauseName);
+      const declared = record.authority?.[key];
+      if (declared && norm(declared) !== norm(authority)) {
+        report(record.id, `value "${key}" declares authority "${declared}", but ${clauseName} of ${record.rule} is ${authority}`);
+        continue;
+      }
+
+      verified += 1;
+      onPass?.(record.id, `"${value}" as "${context}" in ${record.rule} (${clauseName}, ${authority})`);
+    }
+  }
+
+  return verified;
+}
+
 if (import.meta.main) {
   const dir = join(ROOT, "guidance", "apple-design", "records");
   if (!(await exists(dir))) {
@@ -472,9 +672,18 @@ if (import.meta.main) {
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort()) {
     const doc = parse(await readFile(join(dir, file), "utf8")) as RecordDoc;
 
-    // Records taken from a local IR build (WCAG) rather than Apple's live DocC. Verified, but
-    // against a different source: the value must appear in the text of the rule it names. Without
-    // this branch the file would be trusted, and a file that is merely trusted is a claim.
+    // Records taken from a local IR build (WCAG) rather than Apple's live DocC.
+    //
+    // The first version of this branch asked only whether the value appeared ANYWHERE in the named
+    // rule. An audit defeated it three times over: "14 point" and "18 point" both occur in the
+    // large-scale definition, and "4.5:1" and "3:1" both occur in SC 1.4.3, so every threshold
+    // could be swapped for another one from the same sentence and still pass. That is the same
+    // defect as the string-comparison hole in the table branch, moved to a new place: finding a
+    // number is not verifying a number.
+    //
+    // A value is now bound to the CLAUSE it comes from (statement, rationale, or note N) and to a
+    // `context` pattern that must match the text immediately around it. "18 point" is only
+    // acceptable where the surrounding words are the non-bold threshold.
     if (doc.source_kind === "local_ir") {
       if (!quiet) console.log(`\n== ${file} (${doc.records?.length ?? 0} records from ${doc.source_build})`);
       const rules = await loadIrRules(doc.source_build ?? "");
@@ -482,30 +691,9 @@ if (import.meta.main) {
         fail(file, `source_build "${doc.source_build}" is not a readable IR build`);
         continue;
       }
-      for (const record of doc.records ?? []) {
-        if (!record.rule) {
-          fail(record.id, "a local_ir record must name the `rule` its value comes from");
-          continue;
-        }
-        const body = rules.get(record.rule);
-        if (body === undefined) {
-          fail(record.id, `names rule "${record.rule}", which does not exist in ${doc.source_build}`);
-          continue;
-        }
-        if (!record.attribution?.trim()) {
-          fail(record.id, "a local_ir record must carry `attribution`: these are another body's values");
-        }
-        for (const [key, value] of Object.entries(record.values ?? {})) {
-          // The value must be findable in the rule's own text, allowing for spacing.
-          const needle = norm(String(value)).replace(/\s+/g, "\\s*");
-          if (!new RegExp(needle, "i").test(norm(body))) {
-            fail(record.id, `value "${key}"="${value}" does not appear in the text of ${record.rule}`);
-          } else {
-            verified += 1;
-            if (!quiet) console.log(`  ✓ ${record.id}: "${value}" found in ${record.rule}`);
-          }
-        }
-      }
+      verified += verifyIrRecords(doc, rules, fail, (id, msg) => {
+        if (!quiet) console.log(`  ✓ ${id}: ${msg}`);
+      });
       continue;
     }
 

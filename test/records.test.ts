@@ -2,7 +2,10 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePage, resolveTableCell, sectionText, parsePredicate, admits, intersects } from "../src/e2e/record-source.ts";
-import { verifyRecord, validateProvenance, type MeasurementRecord, type RecordDoc } from "../src/e2e/records.ts";
+import {
+  verifyRecord, validateProvenance, verifyIrRecords,
+  type MeasurementRecord, type RecordDoc, type IrRule,
+} from "../src/e2e/records.ts";
 
 /**
  * Regression tests for measurement-record verification.
@@ -489,6 +492,31 @@ test("no conditions at all fails (audit: conditions_match deleted, and it passed
   expect(problems.join()).toContain('no condition for column "Text weight"');
 });
 
+test("a condition key whose unit disagrees with its cell fails", () => {
+  // Renaming text_size_max_pt to text_size_max_px passed silently: the check validated the
+  // comparison and the number but never the quantity. Same digits, different unit.
+  const px = smallText();
+  px.conditions_match = { text_size_max_px: 17, text_weight: "any" };
+  expect(checkContrast(px).problems.join()).toContain("is in px, but the cell");
+
+  const dp = smallText();
+  dp.conditions_match = { text_size_max_dp: 17, text_weight: "any" };
+  expect(checkContrast(dp).problems.join()).toContain("is in dp, but the cell");
+
+  // A key with no unit at all is just as unverifiable.
+  const bare = smallText();
+  bare.conditions_match = { text_size_max: 17, text_weight: "any" };
+  expect(checkContrast(bare).problems.join()).toContain("states no unit");
+
+  // Equivalent spellings of the same unit must still be accepted, or the check would just be
+  // demanding one spelling rather than checking a quantity.
+  for (const key of ["text_size_max_pt", "text_size_max_pts", "text_size_max_point", "text_size_max_points"]) {
+    const ok = smallText();
+    ok.conditions_match = { [key]: 17, text_weight: "any" };
+    expect(checkContrast(ok).problems).toEqual([]);
+  }
+});
+
 test("an upper bound declared as an exact match fails, and the reverse too", () => {
   const upper = smallText();
   // "Up to 17 pts" is a maximum; a key that does not say so would read as "exactly 17".
@@ -562,4 +590,167 @@ test("an overlap claim is checked by intersecting conditions, not by comparing v
   // Named categories intersect only with themselves or a wildcard.
   expect(intersects(parsePredicate("Bold"), parsePredicate("All"))).toBe(true);
   expect(intersects(parsePredicate("Bold"), parsePredicate("Regular"))).toBe(false);
+});
+
+/*
+ * ---- local_ir records: WCAG's own thresholds ----
+ *
+ * The first version of this branch asked only whether a value appeared ANYWHERE in the rule it
+ * cited. An audit swapped three thresholds for other numbers from the same sentences and all three
+ * passed, which is the original string-matching flaw wearing a different hat. These tests are those
+ * swaps, so the hole cannot be reopened quietly.
+ *
+ * The fixture is WCAG's real text, short enough to read: both point thresholds live in ONE clause,
+ * and both contrast ratios live in one rule split across statement and note.
+ */
+const irRules = new Map<string, IrRule>([
+  [
+    "wcag22/glossary/041",
+    {
+      statement: "large scale (text)",
+      rationale:
+        "with at least 18 point or 14 point bold or font size that would yield equivalent size " +
+        "for Chinese, Japanese and Korean (CJK) fonts",
+      notes: ["_[informative]_ > **Note:** The 18 and 14 point sizes for roman texts are taken from print convention."],
+      noteAuthority: ["informative"],
+    },
+  ],
+  [
+    "wcag22/distinguishable/003",
+    {
+      statement:
+        "The visual presentation of text and images of text has a contrast ratio of at least 4.5:1, " +
+        "except for the following:",
+      rationale: undefined,
+      notes: [
+        "- Large Text — Large-scale text and images of large-scale text have a contrast ratio of at least 3:1;",
+        "- Logotypes — Text that is part of a logo or brand name has no contrast requirement.",
+      ],
+      noteAuthority: ["normative", "normative"],
+    },
+  ],
+]);
+
+const irDoc = (records: MeasurementRecord[]): RecordDoc => ({
+  topic: "wcag-upstream",
+  source_kind: "local_ir",
+  source_build: "ir/wcag22",
+  records,
+});
+
+const regular = (): MeasurementRecord => ({
+  id: "wcag.large-scale-regular",
+  rule: "wcag22/glossary/041",
+  values: { min_size: "18 point" },
+  clauses: { min_size: "rationale" },
+  context: { min_size: "at least 18 point" },
+  authority: { min_size: "normative" },
+  conditions: "CSS points at delivery size",
+  attribution: 'W3C, WCAG 2.2 glossary, "large scale (text)"',
+});
+
+const bold = (): MeasurementRecord => ({
+  id: "wcag.large-scale-bold",
+  rule: "wcag22/glossary/041",
+  values: { min_size: "14 point" },
+  clauses: { min_size: "rationale" },
+  context: { min_size: "14 point bold" },
+  authority: { min_size: "normative" },
+  conditions: "CSS points at delivery size, bold",
+  attribution: 'W3C, WCAG 2.2 glossary, "large scale (text)"',
+});
+
+const largeRatio = (): MeasurementRecord => ({
+  id: "wcag.large-scale-ratio",
+  rule: "wcag22/distinguishable/003",
+  values: { minimum_ratio: "3:1" },
+  clauses: { minimum_ratio: "note:0" },
+  context: { minimum_ratio: "contrast ratio of at least 3:1" },
+  authority: { minimum_ratio: "normative" },
+  conditions: "large-scale text",
+  attribution: "W3C, WCAG 2.2 SC 1.4.3",
+});
+
+function checkIr(records: MeasurementRecord[]) {
+  const problems: string[] = [];
+  const verified = verifyIrRecords(irDoc(records), irRules, (_id, m) => problems.push(m));
+  return { problems, verified };
+}
+
+test("correct local_ir records verify, one pass per value", () => {
+  const { problems, verified } = checkIr([regular(), bold(), largeRatio()]);
+  expect(problems).toEqual([]);
+  expect(verified).toBe(3);
+});
+
+test("audit swap 1: the regular threshold cannot take the bold number", () => {
+  const r = regular();
+  r.values = { min_size: "14 point" };
+  // "14 point" is in the clause, so a substring search accepted this. The context does not
+  // contain it, so binding the value to its phrase rejects it.
+  expect(checkIr([r]).problems.join()).toContain('does not itself contain "14 point"');
+});
+
+test("audit swap 2: the bold threshold cannot take the regular number", () => {
+  const r = bold();
+  r.values = { min_size: "18 point" };
+  expect(checkIr([r]).problems.join()).toContain('does not itself contain "18 point"');
+});
+
+test("audit swap 3: the large-text ratio cannot take the general ratio", () => {
+  const r = largeRatio();
+  r.values = { minimum_ratio: "4.5:1" };
+  expect(checkIr([r]).problems.join()).toContain('does not itself contain "4.5:1"');
+});
+
+test("a context naming both thresholds is rejected as ambiguous", () => {
+  const r = regular();
+  // The full clause mentions 18 AND 14, so it would accept either. A context has to pin one case.
+  r.context = { min_size: "at least 18 point or 14 point bold" };
+  expect(checkIr([r]).problems.join()).toContain("more than one candidate value");
+});
+
+test("a context that would be equally true of a sibling's value is rejected", () => {
+  // "14 point bold" pins the bold case. Weakened to "14 point" it still contains its own value and
+  // still appears in the clause, but says nothing about weight: substituting the sibling's 18
+  // point also matches, so the context does not discriminate.
+  const weak = bold();
+  weak.context = { min_size: "14 point" };
+  expect(checkIr([weak, regular()]).problems.join()).toContain("would be equally true of 18 point");
+});
+
+test("citing the wrong clause fails even when the value is real", () => {
+  const r = largeRatio();
+  r.clauses = { minimum_ratio: "statement" };   // the statement says 4.5:1, not 3:1
+  expect(checkIr([r]).problems.join()).toContain("is not stated as");
+
+  const missing = largeRatio();
+  missing.clauses = { minimum_ratio: "note:9" };
+  expect(checkIr([missing]).problems.join()).toContain("does not have");
+});
+
+test("a value with no clause or no context fails", () => {
+  const noClause = regular();
+  delete noClause.clauses;
+  expect(checkIr([noClause]).problems.join()).toContain("names no `clause`");
+
+  const noContext = regular();
+  delete noContext.context;
+  expect(checkIr([noContext]).problems.join()).toContain("names no `context`");
+});
+
+test("claiming normative authority for an informative note fails", () => {
+  const r = regular();
+  r.clauses = { min_size: "note:0" };
+  r.context = { min_size: "18 and 14 point sizes" };
+  r.values = { min_size: "18 and 14 point" };
+  const problems = checkIr([r]).problems.join();
+  // The note is marked informative; the record claims normative.
+  expect(problems).toContain("informative");
+});
+
+test("a local_ir record without attribution fails: these are another body's values", () => {
+  const r = regular();
+  delete r.attribution;
+  expect(checkIr([r]).problems.join()).toContain("must carry `attribution`");
 });

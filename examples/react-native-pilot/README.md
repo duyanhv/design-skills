@@ -47,16 +47,17 @@ the same `fontScale`.
 
 ### Six variants, one clean build each
 
-From [`harness/results.tsv`](harness/results.tsv), regenerable with `./run-variants.sh`:
+From [`harness/results.tsv`](harness/results.tsv), regenerated from a clean `git clone` via
+`./bootstrap.sh && ./run-variants.sh`:
 
 | Variant | Pixels differing vs uncapped | Result |
 | --- | --- | --- |
-| `dynamicTypeRamp="largeTitle"` | 50.63% | **Works, scaling stays on.** |
-| `allowFontScaling={false}` + size | 48.90% | Works, never scales again. |
-| `maxFontSizeMultiplier={1.4}` | **0.00%** | **Byte-identical. Did nothing.** |
-| inline `Math.min` cap | 52.38% | Worse; RN re-scales the computed size. |
-| `PlatformColor` palette | 50.62% | Works; 99.75% light-vs-dark with no palette of its own. |
-| **control:** edited title text | 50.39% | Edits reach the build. |
+| `dynamicTypeRamp="largeTitle"` | 53.41% | **Works, scaling stays on.** |
+| `allowFontScaling={false}` + size | 51.58% | Works, never scales again. |
+| `maxFontSizeMultiplier={1.4}` | **0.00%** | **Identical. Did nothing.** |
+| inline `Math.min` cap | 55.26% | Worse; RN re-scales the computed size. |
+| `PlatformColor` palette | 53.41% | Works; 99.78% light-vs-dark with no palette of its own. |
+| **control:** edited title text | 53.15% | Edits reach the build. |
 
 The control matters. "The screenshot did not change" has a boring explanation (the build never
 picked up the edit) and an interesting one (the prop does nothing). The control rules out the boring
@@ -88,7 +89,11 @@ version presented them as one.
 - **iOS only, simulator only.** No Android, no device, so touch behaviour is inferred from layout.
 - **One RN version, one OS, one device.** The `maxFontSizeMultiplier` result is specific to 0.76.5
   on Fabric; `inspect-source.sh` re-answers it for another version in seconds.
-- **Pixel percentages detect change, they do not rank quality.** 50.63% vs 48.90% says nothing about
+- **Pixel percentages detect change, they do not rank quality.** 53.41% vs 51.58% says nothing about
   which screen is better. Only the 0.00% carries weight.
+- **That zero needed a correction.** Reproducing from a clean clone gave 0.06%, because the
+  simulator clock advances between builds and the first run happened to capture both variants in
+  the same minute. The measurement now excludes the status bar. The finding survives; the original
+  claim of "byte-identical" whole screenshots did not.
 - One screen. No control arm on the guidance itself: this pilot shows what RN does, not whether the
   guidance improved anyone's outcome.

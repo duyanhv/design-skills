@@ -111,6 +111,47 @@ if (!(await exists(probeResult))) {
   }
 }
 
+// 3b. The React Native pilot's percentages must match its harness output.
+//
+// Same rule as the probe above, added after an audit found the RN numbers were assertions: the app
+// was outside the repo, so nothing tied the published figures to a run. Now results.tsv ships with
+// the harness and every document quoting a variant has to agree with it. A reproduction changed
+// every figure (the status bar was being measured), and this is what would have caught the drift.
+const rnResults = join(ROOT, "examples", "react-native-pilot", "harness", "results.tsv");
+if (!(await exists(rnResults))) {
+  fail("react-native-pilot/harness/results.tsv is missing", "published percentages need the run that produced them");
+} else {
+  const rows = (await readFile(rnResults, "utf8")).trim().split("\n").slice(1)
+    .map((line) => line.split("\t"))
+    .filter((cells) => cells.length >= 2 && cells[1] !== "-");
+  const rnReadme = await readFile(join(ROOT, "examples", "react-native-pilot", "README.md"), "utf8");
+  const rnReference = await readFile(
+    join(ROOT, "guidance", "apple-design", "references", "frameworks", "react-native.md"), "utf8");
+
+  if (!rows.length) fail("results.tsv has no measured rows");
+  for (const [variant, value] of rows) {
+    const figure = (value ?? "").trim();
+    for (const [name, text] of [["pilot README", rnReadme], ["framework reference", rnReference]] as const) {
+      // Every variant is named in both documents, so each figure must appear in both.
+      if (!text.includes(figure)) {
+        fail(`${name} does not quote ${variant}'s measured ${figure}`,
+             "a published percentage that no longer matches the harness is a stale claim");
+      } else {
+        pass(`${name} quotes ${variant} = ${figure}`);
+      }
+    }
+  }
+
+  // The zero is the pilot's load-bearing result, so assert it specifically rather than trusting
+  // that a "0.00%" somewhere in the file is the right one.
+  const capRow = rows.find(([v]) => v === "B-max-multiplier");
+  if (!capRow) fail("results.tsv has no B-max-multiplier row; the cap experiment is the pilot's finding");
+  else if (capRow[1]?.trim() !== "0.00%") {
+    fail(`B-max-multiplier now measures ${capRow[1]}, not 0.00%`,
+         "the reference says the prop has no effect; that claim rests on this being exactly zero");
+  } else pass("B-max-multiplier is exactly 0.00%, as the reference claims");
+}
+
 // 4. The pre-registered artifacts must not have been edited after the review was scored.
 for (const file of ["REVIEW.md", "planted-defects.md"]) {
   const proc = Bun.spawn(["git", "log", "--format=%h %s", "--", `examples/apple-design-review/${file}`], {

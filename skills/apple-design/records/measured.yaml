@@ -80,11 +80,11 @@ records:
     platform: [iOS]
     values:
       max_font_size_multiplier: "0.00 %"
-      inline_cap: "52.38 %"
-      control_edited_text: "50.39 %"
-      allow_font_scaling_false: "48.90 %"
-      dynamic_type_ramp: "50.63 %"
-      platform_color: "50.62 %"
+      inline_cap: "55.26 %"
+      control_edited_text: "53.15 %"
+      allow_font_scaling_false: "51.58 %"
+      dynamic_type_ramp: "53.41 %"
+      platform_color: "53.41 %"
     meaning:
       max_font_size_multiplier: >-
         Share of pixels differing from the uncapped baseline when maxFontSizeMultiplier={1.4} is
@@ -102,17 +102,23 @@ records:
       React Native 0.76.5 New Architecture, iPhone 17 Pro simulator, iOS 26.5, Xcode 27.0,
       content size UICTContentSizeCategoryAccessibilityXXXL, light appearance, Release
       configuration, one clean build per variant. Metric: share of pixels differing in any RGB
-      channel by more than zero, via harness/pixel-diff.swift.
+      channel by more than zero, via harness/pixel-diff.swift, EXCLUDING the top 140 px status bar.
+
+      Regenerated from a clean git clone through harness/bootstrap.sh, not carried over from the
+      first run. The first run's figures were ~2 points lower across the board because they
+      included the status bar; it also reported 0.06 % for maxFontSizeMultiplier on the second
+      machine, which was the simulator clock advancing between captures and not the app.
     exceptions: >-
       A pixel-difference share is a sensitive detector of "did anything change", not a perceptual
-      or quality measure. 50.63 vs 48.90 does not rank E above D. Only the zero is load-bearing.
-      Simulator only; one version.
+      or quality measure. 53.41 vs 51.58 does not rank E above D. Only the zero is load-bearing,
+      and it is only exactly zero once the clock is excluded from the frame. Simulator only; one
+      version.
     source_kind: measured
 
   - id: measured.rn-platformcolor-appearance
     platform: [iOS]
     values:
-      light_vs_dark: "99.75 %"
+      light_vs_dark: "99.78 %"
     meaning:
       light_vs_dark: >-
         Share of pixels differing between light and dark captures of the PlatformColor variant,
@@ -120,7 +126,8 @@ records:
         UIColors that adapt to appearance.
     conditions: >-
       Same build and device as measured.rn-variant-diffs; appearance switched with
-      `xcrun simctl ui <udid> appearance dark`, app relaunched, recaptured.
+      `xcrun simctl ui <udid> appearance dark`, app relaunched, recaptured. Status bar excluded,
+      as above.
     exceptions: >-
       Shows that appearance switching works, not that the resulting colours are correct or
       contrast-conformant. Increased-contrast and reduce-transparency settings were not tested.

@@ -30,11 +30,11 @@ Measured across one clean build per variant at that text size (`measured.rn-vari
 
 | Approach | Pixels differing from uncapped | Verdict |
 | --- | --- | --- |
-| `dynamicTypeRamp="largeTitle"` | 50.63% | **Works, and keeps scaling on.** Start here. |
-| `allowFontScaling={false}` + explicit size | 48.90% | Works, at the cost of never scaling. |
+| `dynamicTypeRamp="largeTitle"` | 53.41% | **Works, and keeps scaling on.** Start here. |
+| `allowFontScaling={false}` + explicit size | 51.58% | Works, at the cost of never scaling. |
 | `maxFontSizeMultiplier={1.4}` | **0.00%** | **No effect.** Byte-identical to no cap. |
-| Inline `Math.min(34 * fontScale, ...)` | 52.38% | Worse. RN scales the size you computed. |
-| *(control)* change the title's text | 50.39% | Proves edits reach the build. |
+| Inline `Math.min(34 * fontScale, ...)` | 55.26% | Worse. RN scales the size you computed. |
+| *(control)* change the title's text | 53.15% | Proves edits reach the build. |
 
 ### Prefer `dynamicTypeRamp`
 
@@ -52,9 +52,13 @@ only when you need an exact size, confine it to display text, and never apply it
 
 ### `maxFontSizeMultiplier` silently does nothing on Fabric
 
-**[measured]** The capture with the prop is byte-identical to the capture without it: 0.00% of
-pixels differ. The control variant, which changes only the title string, differs in 50.39%, so the
-build pipeline was picking up edits.
+**[measured]** The capture with the prop is identical to the capture without it: 0.00% of pixels
+differ. The control variant, which changes only the title string, differs in 53.15%, so the build
+pipeline was picking up edits.
+
+One caveat on that zero, found by reproducing the run on a clean clone: comparing *whole*
+screenshots gives 0.06%, because the simulator's clock advances between builds. The measurement
+excludes the status bar for that reason. Inside the app's own frame the two are identical.
 
 **[source]** The precise scope, which an audit corrected:
 
@@ -87,7 +91,7 @@ to grow. Stack them.
 `React/Base/RCTConvert.mm` maps 33 iOS semantic colour names natively, `labelColor` among them.
 
 **[measured]** A variant whose palette is built entirely from `PlatformColor`, declaring no colours
-of its own, differs between light and dark by 99.75% of pixels
+of its own, differs between light and dark by 99.78% of pixels
 (`measured.rn-platformcolor-appearance`). The system colours are doing the work.
 
 ```tsx
