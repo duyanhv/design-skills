@@ -54,8 +54,8 @@ records:
       default: "Default control size"
       minimum: "Minimum control size"
     meaning:
-      default: "The value in this platform's Default control size column."
-      minimum: "The value in this platform's Minimum control size column."
+      default: "The Default control size for this platform."
+      minimum: "The Minimum control size for this platform."
     conditions: >-
       Applies to the control's interaction region, not its visible glyph. A small symbol inside a
       larger interactive region satisfies the size; a large visual container whose touch region is
@@ -74,8 +74,8 @@ records:
       default: "Default control size"
       minimum: "Minimum control size"
     meaning:
-      default: "The value in this platform's Default control size column."
-      minimum: "The value in this platform's Minimum control size column."
+      default: "The Default control size for this platform."
+      minimum: "The Minimum control size for this platform."
     conditions: >-
       Pointer-driven platform: the values are smaller than the touch platforms because a pointer is
       more precise than a fingertip.
@@ -93,8 +93,8 @@ records:
       default: "Default control size"
       minimum: "Minimum control size"
     meaning:
-      default: "The value in this platform's Default control size column."
-      minimum: "The value in this platform's Minimum control size column."
+      default: "The Default control size for this platform."
+      minimum: "The Minimum control size for this platform."
     conditions: >-
       Focus-driven platform: nothing is tapped, so the value concerns the focusable region and its
       focused appearance rather than a touch target.
@@ -110,8 +110,8 @@ records:
       default: "Default control size"
       minimum: "Minimum control size"
     meaning:
-      default: "The value in this platform's Default control size column."
-      minimum: "The value in this platform's Minimum control size column."
+      default: "The Default control size for this platform."
+      minimum: "The Minimum control size for this platform."
     conditions: >-
       Gaze-driven targeting. The larger default reflects that the eyes select less precisely than a
       fingertip.
@@ -127,8 +127,8 @@ records:
       default: "Default control size"
       minimum: "Minimum control size"
     meaning:
-      default: "The value in this platform's Default control size column."
-      minimum: "The value in this platform's Minimum control size column."
+      default: "The Default control size for this platform."
+      minimum: "The Minimum control size for this platform."
     conditions: >-
       Matches the iOS values despite the much smaller display, so a design scaled down from iPhone
       will usually violate them.
@@ -160,9 +160,10 @@ records:
     platform: [visionOS]
     values:
       centre_to_centre: "at least 60 points"
-      gap_between: "16 points"
+      gap_between: "16 points or more"
     qualifiers:
       centre_to_centre: at least
+      gap_between: or more
     meaning:
       centre_to_centre: "Minimum distance between the CENTRES of adjacent regular-size buttons."
       gap_between: >-

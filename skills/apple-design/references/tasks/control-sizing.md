@@ -38,8 +38,9 @@ all on a focus-driven platform. Read the row for the platform in front of you.
 Two controls that each meet the size values can still be easy to mis-hit. Apple states spacing as
 prose rather than a table, hedged with "in general" and "about" (`control-spacing.general`):
 
-- Elements **with** a bezel: about 12 points of padding.
-- Elements **without** a bezel: about 24 points of padding around the visible edges.
+- Elements **with** a bezel: about 12 points of padding (`control-spacing.general`).
+- Elements **without** a bezel: about 24 points of padding around the visible edges
+  (`control-spacing.general`).
 
 The sentence carrying this begins "Consider", and Apple publishes no formal strength for it. This
 project's compiler classifies that wording as a MAY, which is **our** reading of how firmly it was
@@ -47,7 +48,8 @@ worded, not a classification Apple states. Quote the wording rather than the lab
 
 visionOS carries its own guidance (`control-spacing.visionos`), and it is two measurements of one
 arrangement rather than two ways of saying the same thing: regular-size buttons placed so their
-**centres are at least 60 points apart**, which leaves **16 points or more of space between them**.
+**centres are at least 60 points apart**, which leaves **16 points or more of space between them**
+(`control-spacing.visionos`).
 A margin of 16 points around each item is a different layout and is not what the source says.
 
 ## Measure the interaction region, not the glyph

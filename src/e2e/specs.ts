@@ -89,6 +89,26 @@ function proseLines(markdown: string): { line: string; number: number }[] {
   return out;
 }
 
+/**
+ * The text a citation must appear in for it to attribute *this* measurement.
+ *
+ * A table row is its own scope: a value in one row is not cited by its neighbour's record id, which
+ * a line-window check allowed. Otherwise the scope is the paragraph, bounded by blank lines, so a
+ * sentence is attributed by a citation in the same sentence or its immediate neighbours and not by
+ * one several paragraphs away.
+ */
+function citationScope(text: string, lineNumber: number): string {
+  const lines = text.split("\n");
+  const line = lines[lineNumber - 1] ?? "";
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s);
+  if (isTableRow(line)) return line;
+  let start = lineNumber - 1;
+  while (start > 0 && lines[start - 1]?.trim() && !isTableRow(lines[start - 1]!)) start--;
+  let end = lineNumber - 1;
+  while (end + 1 < lines.length && lines[end + 1]?.trim() && !isTableRow(lines[end + 1]!)) end++;
+  return lines.slice(start, end + 1).join(" ");
+}
+
 /** A URL may contain digits that mean nothing here (anchors, versions). Strip links first. */
 const withoutLinks = (line: string) => line.replace(/\]\([^)]*\)/g, "]()").replace(/https?:\/\/\S+/g, "");
 
@@ -173,13 +193,10 @@ for (const id of await listSources()) {
           }
 
           // The value must be attributed to a record that actually carries it. Citing *some*
-          // record is not enough: an audit fixture wrote "66x66 pt on iOS (control-size.ios)",
-          // where only the tvOS record holds that value, and the old file-level check passed it.
-          //
-          // Scope: the citation must appear on this line, in the surrounding table row, or in the
-          // paragraph, so the binding is local rather than anywhere in the document.
-          const contextLines = text.split("\n");
-          const context = contextLines.slice(Math.max(0, number - 4), number + 3).join(" ");
+          // record is not enough, and neither is citing one *nearby*: a fixed line window let an
+          // iOS table row borrow the tvOS citation from the row beneath it. So the scope is the
+          // syntactic unit the value sits in — its own table row, or its own paragraph.
+          const context = citationScope(text, number);
           const cited = publishers.filter((p) => context.includes(p.recordId));
           if (cited.length) {
             licensed++;

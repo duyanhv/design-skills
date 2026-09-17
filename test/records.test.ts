@@ -26,7 +26,11 @@ const valid = (): MeasurementRecord => ({
   row: "iOS, iPadOS",
   values: { default: "44x44 pt", minimum: "28x28 pt" },
   columns: { default: "Default control size", minimum: "Minimum control size" },
-  meaning: { default: "default column", minimum: "minimum column" },
+  // A meaning must name the column it describes, so a swapped mapping cannot hide behind it.
+  meaning: {
+    default: "The Default control size for this platform.",
+    minimum: "The Minimum control size for this platform.",
+  },
   conditions: "the interaction region, not the glyph",
 });
 
@@ -68,6 +72,27 @@ test("swapping default and minimum fails", async () => {
   record.values = { default: "28x28 pt", minimum: "44x44 pt" };
   const { problems } = check(record);
   expect(problems.join()).toContain('holds "44x44 pt", but the record says default="28x28 pt"');
+});
+
+// A second audit found that v2 checked row and columns but never compared them to the record's own
+// platform and meaning labels. Both of these passed it.
+
+test("a platform label that disagrees with the row it selects fails", () => {
+  const record = valid();
+  // Row and values untouched: only the label lies. The earlier platform test changed both, so it
+  // could not have caught this.
+  record.platform = ["tvOS"];
+  const { problems } = check(record);
+  expect(problems.join()).toContain("disagrees with the row it selects");
+});
+
+test("swapping values and their column mappings together fails, because meaning names the column", () => {
+  const record = valid();
+  record.values = { default: "28x28 pt", minimum: "44x44 pt" };
+  record.columns = { default: "Minimum control size", minimum: "Default control size" };
+  // meaning left as-is, which is what made this invisible to a per-field check.
+  const { problems } = check(record);
+  expect(problems.join()).toContain("does not name the column it describes");
 });
 
 test("attributing one platform's values to another fails", async () => {
@@ -140,6 +165,33 @@ test("a prose record carrying its qualifier verifies", async () => {
   expect(await ok).toBe(1);
 });
 
+test("omitting the qualifiers field entirely fails, rather than skipping the check", () => {
+  const record = prose();
+  record.values = { centre_to_centre: "60 points" };
+  delete record.qualifiers;
+  const { problems } = check(record);
+  expect(problems.join()).toContain("declares no qualifier");
+});
+
+test("declaring `none` where the source hedges fails", () => {
+  const record = prose();
+  record.values = { centre_to_centre: "60 points" };
+  record.qualifiers = { centre_to_centre: "none" };
+  const { problems } = check(record);
+  expect(problems.join()).toContain('the source reads "at least 60 points"');
+});
+
+test("a trailing qualifier is matched after the number, not only before it", () => {
+  const record = prose();
+  record.id = "control-spacing.visionos.gap";
+  record.values = { gap_between: "16 points or more" };
+  record.qualifiers = { gap_between: "or more" };
+  record.meaning = { gap_between: "space left between the buttons" };
+  const { problems, ok } = check(record);
+  expect(problems).toEqual([]);
+  expect(ok).toBe(1);
+});
+
 test("dropping the source's qualifier fails", async () => {
   const record = prose();
   record.values = { centre_to_centre: "60 points" };
@@ -162,4 +214,29 @@ test("a prose value present on the page but under a different section fails", as
   // 17 pt exists, in the Vision table, not in Mobility's prose.
   const { problems } = check(record);
   expect(problems.join()).toContain("does not appear in the text under Mobility");
+});
+
+// ---- Snapshot integrity. The verifier checked that the snapshot path existed and then hashed the
+// *live* response, so `{}` could stand in for the page while the recorded digest was retained.
+// The digest must be computed from the bytes we actually hold.
+
+test("a snapshot's bytes must hash to the recorded digest", async () => {
+  const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const dir = await mkdtemp(join(tmpdir(), "ds-snap-"));
+  await mkdir(join(dir, "snapshots"), { recursive: true });
+
+  const real = '{"metadata":{"title":"Accessibility"}}';
+  const digest = new Bun.CryptoHasher("sha256").update(real).digest("hex");
+  await writeFile(join(dir, "snapshots", "p.json"), real);
+
+  const hashOf = async (path: string) =>
+    new Bun.CryptoHasher("sha256").update(await Bun.file(path).arrayBuffer()).digest("hex");
+
+  // Intact snapshot matches.
+  expect(await hashOf(join(dir, "snapshots", "p.json"))).toBe(digest);
+
+  // The audit's substitution: keep the digest, replace the contents.
+  await writeFile(join(dir, "snapshots", "p.json"), "{}");
+  expect(await hashOf(join(dir, "snapshots", "p.json"))).not.toBe(digest);
 });

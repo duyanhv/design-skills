@@ -66,6 +66,13 @@ A record therefore carries what a bare number cannot: values keyed by **meaning*
 they cover, conditions, exceptions, the source table's header row, and a snapshot version. Where the
 source is itself ambiguous, say so in `tension:` rather than resolving it silently.
 
+A field a record asserts about the source is **checked against the source**, not merely required to
+be present. Two audits defeated earlier versions by exploiting the difference: a record can name the
+right cell and still lie about it. So `platform` is derived from the row label rather than trusted,
+`meaning` must name the column it describes (otherwise swapping values and columns together leaves
+the labels wrong in unison), and every prose value must declare its qualifier explicitly — including
+`none`, which is then checked against the passage, because an omitted field used to skip the check.
+
 Values are bound to a **cell**, not to a page. A record names the section, the table row, and the
 column whose header gives the value its meaning, and verification resolves
 section → table → row → column. Page-wide string matching is not enough, and an audit proved it by
@@ -75,13 +82,16 @@ different table in the same document. Prose-sourced values carry the source's qu
 "about") verbatim, because a hedge changes what the number means.
 
 - `bun run specs` (offline, in `check`) — every measurement is bound to a record that publishes
-  *that* value, cited nearby. Citing some other record is a failure, not a pass.
+  *that* value, cited in the same syntactic unit: a table row is its own scope, so a row cannot
+  borrow its neighbour's citation, and prose is scoped to its paragraph.
 - `bun run records` (network) — every record resolves to its cell or passage in the live source.
 - `bun test test/records.test.ts` — the mutations above, offline, against a committed fixture.
 
 Snapshots of source pages stay local and git-ignored: they are the source's text. Records commit a
-per-page `sha256` instead, which identifies the content without republishing it, kept separate from
-the page's own update date.
+per-page `sha256` instead, kept separate from the page's own update date. The digest is computed
+from the snapshot's **bytes**, so replacing the file while keeping the digest fails; upstream drift
+is reported separately, since "the page moved on" and "our snapshot is not what we claim" need
+different responses.
 
 Records of our own measurements go in a file with an `origin:` key. They are skipped by `records`
 and reported as skipped, because verifying an observation against Apple's page would be a category

@@ -138,6 +138,38 @@ const CASES: Case[] = [
     note: "no record can license a colour literal",
     records: RECORDS,
   },
+  {
+    // A line window let one table row borrow its neighbour's citation. A row is its own scope.
+    name: "a table row cannot borrow the adjacent row's citation",
+    prose: [
+      "| Platform | Size | Record |",
+      "| --- | --- | --- |",
+      "| iOS | 66x66 pt | `control-size.ios` |",
+      "| tvOS | 66x66 pt | `control-size.tvos` |",
+    ].join("\n"),
+    caught: true,
+    note: "",
+    records: RECORDS,
+  },
+  {
+    name: "a table row citing its own correct record is licensed",
+    prose: [
+      "| Platform | Size | Record |",
+      "| --- | --- | --- |",
+      "| tvOS | 66x66 pt | `control-size.tvos` |",
+    ].join("\n"),
+    caught: false,
+    note: "the row carries the record that publishes its value",
+    allowed: true,
+    records: RECORDS,
+  },
+  {
+    name: "a paragraph cannot borrow a citation from a different paragraph",
+    prose: "Targets are 44x44 pt here.\n\nA separate paragraph mentions `control-size.ios`.",
+    caught: true,
+    note: "",
+    records: RECORDS,
+  },
 ];
 
 let failed = 0;

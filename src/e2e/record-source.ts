@@ -126,6 +126,15 @@ export function resolveTableCell(page: PageData, anchor: string, row: string, co
   return null;
 }
 
+/** The table under `anchor` whose header matches `column`, or null. Exposed for diagnostics. */
+export function findTable(page: PageData, anchor: string, column: string): SourceTable | null {
+  for (const table of page.tables) {
+    if (table.anchor !== anchor) continue;
+    if (table.header.some((h) => norm(h) === norm(column))) return table;
+  }
+  return null;
+}
+
 /** The prose under one section, for records whose value is stated in a sentence. */
 export function sectionText(page: PageData, anchor: string): string | null {
   return page.prose.get(anchor) ?? null;
