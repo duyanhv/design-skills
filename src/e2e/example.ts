@@ -133,6 +133,58 @@ if (!(await exists(rnResults))) {
   for (const message of pilot.passes) pass(message);
 }
 
+// 3c. The Material examples' published scores must match their own artifacts.
+//
+// Same rule as the Apple example's scoring table, applied to the two Material examples as they were
+// added. The number in a README is the thing a reader takes away, and nothing but a check keeps it
+// tied to the file it summarises — three separate audits found drifted figures in the Apple example
+// before this class of check existed.
+for (const [name, dir, expectations] of [
+  ["material-3-review", "material-3-review", "planted-defects.md"],
+  ["material-3-build", "material-3-build", "expectations.md"],
+] as const) {
+  const readmePath = join(ROOT, "examples", dir, "README.md");
+  const listPath = join(ROOT, "examples", dir, expectations);
+  if (!(await exists(readmePath)) || !(await exists(listPath))) {
+    fail(`${name} is missing README.md or ${expectations}`);
+    continue;
+  }
+  const readme = await readFile(readmePath, "utf8");
+  const list = await readFile(listPath, "utf8");
+
+  // Count the pre-registered items from the list itself, so the README cannot claim more than
+  // were planted. Review items are M1..Mn; build traps are T1..Tn.
+  // Both list formats: "**M1.** …" in the review's list, "| **T1** |" in the build's trap table.
+  const planted = new Set([...list.matchAll(/\*\*(M\d+|T\d+)(?:[.,]|\*\*)/g)].map((m) => m[1]!));
+  if (!planted.size) {
+    fail(`${expectations} names no pre-registered items`, "the scoring has nothing to be scored against");
+    continue;
+  }
+  // "12 of 12", "7 of 7": the denominator must be the number actually pre-registered.
+  for (const claim of readme.matchAll(/(\d+) of (\d+)/g)) {
+    if (Number(claim[2]) !== planted.size) {
+      fail(`${name}/README.md claims "${claim[0]}", but ${expectations} pre-registers ${planted.size}`,
+           "a denominator that does not match the list is a score against a different experiment");
+    }
+  }
+  pass(`${name}: README agrees with the ${planted.size} item(s) in ${expectations}`);
+
+  // The review example's before/ screen has to still run: a straw man that throws tests nothing.
+  if (dir === "material-3-review") {
+    const proc = Bun.spawn(["node", join(ROOT, "examples", dir, "before", "renders.mjs")], {
+      cwd: ROOT, stdout: "pipe", stderr: "pipe",
+    });
+    const out = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
+    const code = await proc.exited;
+    if (code !== 0 || out.includes("MISSING")) {
+      fail("the review example's before/ screen no longer renders its controls",
+           out.split("\n").filter((l) => l.includes("MISSING")).join("; ") || `exit ${code}`);
+    } else {
+      pass("the review example's before/ screen still renders");
+    }
+  }
+}
+
 // 4. The pre-registered artifacts must not have been edited after the review was scored.
 //
 // Two different questions, and the first version only asked one of them. Counting commits catches

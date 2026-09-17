@@ -65,7 +65,7 @@ confidently wrong.
 
 ## The library is not the specification
 
-The project's library implements Material; it is Material, and it may lag, extend, or diverge.
+The project's library implements Material; it is not Material, and it may lag, extend, or diverge.
 Check the component exists in the installed version before recommending it, and check what that
 version calls it. A finding that reads "use the X component" is incomplete without "which your
 version provides, as Y".

@@ -1,0 +1,362 @@
+/*
+ * Styles for <notification-settings>.
+ *
+ * Loaded into the element's shadow root via <link>. Every colour, type and
+ * shape value is a --md-sys-* role token, so the screen follows whatever
+ * theme the host page defines and adapts to light/dark with it. The only
+ * literal colours are the documented baseline var() fallbacks below.
+ */
+
+/*
+ * Baseline fallbacks.
+ *
+ * The screen is themed entirely through --md-sys-color-* roles. If the host
+ * page has not defined them, a bare var() with no fallback resolves to nothing
+ * and the cards render transparent (this was observed in Chrome 141 headless
+ * against an unthemed page). The Material Web components carry their own
+ * baseline fallbacks internally, so only this file's custom markup was
+ * affected.
+ *
+ * The values below are the library's own baseline scheme, read out of
+ * node_modules/@material/web/tokens/versions/v0_192/_md-sys-color.scss
+ * resolved through _md-ref-palette.scss (design system v0.192). They are used
+ * ONLY as the third argument of var(), so any theme the host defines still
+ * wins. This is not a theme; it is a fallback so an unthemed host is legible.
+ */
+:host {
+  --_fb-surface: #fef7ff;
+  --_fb-on-surface: #1d1b20;
+  --_fb-on-surface-variant: #49454f;
+  --_fb-surface-container: #f3edf7;
+  --_fb-surface-container-high: #ece6f0;
+  --_fb-outline-variant: #cac4d0;
+  --_fb-error: #b3261e;
+
+  display: block;
+  /* The element itself is a surface; content on it uses the matching on- role. */
+  background: var(--md-sys-color-surface, var(--_fb-surface));
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+  container-type: inline-size;
+}
+
+/* Dark is a separate set of role values, not an inversion: the surface
+   containers get lighter as elevation rises rather than relying on shadow. */
+@media (prefers-color-scheme: dark) {
+  :host {
+    --_fb-surface: #141218;
+    --_fb-on-surface: #e6e0e9;
+    --_fb-on-surface-variant: #cac4d0;
+    --_fb-surface-container: #211f26;
+    --_fb-surface-container-high: #2b2930;
+    --_fb-outline-variant: #49454f;
+    --_fb-error: #f2b8b5;
+  }
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+/* Fallback type values only apply when the host page has not set the
+   typescale tokens. Size, line height and weight are carried together, since
+   applying one of the three alone detaches the text from the role. */
+.screen {
+  box-sizing: border-box;
+  padding: 16px;
+  font-family: var(--md-sys-typescale-body-medium-font, system-ui, sans-serif);
+}
+
+.screen-header {
+  margin-block-end: 16px;
+}
+
+.title {
+  margin: 0;
+  /* headline-small on an <h1>: the role styles the text, the element carries
+     the structure. */
+  font-family: var(--md-sys-typescale-headline-small-font, inherit);
+  font-size: var(--md-sys-typescale-headline-small-size, 1.5rem);
+  line-height: var(--md-sys-typescale-headline-small-line-height, 2rem);
+  font-weight: var(--md-sys-typescale-headline-small-weight, 400);
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: var(--md-sys-typescale-body-medium-size, 0.875rem);
+  line-height: var(--md-sys-typescale-body-medium-line-height, 1.25rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+/* --- Layout -------------------------------------------------------------- */
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  /* Keeps line length readable at desktop widths rather than letting the
+     text span the whole window. */
+  max-inline-size: 1100px;
+}
+
+.pane {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-inline-size: 0;
+}
+
+/* Cards are raised above the page, so they use a surface-container role
+   rather than plain surface. In the dark scheme this is what carries the
+   elevation hierarchy, which a shadow alone would not. */
+.card {
+  background: var(--md-sys-color-surface-container, var(--_fb-surface-container));
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  padding: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-family: var(--md-sys-typescale-title-medium-font, inherit);
+  font-size: var(--md-sys-typescale-title-medium-size, 1rem);
+  line-height: var(--md-sys-typescale-title-medium-line-height, 1.5rem);
+  font-weight: var(--md-sys-typescale-title-medium-weight, 500);
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.section-support,
+.section-disabled-note {
+  margin: 4px 0 12px;
+  font-size: var(--md-sys-typescale-body-small-size, 0.75rem);
+  line-height: var(--md-sys-typescale-body-small-line-height, 1rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+.section-disabled-note[hidden] {
+  display: none;
+}
+
+/* --- Master switch row --------------------------------------------------- */
+
+.master {
+  background: var(--md-sys-color-surface-container-high, var(--_fb-surface-container-high));
+}
+
+.row-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* Wrapping, not truncating: at large user font sizes the label needs room
+     to grow beside a fixed-width switch. */
+  flex-wrap: wrap;
+}
+
+.row-text {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 12ch;
+  flex: 1 1 16ch;
+}
+
+.row-label {
+  font-size: var(--md-sys-typescale-body-large-size, 1rem);
+  line-height: var(--md-sys-typescale-body-large-line-height, 1.5rem);
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.row-support {
+  font-size: var(--md-sys-typescale-body-small-size, 0.75rem);
+  line-height: var(--md-sys-typescale-body-small-line-height, 1rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+/* --- Categories ---------------------------------------------------------- */
+
+.category {
+  display: grid;
+  gap: 8px;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--md-sys-color-outline-variant, var(--_fb-outline-variant));
+}
+
+.category:first-of-type {
+  border-block-start: none;
+  padding-block-start: 0;
+}
+
+.category-text {
+  display: grid;
+  gap: 2px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* The label is part of the target: the visible radio is small, the
+     interactive row is not. */
+  padding-block: 4px;
+  min-block-size: 48px;
+  cursor: pointer;
+  flex: 1 1 14ch;
+}
+
+.choice-text {
+  display: grid;
+  gap: 0;
+}
+
+.choice-label {
+  font-size: var(--md-sys-typescale-body-medium-size, 0.875rem);
+  line-height: var(--md-sys-typescale-body-medium-line-height, 1.25rem);
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.choice-hint {
+  font-size: var(--md-sys-typescale-label-small-size, 0.6875rem);
+  line-height: var(--md-sys-typescale-label-small-line-height, 1rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+/* Disabled group: dimming the labels matches the components' own disabled
+   treatment. WCAG 2.2 SC 1.4.3 exempts disabled controls, and a text note in
+   the group says why the controls are unavailable, so the state is not
+   communicated by dimming alone. */
+.categories.is-disabled .choice {
+  cursor: default;
+}
+
+.categories.is-disabled .category-text,
+.categories.is-disabled .choice-text {
+  opacity: 0.38;
+}
+
+/* --- Do not disturb ------------------------------------------------------ */
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.time-row md-outlined-text-field {
+  flex: 1 1 10ch;
+  min-inline-size: 9ch;
+}
+
+.time-separator {
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+  font-size: var(--md-sys-typescale-body-medium-size, 0.875rem);
+}
+
+.dnd-readout {
+  margin: 12px 0 0;
+  font-size: var(--md-sys-typescale-body-small-size, 0.75rem);
+  line-height: var(--md-sys-typescale-body-small-line-height, 1rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+md-outlined-select {
+  inline-size: 100%;
+}
+
+/* --- Summary and actions ------------------------------------------------- */
+
+.summary-card {
+  background: var(--md-sys-color-surface-container-high, var(--_fb-surface-container-high));
+}
+
+.summary {
+  margin: 8px 0 12px;
+  font-size: var(--md-sys-typescale-body-medium-size, 0.875rem);
+  line-height: var(--md-sys-typescale-body-medium-line-height, 1.25rem);
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block-start: 12px;
+}
+
+md-circular-progress[hidden] {
+  display: none;
+}
+
+md-circular-progress {
+  --md-circular-progress-size: 24px;
+}
+
+/* The result line reserves its own space and pairs an icon with text, so the
+   success/failure difference is never colour alone. */
+.test-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  min-block-size: 1.25rem;
+  font-size: var(--md-sys-typescale-body-small-size, 0.75rem);
+  line-height: var(--md-sys-typescale-body-small-line-height, 1rem);
+  color: var(--md-sys-color-on-surface-variant, var(--_fb-on-surface-variant));
+}
+
+.test-status.is-success {
+  color: var(--md-sys-color-on-surface, var(--_fb-on-surface));
+}
+
+.test-status.is-error {
+  color: var(--md-sys-color-error, var(--_fb-error));
+}
+
+.status-icon {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+  fill: currentColor;
+}
+
+/* --- Adaptive behaviour --------------------------------------------------
+ * Container queries, not viewport media queries: the element can be placed in
+ * a narrow pane inside a wide window, and what matters is the space it
+ * actually has. This changes column count only; there is no navigation in
+ * this element, so no destination or focus order changes with width. DOM
+ * order is preserved, so the tab order is the same at every width.
+ */
+@container (min-width: 720px) {
+  .screen {
+    padding: 24px;
+  }
+
+  .panes {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 24px;
+  }
+}
+
+/* Fallback for engines without container queries. */
+@supports not (container-type: inline-size) {
+  @media (min-width: 720px) {
+    .panes {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      gap: 24px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

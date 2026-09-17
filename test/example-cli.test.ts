@@ -201,6 +201,43 @@ test("a measurement that disagrees with the committed probe output fails the CLI
   expect(defect.output).toContain("does not quote the measured figure");
 }, 60_000);
 
+/*
+ * The Material examples' scores, checked the same way.
+ *
+ * Both publish a headline ("12 of 12", "7 of 7") that summarises a pre-registered list. The Apple
+ * example had three separate audits find drifted figures before a check tied them together, so
+ * these were wired in as the examples were written rather than after the same thing happened again.
+ */
+test("a Material README claiming more than was pre-registered fails the CLI", async () => {
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/material-3-review/README.md",
+         (t) => t.replace("**12 of 12 planted defects reached**", "**13 of 13 planted defects reached**")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("pre-registers 12");
+}, 60_000);
+
+test("deleting a planted defect fails the CLI, because the score no longer matches", async () => {
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/material-3-review/planted-defects.md", (t) => t.replace("**M12.", "**Mxx.")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+}, 60_000);
+
+test("the review example's before/ screen must still render", async () => {
+  // A straw man that throws on load tests nothing: any reviewer would find "it does not run" and
+  // stop, so the example would stop being evidence about the guides.
+  const { control, defect } = await controlAndDefect((dir) =>
+    edit(dir, "examples/material-3-review/before/notification-settings.js",
+         (t) => t.replace("<md-switch", "<broken-switch")));
+
+  expect(control.code).toBe(0);
+  expect(defect.code).not.toBe(0);
+  expect(defect.output).toContain("no longer renders");
+}, 60_000);
+
 /**
  * The meta-test: break the wire itself.
  *
