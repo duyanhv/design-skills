@@ -51,7 +51,7 @@ looked. With it, the gaps are actionable.
 
 ## Do not claim conformance you did not establish
 
-- A review finding nothing establishes that **this review** was clean.
+- A review finding nothing establishes that **this review** found nothing.
 - Conformance is a property of full pages and complete processes, not components, and not a subset
   of criteria. See [criteria.md](criteria.md).
 - If a formal claim is the goal, WCAG defines what one must contain; this bundle does not produce

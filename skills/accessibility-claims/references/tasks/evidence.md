@@ -50,7 +50,7 @@ So:
 For each finding, one line about what you did:
 
 > Read in `Component.tsx:42`. Not rendered, not announced.
-> Measured at 1440px in Chrome 141, default OS text size. Other widths not checked.
+> Measured at one stated viewport width in Chrome 141, default OS text size. Other widths not checked.
 > Announced as "Close, button" by VoiceOver on macOS 26.5, Safari. Not checked on Windows.
 
 This is not hedging. It is the difference between a finding a developer can reproduce and a finding
@@ -65,6 +65,6 @@ and the reader has no way to know.
 
 The strongest version names the test that would settle it:
 
-> Target size for the icon buttons: the interactive region may exceed the visible 24px because the
+> Target size for the icon buttons: the interactive region may exceed the visible box because the
 > component draws an absolutely positioned hit area. Not measured. To settle it, inspect the
 > rendered region against SC 2.5.8, reading its spacing exception first.

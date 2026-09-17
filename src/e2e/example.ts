@@ -142,6 +142,7 @@ if (!(await exists(rnResults))) {
 for (const [name, dir, expectations] of [
   ["material-3-review", "material-3-review", "planted-defects.md"],
   ["material-3-build", "material-3-build", "expectations.md"],
+  ["accessibility-claims-review", "accessibility-claims-review", "planted-defects.md"],
 ] as const) {
   const readmePath = join(ROOT, "examples", dir, "README.md");
   const listPath = join(ROOT, "examples", dir, expectations);
@@ -154,8 +155,9 @@ for (const [name, dir, expectations] of [
 
   // Count the pre-registered items from the list itself, so the README cannot claim more than
   // were planted. Review items are M1..Mn; build traps are T1..Tn.
-  // Both list formats: "**M1.** …" in the review's list, "| **T1** |" in the build's trap table.
-  const planted = new Set([...list.matchAll(/\*\*(M\d+|T\d+)(?:[.,]|\*\*)/g)].map((m) => m[1]!));
+  // Three list formats across the examples: "**M1.** …", "| **T1** |", "**A1. …". The prefix
+  // letter is per-example and carries no meaning beyond distinguishing the lists.
+  const planted = new Set([...list.matchAll(/\*\*([MTA]\d+)(?:[.,]|\*\*)/g)].map((m) => m[1]!));
   if (!planted.size) {
     fail(`${expectations} names no pre-registered items`, "the scoring has nothing to be scored against");
     continue;
