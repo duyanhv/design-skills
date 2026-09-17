@@ -1,0 +1,64 @@
+# Smoke checks for the authored accessibility-claims guide.
+#
+# Page-level `expect` checks, as with the other authored bundles: an authored guide has no IR to
+# assert against, so each question names a requirement the guide must keep meeting, and the strings
+# are the ones that cannot be reworded without the requirement itself changing.
+#
+# Deliberately not matched: the counts. Those are verified against the local WCAG build by
+# `bun run src/e2e/wcag-counts.ts`, which recounts them rather than asserting the digits are
+# present — an eval matching "118" would pass on a sentence that had become false.
+
+- q: Does the authority guide separate normative from informative, including inside one document?
+  source: authority
+  expect:
+    # The four kinds, and the fact that the middle two share a document.
+    - "Informative note"
+    - "Understanding"
+    # A technique is one way to satisfy a criterion, not the requirement.
+    - "not the only way"
+    # Levels describe scope, not severity — the misreading that turns a AAA gap into a "failure".
+    - "not severity"
+    # Vendors point at the standard rather than defining their own ratios.
+    - "not conformance requirements"
+
+- q: Does the criteria guide require the exceptions and the glossary, not just the statement?
+  source: criteria
+  expect:
+    - "exceptions"
+    # WCAG's definitions are normative and do specific work.
+    - "glossary"
+    # The named traps a review dies on.
+    - "Disabled controls"
+    - "Logotypes"
+    # Conformance is a property of pages and processes, not components.
+    - "full pages"
+    - "complete processes"
+    # Three outcomes, not two: failure, untested, and open question.
+    - "open question"
+
+- q: Does the evidence guide rank evidence and name what source alone cannot settle?
+  source: evidence
+  expect:
+    # The ladder's top and bottom rungs.
+    - "Source read"
+    - "Measured"
+    # Reading markup is the input to name computation, not its output.
+    - "accessible name"
+    - "Focus order"
+    # A clean automated run is not a pass.
+    - "not a pass"
+    # "I could not check this" is a result.
+    - "could not check"
+
+- q: Does the reporting guide require scope, separation, and a refusal to overstate?
+  source: reporting
+  expect:
+    # The fields that make a finding checkable.
+    - "Authority"
+    - "Evidence"
+    # The three groups, never interleaved.
+    - "Suggestions"
+    # Severity is a judgement and must be labelled as one.
+    - "your judgement"
+    # A review finding nothing establishes only that this review found nothing.
+    - "found nothing"

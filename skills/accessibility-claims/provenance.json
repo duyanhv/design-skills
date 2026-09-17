@@ -1,0 +1,24 @@
+{
+  "source": "accessibility-claims",
+  "kind": "authored",
+  "authorship": "original",
+  "license": {
+    "spdx": "MIT",
+    "redistributable": true,
+    "attribution": "Original workflow instructions by design-skills contributors (MIT). WCAG 2.2 is © W3C and is linked, not bundled. Not affiliated with the W3C. This is not a conformance standard."
+  },
+  "format": "authored-skill@1",
+  "partial": false,
+  "note": "Original design-skills workflow instructions. Linked upstream guidelines are not bundled; upstream completeness and freshness are not asserted.",
+  "files": {
+    "references/tasks/authority.md": "ae2fdf0f3ac4829a",
+    "references/tasks/criteria.md": "7aee8d9b2fba538c",
+    "references/tasks/evidence.md": "277f184b1b78fa80",
+    "references/tasks/reporting.md": "694671d2db05971d",
+    "SKILL.md": "8150bac0b7e2c712"
+  },
+  "references": [
+    "https://www.w3.org/TR/WCAG22/",
+    "https://www.w3.org/TR/WCAG22/#conformance-reqs"
+  ]
+}

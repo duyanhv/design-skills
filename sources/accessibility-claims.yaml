@@ -1,0 +1,13 @@
+id: accessibility-claims
+name: Accessibility Claims Guide
+kind: authored
+base_url: https://www.w3.org/TR/WCAG22/
+entry: /
+license:
+  spdx: MIT
+  redistributable: true
+  attribution: "Original workflow instructions by design-skills contributors (MIT). WCAG 2.2 is © W3C and is linked, not bundled. Not affiliated with the W3C. This is not a conformance standard."
+skill:
+  name: accessibility-claims
+  description: "Make accessibility findings that hold up: separate what a standard requires from what it advises, read a success criterion with its exceptions, and say what your evidence does and does not establish. Use when writing or reviewing an accessibility finding, an audit, or a conformance claim. This is a method for making claims, not a copy of WCAG and not a conformance standard."
+  max_skill_lines: 150
