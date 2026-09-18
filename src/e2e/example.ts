@@ -361,7 +361,7 @@ if (await exists(wcagPages)) {
     }
 
     /**
-     * Structured erratum records: `erratum: criterion=2.4.7 cited=A corrected=AA`.
+     * Erratum records, read from the visible table in ERRATA.md.
      *
      * Presence of the criterion number was not enough. An audit replaced the whole erratum with a
      * sentence asserting the review was right, and the check accepted it as the correction — so a
@@ -369,8 +369,26 @@ if (await exists(wcagPages)) {
      * the review cited AND the level the source gives, and both are verified.
      */
     const corrections = new Map<string, { cited: string; corrected: string }>();
-    for (const record of errata.matchAll(/erratum:\s*criterion=(\S+)\s+cited=(\S+)\s+corrected=(\S+)/g)) {
-      corrections.set(record[1]!, { cited: record[2]!, corrected: record[3]! });
+
+    // Read the VISIBLE table, with HTML comments stripped first.
+    //
+    // The record used to be a `erratum: criterion=… cited=… corrected=…` line, and an audit put a
+    // correct one inside an HTML comment above a sentence restating the error. Everything verified
+    // and a reader saw the error reasserted. So comments are removed before parsing: if the record
+    // is not rendered, it does not count.
+    const visible = errata.replace(/<!--[\s\S]*?-->/g, "");
+    for (const table of markdownTables(visible)) {
+      const criterion = table.header.findIndex((h) => /criterion/i.test(h));
+      const citedColumn = table.header.findIndex((h) => /cited|review/i.test(h));
+      const actualColumn = table.header.findIndex((h) => /source|gives|actual/i.test(h));
+      if (criterion < 0 || citedColumn < 0 || actualColumn < 0) continue;
+
+      for (const cells of table.rows) {
+        const number = /(\d+\.\d+\.\d+)/.exec(cells[criterion] ?? "")?.[1];
+        const cited = /Level (A{1,3})\b/.exec(cells[citedColumn] ?? "")?.[1];
+        const corrected = /Level (A{1,3})\b/.exec(cells[actualColumn] ?? "")?.[1];
+        if (number && cited && corrected) corrections.set(number, { cited, corrected });
+      }
     }
 
     for (const problem of wrong) {
@@ -381,7 +399,8 @@ if (await exists(wcagPages)) {
 
       if (!correction) {
         fail(`${dir}/REVIEW.md: ${problem}`,
-             `preserve the review and add to ERRATA.md: \`erratum: criterion=${number} cited=${claimed} corrected=${actual}\``);
+             `preserve the review and add a visible row to ERRATA.md's table: ` +
+               `| SC ${number} … | Level ${claimed} | Level ${actual} | … |`);
       } else if (correction.cited !== claimed) {
         fail(`${dir}/ERRATA.md says the review cited Level ${correction.cited} for SC ${number}, but it cites ${claimed}`);
       } else if (correction.corrected !== actual) {

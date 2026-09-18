@@ -54,21 +54,20 @@ for (const file of (await readdir(PAGES)).filter((f) => f.endsWith(".json"))) {
 }
 
 /**
- * The blocks an extracted rule keeps after its opening paragraph, and what they actually are.
+ * Is a block a Note, in WCAG's sense?
  *
- * `note_authority` is the extractor's internal labelling of the `notes` field, which holds
- * exceptions, bulleted alternatives, real Notes and examples together. An audit found the guide
- * publishing those labels as WCAG's own terminology — "118 normative notes" — when WCAG says
- * plainly that its notes are informative. The counts were right and the noun was wrong.
- *
- * So this now checks the claim the guide actually makes: that the normative material after a
- * criterion's first sentence is NOT notes. If a future extraction starts labelling a real Note
- * normative, that is a defect in the extraction and this is where it surfaces.
+ * This is the only classification here, and it is the only one the source's own text supports:
+ * WCAG marks its Notes, so "is this a Note" is readable. What is NOT readable from a block's shape
+ * is its semantic role — an earlier version counted every hyphen-led block as an "alternative",
+ * and the source disagrees constantly: 1.4.12's bullets apply together, 1.4.3's are exceptions,
+ * 2.4.13's mix both. Those totals were published and are now removed, so nothing here classifies
+ * a block beyond Note versus not-a-Note.
  */
 const normativeBlocks = rules.flatMap((r) =>
   (r.notes ?? []).filter((_, i) => (r.note_authority ?? [])[i] === "normative"),
 );
-const isNote = (block: string) => /^_?\[?informative/i.test(block.trim()) || /\bNote\b/.test(block.trim().slice(0, 40));
+const isNote = (block: string) =>
+  /^_?\[?informative/i.test(block.trim()) || /\bNote\b/.test(block.trim().slice(0, 40));
 
 const authorities = rules.flatMap((r) => r.note_authority ?? []);
 const counts = {
@@ -76,19 +75,6 @@ const counts = {
   informativeNotes: authorities.filter((a) => a === "informative").length,
   /** Normative blocks that are really Notes. WCAG says this should be zero. */
   normativeRealNotes: normativeBlocks.filter(isNote).length,
-  /**
-   * The three published categories, mutually exclusive and exhaustive by construction: a block is
-   * a bullet, or mentions an exception, or is neither. An audit changed "6 are exceptions" to 600
-   * and the checker did not care, because it verified the total and the bullets and left the other
-   * two figures unchecked. Every published category is derived here, and their sum is asserted.
-   */
-  normativeBullets: normativeBlocks.filter((b) => b.trim().startsWith("-")).length,
-  normativeExceptions: normativeBlocks.filter(
-    (b) => !b.trim().startsWith("-") && /\bexcept(?:ion)?s?\b/i.test(b),
-  ).length,
-  normativeOther: normativeBlocks.filter(
-    (b) => !b.trim().startsWith("-") && !/\bexcept(?:ion)?s?\b/i.test(b),
-  ).length,
   mixedRules: rules.filter(
     (r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"),
   ).length,
@@ -125,26 +111,6 @@ const CLAIMS: { what: string; actual: number; pattern: RegExp; in?: string }[] =
     pattern: /\*\*\d+ of (\d+) success criteria state an exception/,
     in: "criteria.md",
   },
-  {
-    what: "blocks the extractor marks normative",
-    actual: counts.normativeNotes,
-    pattern: /Of the (\d+) blocks it marks\s*\n?> ?normative/,
-  },
-  {
-    what: "of those, bulleted alternatives",
-    actual: counts.normativeBullets,
-    pattern: /\*\*none is a Note\*\* — (\d+) are bulleted alternatives/,
-  },
-  {
-    what: "of those, exceptions",
-    actual: counts.normativeExceptions,
-    pattern: /are bulleted alternatives, (\d+) are exceptions/,
-  },
-  {
-    what: "of those, other normative text",
-    actual: counts.normativeOther,
-    pattern: /are exceptions, (\d+) are other\s*\n?> ?normative text/,
-  },
   { what: "Level A criteria", actual: counts.levelA, pattern: /\*\*(\d+) Level A,/ },
   { what: "Level AA criteria", actual: counts.levelAA, pattern: /Level A, (\d+) Level AA,/ },
   { what: "Level AAA criteria", actual: counts.levelAAA, pattern: /and (\d+) Level AAA\*\*/ },
@@ -175,21 +141,14 @@ for (const claim of CLAIMS) {
 const mixedSections = rules
   .filter((r) => (r.note_authority ?? []).includes("normative") && (r.note_authority ?? []).includes("informative"))
   .map((r) => r.section ?? "");
-// The breakdown has to account for every normative block, or it is a set of numbers that happen to
-// appear in a sentence rather than a partition of the thing being described.
-const breakdown = counts.normativeBullets + counts.normativeExceptions + counts.normativeOther;
-if (breakdown === counts.normativeNotes) {
-  console.log(`✓ the published breakdown accounts for all ${counts.normativeNotes} normative block(s)`);
-} else {
-  console.log(`✗ the breakdown sums to ${breakdown}, but there are ${counts.normativeNotes} normative blocks`);
-  failed++;
-}
-
 // The guide's central factual claim: NONE of the normative blocks is a Note. WCAG says its notes
 // are informative, so a normative block that is really a Note would mean either the extraction or
 // the guide is wrong. Checked directly rather than inferred from a total.
 if (counts.normativeRealNotes === 0) {
-  console.log(`✓ none of the ${counts.normativeNotes} normative block(s) is a Note, as the guide states`);
+  console.log(
+    `✓ none of the ${counts.normativeNotes} block(s) the extractor marks normative is a Note, ` +
+      `as the guide states (the total is reported, not published in the guide)`,
+  );
 } else {
   console.log(`✗ ${counts.normativeRealNotes} block(s) marked normative are Notes; WCAG says notes are informative`);
   console.log("    either the extraction mislabels them or authority.md's claim is wrong");
@@ -197,6 +156,11 @@ if (counts.normativeRealNotes === 0) {
 }
 
 // The named example must really carry bulleted alternatives followed by real Notes.
+//
+// 2.5.2 is used because its own statement says "at least one of the following is true", which is
+// what makes its bullets alternatives. That is read from the criterion, not inferred from the
+// hyphens — the inference an audit rightly rejected for the removed breakdown. A criterion whose
+// bullets apply cumulatively (1.4.12) or are exceptions (1.4.3) would be the wrong example here.
 const pointerCancellation = rules.find((r) => (r.section ?? "").startsWith("2.5.2 "));
 if (!guide.includes("2.5.2 Pointer Cancellation")) {
   console.log("✗ authority.md no longer names the criterion its explanation rests on");
@@ -205,6 +169,13 @@ if (!guide.includes("2.5.2 Pointer Cancellation")) {
   console.log("✗ authority.md names SC 2.5.2, which is not in the build");
   failed++;
 } else {
+  // The statement has to establish that the bullets are alternatives, or the example is making the
+  // same shape-for-meaning mistake the breakdown made.
+  if (!/at least one of the following/i.test(pointerCancellation.statement ?? "")) {
+    console.log("✗ SC 2.5.2's statement no longer says its bullets are alternatives");
+    console.log("    the example depends on that wording; pick a criterion whose statement says it");
+    failed++;
+  }
   const blocks = pointerCancellation.notes ?? [];
   const auth = pointerCancellation.note_authority ?? [];
   const alternatives = blocks.filter((b, i) => auth[i] === "normative" && b.trim().startsWith("-")).length;

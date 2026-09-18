@@ -38,13 +38,26 @@ Those are requirements. Two actual Notes follow them, and those are not.
 So "it says so in the criterion" is not enough. It matters **which part**: a paragraph further down
 may be an alternative that lets an implementation off, or commentary that binds nobody.
 
-> **A correction, because this page got it wrong.** It previously said WCAG has "118 normative notes
-> and 181 informative notes", counted from this repository's own extraction. Those counts are real
-> but the label was not: the extractor keeps everything after a criterion's first paragraph in one
-> `notes` field, and marks each block normative or informative. Of the 118 blocks it marks
-> normative, **none is a Note** — 94 are bulleted alternatives, 5 are exceptions, 19 are other
-> normative text. Publishing them as "normative notes" gave an internal representation the source's
-> vocabulary, and contradicted what WCAG says about its own notes. An audit caught it.
+> **A correction, twice over, because this page got it wrong twice.**
+>
+> It first said WCAG has "118 normative notes and 181 informative notes", counted from this
+> repository's own extraction. The counts were real and the label was not: the extractor keeps
+> everything after a criterion's first paragraph in one `notes` field and marks each block
+> normative or informative, and **none of the blocks it marks normative is a Note**. Publishing
+> them as "normative notes" gave an internal representation the source's vocabulary, and
+> contradicted what WCAG says about its own notes.
+>
+> The fix then broke the categories down — "94 bulleted alternatives, 5 exceptions, 19 other" —
+> and a second audit showed that was the same mistake at a smaller scale. "Starts with a hyphen"
+> is a text shape, not a semantic role, and the source disagrees with it constantly: 1.4.12 Text
+> Spacing's four bullets apply *together*, 1.4.3 Contrast's Large Text and Logotypes bullets are
+> *exceptions*, and 2.4.13 Focus Appearance mixes cumulative requirements and exceptions in one
+> bulleted list. Counting them as "alternatives" published a classification the extractor never
+> made.
+>
+> So the breakdown is gone. The distinction this section actually needs — a Note is informative,
+> and the exceptions, alternatives and definitions that continue a criterion are not — does not
+> depend on any total, and the totals were the part that kept being wrong.
 
 ## Understanding documents are not the standard
 

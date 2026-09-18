@@ -7,14 +7,15 @@ correcting it in place would destroy that.
 Found by audit, not by me. Each is checked against the WCAG 2.2 text as built locally by this
 repository (source version 2026-08-17).
 
-<!-- Structured so a checker can verify the correction rather than the mere mention of a criterion.
-     An audit replaced this file with "SC 2.4.7 is Level A. The review is correct." and the check
-     passed, because it only asked whether the number appeared. Each record below is resolved
-     against the local WCAG build: `corrected` must be the level the source gives, and `cited` must
-     be what the review actually says.
+Each entry carries a **visible** record, in the table below, that a checker resolves against the
+WCAG 2.2 text as built locally by this repository. Visible on purpose: an earlier version put the
+record in an HTML comment, and an audit showed the consequence — the metadata said "corrected=AA"
+while the only sentence a reader saw said "SC 2.4.7 is Level A. The review is correct." The check
+passed. A correction nobody can read is not a correction.
 
-     erratum: criterion=2.4.7 cited=A corrected=AA
--->
+| Criterion | The review cited | The source gives | Erratum |
+| --- | --- | --- | --- |
+| SC 2.4.7 Focus Visible | Level A | Level AA | E1 |
 
 ## E1 — SC 2.4.7 Focus Visible is Level AA, not Level A
 

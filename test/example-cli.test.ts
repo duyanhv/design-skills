@@ -61,35 +61,33 @@ async function sandbox(): Promise<string> {
   // Built skills are git-ignored for the non-redistributable sources, and manifests checks exactly
   // that. Copying the ignore file keeps that check meaningful in the sandbox.
   await cp(join(REPO, ".gitignore"), join(dir, ".gitignore"));
-  // The pre-registered-artifact check shells out to git log, so the copy needs history to read.
-  // Pointing it at the real repository keeps that check meaningful instead of silently empty.
-  // Point at the real .git so `git log`, `git diff HEAD` and `git ls-files` see real history.
-  //
-  // READ-ONLY, and that is now enforced rather than assumed: a test that committed inside the
-  // sandbox put 14 junk commits into the actual repository, because a borrowed gitdir is the same
-  // repository. Recovered with a soft reset, and the fix is below — a sandbox that needs to commit
-  // must call `isolateGit` first and get a repository of its own.
-  await writeFile(join(dir, ".git"), `gitdir: ${join(REPO, ".git")}\n`);
-  return dir;
-}
 
-/**
- * Give a sandbox its own git repository, for the cases that must commit.
- *
- * The borrowed gitdir above is read-only by intent; anything that commits needs this first. It
- * copies history in so `git log` still reports real commits, then commits are contained.
- */
-async function isolateGit(dir: string): Promise<void> {
-  await rm(join(dir, ".git"), { recursive: true, force: true });
-  for (const args of [
-    ["init", "-q"],
-    ["-c", "user.email=test@example.invalid", "-c", "user.name=test", "add", "-A"],
-    ["-c", "user.email=test@example.invalid", "-c", "user.name=test",
-     "commit", "-q", "-m", "baseline for an isolated sandbox"],
-  ]) {
-    const proc = Bun.spawn(["git", ...args], { cwd: dir, stdout: "ignore", stderr: "ignore" });
-    if ((await proc.exited) !== 0) throw new Error(`git ${args[0]} failed while isolating ${dir}`);
+  // Every sandbox gets its OWN git storage, always. No caller can forget.
+  //
+  // This used to write a gitdir file pointing at the real `.git`, described as read-only. It was
+  // not: a borrowed gitdir *is* the same repository, and the R1 test committing inside its sandbox
+  // put 14 junk commits into the actual repository. The fix at the time was a helper each
+  // committing test had to call, which an audit then defeated by commenting out one call — the
+  // suite stayed green while HEAD moved.
+  //
+  // So isolation is a property of the factory now. A `git clone --local --no-hardlinks` gives the
+  // sandbox real history for `git log` and `git diff HEAD` to read, in storage of its own, so a
+  // commit inside it cannot reach the caller. Slower than a symlink and correct by construction,
+  // which is the right trade for a guard that has failed twice.
+  const clone = Bun.spawn(
+    ["git", "clone", "--local", "--no-hardlinks", "--quiet", REPO, "__history__"],
+    { cwd: dir, stdout: "ignore", stderr: "pipe" },
+  );
+  if ((await clone.exited) !== 0) {
+    throw new Error(`could not clone history into the sandbox: ${await new Response(clone.stderr).text()}`);
   }
+  await cp(join(dir, "__history__", ".git"), join(dir, ".git"), { recursive: true });
+  await rm(join(dir, "__history__"), { recursive: true, force: true });
+
+  // The clone's HEAD is the caller's HEAD, so `git diff HEAD` compares against real committed
+  // content. The working tree is the copy made above, which may differ from it — that is what the
+  // uncommitted-rewrite checks look at.
+  return dir;
 }
 
 /** Run an e2e CLI inside a sandbox, returning its exit code and combined output. */
@@ -417,33 +415,49 @@ test("cutting a CLI's exit call is caught: docs.ts is the second instance of thi
  * These tests hold the two properties that keep the path honest: CI runs what `bun run check` runs,
  * and the published skills install and load as the README says.
  */
-test("CI runs the same entry point a contributor runs", () => {
-  // Structural, not parsed. The previous version compared a regex over the workflow YAML against a
-  // regex over the package script, and an audit showed three ways a step could be neutered without
-  // it noticing: replaced with `echo`, disabled with `if: false`, or simply omitted — typecheck
-  // was, and the test missed it because it only looked for `src/e2e/*.ts`. Worse, its own
-  // regression duplicated the parser, so removing the guard from the real test left both green.
-  //
-  // So there is nothing to parse now: CI runs `bun run check`. The assertions below are about that
-  // invariant holding, which is checkable without modelling YAML semantics.
-  const workflow = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+/**
+ * The workflow invariants, as one function.
+ *
+ * Extracted because the negative test used to duplicate this logic, so removing a guard from the
+ * real test left both green — the regression proved its own copy worked. An audit reported that
+ * twice, the second time after I claimed to have fixed it. One implementation, two callers: the
+ * real workflow and a sabotaged string.
+ *
+ * Returns the problems found, so a caller can assert on emptiness or on a specific message.
+ */
+function workflowProblems(workflow: string): string[] {
+  const problems: string[] = [];
 
   const runs = [...workflow.matchAll(/^\s*run: (.+)$/gm)].map((m) => m[1]!.trim());
-  const checkStep = runs.find((r) => r === "bun run check");
-  expect(checkStep).toBe("bun run check");
+  if (!runs.includes("bun run check")) {
+    problems.push("the workflow does not run `bun run check`");
+  }
 
-  // No conditional may gate it: `if: ${{ false }}` above the step would disable it silently.
-  const checkIndex = workflow.indexOf("run: bun run check");
-  const stepStart = workflow.lastIndexOf("- name:", checkIndex);
-  expect(workflow.slice(stepStart, checkIndex)).not.toContain("if:");
+  // A conditional above the step disables it silently, and the `run:` line still reads correctly.
+  const index = workflow.indexOf("run: bun run check");
+  if (index >= 0) {
+    const stepStart = workflow.lastIndexOf("- name:", index);
+    if (workflow.slice(stepStart, index).includes("if:")) {
+      problems.push("the check step is gated by a condition, so it may not run");
+    }
+  }
 
-  // Anything CI runs beyond the shared entry point is a deliberate extra, named here. A new step
-  // appearing without being added to this list is the drift this test exists to catch.
+  // Anything beyond the shared entry point is a deliberate extra and has to be named here.
   const CI_ONLY = ["bun install --frozen-lockfile", "bun run src/e2e/leak.ts"];
-  const extras = runs.filter(
-    (r) => r !== "bun run check" && !CI_ONLY.includes(r) && r !== "|",
-  );
-  expect(extras).toEqual([]);
+  for (const run of runs) {
+    if (run === "bun run check" || CI_ONLY.includes(run) || run === "|") continue;
+    problems.push(`unlisted step: ${run}`);
+  }
+
+  return problems;
+}
+
+test("CI runs the same entry point a contributor runs", () => {
+  // Structural, not parsed into a set of names. The previous version compared a regex over the
+  // workflow against a regex over the package script, and a step could be neutered three ways it
+  // could not see: replaced with `echo`, disabled with `if: false`, or simply omitted — typecheck
+  // was, because it only looked for `src/e2e/*.ts`.
+  expect(workflowProblems(readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8"))).toEqual([]);
 });
 
 test("`bun run check` covers every e2e guard in the repository", async () => {
@@ -647,24 +661,21 @@ test("a documented install destination that nothing created fails the CLI", asyn
 });
 
 test("a workflow that stops running the shared check is caught", () => {
-  // The previous regression duplicated the parity parser and therefore proved its own copy worked.
-  // This drives the same assertions the real test makes, against a sabotaged workflow.
+  // Drives workflowProblems — the same function the test above asserts on — rather than a copy.
+  // Removing a guard from that function now fails both this and the real check, which is the
+  // property the previous version did not have.
   const workflow = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
+  expect(workflowProblems(workflow)).toEqual([]);
 
-  for (const [label, sabotaged] of [
-    ["replaced with echo", workflow.replace("run: bun run check", 'run: echo "skipped check"')],
-    ["disabled by a condition", workflow.replace("      - name: check", "      - name: check\n        if: ${{ false }}")],
-    ["removed entirely", workflow.replace("        run: bun run check\n", "")],
+  for (const [label, sabotaged, expected] of [
+    ["replaced with echo", workflow.replace("run: bun run check", 'run: echo "skipped check"'), "does not run"],
+    ["disabled by a condition", workflow.replace("      - name: check", "      - name: check\n        if: ${{ false }}"), "gated by a condition"],
+    ["removed entirely", workflow.replace("        run: bun run check\n", ""), "does not run"],
+    ["an unlisted step added", workflow.replace("      - name: check", "      - name: sneaky\n        run: curl evil.example\n      - name: check"), "unlisted step"],
   ] as const) {
-    const runs = [...sabotaged.matchAll(/^\s*run: (.+)$/gm)].map((m) => m[1]!.trim());
-    const hasCheck = runs.includes("bun run check");
-    const index = sabotaged.indexOf("run: bun run check");
-    const stepStart = index >= 0 ? sabotaged.lastIndexOf("- name:", index) : -1;
-    const gated = index >= 0 && sabotaged.slice(stepStart, index).includes("if:");
-
-    // Every sabotage is visible to at least one of the two assertions the real test makes.
-    expect(!hasCheck || gated).toBe(true);
-    expect(label).toBeTruthy();
+    const problems = workflowProblems(sabotaged);
+    expect(problems.length, `${label} should be reported`).toBeGreaterThan(0);
+    expect(problems.join(" | ")).toContain(expected);
   }
 });
 
@@ -707,8 +718,6 @@ test("R1: a committed review rewrite fails the CLI", async () => {
   // working file.
   const dir = await sandbox();
   try {
-    // Its own repository: committing through a borrowed gitdir writes to the real one.
-    await isolateGit(dir);
     const control = await runTool(dir, "example");
     expect(control.code).toBe(0);
 
@@ -788,20 +797,26 @@ test("R3: an erratum that restates the error fails the CLI", async () => {
   }
 }, 60_000);
 
-test("R4: an unchecked category in the count breakdown fails the CLI", async () => {
-  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+test("F2: the guide publishes no shape-based classification of WCAG's blocks", async () => {
+  // R4 added a breakdown — "94 bulleted alternatives, 5 exceptions, 19 other" — and made every
+  // figure checkable. A later audit showed the figures were checkable and the categories were
+  // wrong: "starts with a hyphen" is a text shape, and the source disagrees constantly (1.4.12's
+  // bullets apply together, 1.4.3's are exceptions, 2.4.13's mix both). The breakdown is removed,
+  // so this asserts its absence rather than its arithmetic.
+  const guide = await readFile(
+    join(REPO, "guidance", "accessibility-claims", "references", "tasks", "authority.md"), "utf8");
 
-  const guide = join(REPO, "guidance", "accessibility-claims", "references", "tasks", "authority.md");
-  const original = await readFile(guide, "utf8");
-  try {
-    expect((await runTool(REPO, "wcag-counts")).code).toBe(0);
-    await writeFile(guide, original.replace("5 are exceptions", "600 are exceptions"));
-    const defect = await runTool(REPO, "wcag-counts");
-    expect(defect.code).not.toBe(0);
-    expect(defect.output).toContain("600");
-  } finally {
-    await writeFile(guide, original);
-  }
+  expect(guide).not.toMatch(/\d+ are bulleted alternatives/);
+  expect(guide).not.toMatch(/\d+ are exceptions,/);
+
+  // What survives is the claim the source's own text supports, and it is still published.
+  expect(guide).toContain("none of the blocks it marks normative is a Note");
+
+  // And it is still verified.
+  if (!(await Bun.file(join(REPO, "ir", "wcag22", "pages", "navigable.json")).exists())) return;
+  const counts = await runTool(REPO, "wcag-counts");
+  expect(counts.code).toBe(0);
+  expect(counts.output).toContain("is a Note, as the guide states");
 }, 60_000);
 
 test("R5: a shared install-root typo fails the CLI", async () => {
@@ -826,14 +841,21 @@ test("R3: an erratum that reverses the correction fails the CLI", async () => {
   try {
     expect((await runTool(REPO, "example")).code).toBe(0);
 
-    // "corrected=A" restates the error the erratum is supposed to fix.
-    await writeFile(errata, original.replace("corrected=AA", "corrected=A"));
+    // Mutating the VISIBLE row. This test used to edit `corrected=AA` in an HTML comment; when the
+    // record moved into the rendered table that string was gone, so `replace` did nothing, the file
+    // stayed correct and the "reversed" case asserted on an unmodified repo. It passed by accident.
+    // The sentinel below stops that recurring silently.
+    const ROW = "| SC 2.4.7 Focus Visible | Level A | Level AA | E1 |";
+    expect(original, "ERRATA.md no longer has the row this test mutates").toContain(ROW);
+
+    // Restates the error the erratum is supposed to fix.
+    await writeFile(errata, original.replace(ROW, "| SC 2.4.7 Focus Visible | Level A | Level A | E1 |"));
     const reversed = await runTool(REPO, "example");
     expect(reversed.code).not.toBe(0);
     expect(reversed.output).toContain("the WCAG build gives AA");
 
     // And a record whose `cited` does not match what the review says.
-    await writeFile(errata, original.replace("cited=A ", "cited=AAA "));
+    await writeFile(errata, original.replace(ROW, "| SC 2.4.7 Focus Visible | Level AAA | Level AA | E1 |"));
     const misquoted = await runTool(REPO, "example");
     expect(misquoted.code).not.toBe(0);
     expect(misquoted.output).toContain("but it cites A");
@@ -842,15 +864,25 @@ test("R3: an erratum that reverses the correction fails the CLI", async () => {
   }
 }, 60_000);
 
-test("a sandbox that commits cannot write to the real repository", async () => {
-  // This exists because it happened. The R1 test commits a review rewrite to exercise the
-  // committed-rewrite case, and the sandbox borrows the real .git via a gitdir file — so those
-  // commits landed in the actual repository, 14 of them, until a soft reset recovered it.
+test("a sandbox cannot write to the repository that created it", async () => {
+  // This exists because it happened twice. The R1 test commits a review rewrite to exercise the
+  // committed-rewrite case; the sandbox used to borrow the real `.git` through a gitdir file, so
+  // those commits landed in the actual repository — 14 of them.
   //
-  // The invariant: any sandbox that commits must call isolateGit first. Asserted by observing the
-  // real repository's HEAD across a commit made inside an isolated sandbox.
+  // The first fix was a helper each committing test had to call. An audit defeated it by
+  // commenting out one call: the suite stayed green while HEAD moved. That is the lesson here —
+  // an invariant every caller has to remember is not an invariant.
+  //
+  // So this now tests the FACTORY, not a convention. Any sandbox, without any further call, must
+  // be unable to reach the repository it was made from.
   const headOf = async (cwd: string) => {
     const proc = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd, stdout: "pipe", stderr: "ignore" });
+    const out = (await new Response(proc.stdout).text()).trim();
+    await proc.exited;
+    return out;
+  };
+  const gitDirOf = async (cwd: string) => {
+    const proc = Bun.spawn(["git", "rev-parse", "--absolute-git-dir"], { cwd, stdout: "pipe", stderr: "ignore" });
     const out = (await new Response(proc.stdout).text()).trim();
     await proc.exited;
     return out;
@@ -859,7 +891,15 @@ test("a sandbox that commits cannot write to the real repository", async () => {
   const before = await headOf(REPO);
   const dir = await sandbox();
   try {
-    await isolateGit(dir);
+    // Storage of its own, not the caller's. This is the property that makes the rest hold.
+    const sandboxGitDir = await gitDirOf(dir);
+    expect(sandboxGitDir).not.toBe(await gitDirOf(REPO));
+    expect(sandboxGitDir.startsWith(dir)).toBe(true);
+
+    // History is real, so `git log` and `git diff HEAD` mean something.
+    expect(await headOf(dir)).toBe(before);
+
+    // A commit made with no isolation call whatsoever stays inside.
     await writeFile(join(dir, "scratch.txt"), "a commit that must stay inside the sandbox\n");
     for (const args of [
       ["add", "-A"],
@@ -869,24 +909,9 @@ test("a sandbox that commits cannot write to the real repository", async () => {
       expect(await proc.exited).toBe(0);
     }
 
-    // The sandbox advanced; the real repository did not.
     expect(await headOf(dir)).not.toBe(before);
     expect(await headOf(REPO)).toBe(before);
   } finally {
     await rm(dir, { recursive: true, force: true });
-  }
-
-  // Behavioural checks only cover the sandbox they create, so the rule is also asserted
-  // structurally: every test that commits has to isolate first. Reading this file is the only way
-  // to cover the other tests, and a new one that forgets is the case that caused the incident.
-  const source = readFileSync(join(REPO, "test", "example-cli.test.ts"), "utf8");
-  const blocks = source.split(/^test\(/m).slice(1);
-  for (const block of blocks) {
-    const name = /^"([^"]+)"/.exec(block)?.[1] ?? "(unnamed)";
-    const commits = /"commit"/.test(block);
-    if (!commits) continue;
-    // Either it isolates the sandbox, or it is this test's own structural scan.
-    const isolates = block.includes("isolateGit(dir)");
-    expect(isolates || name.includes("cannot write to the real repository")).toBe(true);
   }
 }, 60_000);
